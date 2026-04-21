@@ -1,0 +1,510 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data";
+
+const STORAGE_KEY = "activ_admin_password";
+
+const emptyData: AssociationData = {
+  association: {
+    name: "",
+    tagline: "",
+    city: "",
+    contactEmail: "",
+    facebookUrl: "",
+    address: "",
+    organisation: {
+      boardMembers: [],
+      notes: "",
+    },
+  },
+  disciplines: [],
+  schedule: [],
+};
+
+function randomId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function linesToArray(value: string): string[] {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function arrayToLines(value: string[]): string {
+  return value.join("\n");
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
+export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [data, setData] = useState<AssociationData>(emptyData);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [openDisciplineId, setOpenDisciplineId] = useState<string | null>(null);
+
+  const loadData = useCallback(async (adminPassword: string) => {
+    setIsLoading(true);
+    setStatusMessage("");
+
+    const response = await fetch("/api/admin/site-data", {
+      headers: { "x-admin-password": adminPassword },
+    });
+
+    if (!response.ok) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      setIsAuthenticated(false);
+      router.replace("/admin");
+      return;
+    }
+
+    const payload = (await response.json()) as AssociationData;
+    setData(payload);
+    setIsAuthenticated(true);
+    setStatusMessage("Donnees chargees.");
+    setIsLoading(false);
+  }, [router]);
+
+  useEffect(() => {
+    const savedPassword = sessionStorage.getItem(STORAGE_KEY);
+    if (!savedPassword) {
+      router.replace("/admin");
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadData(savedPassword);
+  }, [loadData, router]);
+
+  async function saveData(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+    setStatusMessage("");
+
+    const adminPassword = sessionStorage.getItem(STORAGE_KEY);
+    if (!adminPassword) {
+      router.replace("/admin");
+      return;
+    }
+
+    const response = await fetch("/api/admin/site-data", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": adminPassword,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      setStatusMessage("Enregistrement impossible.");
+      setIsLoading(false);
+      return;
+    }
+
+    setStatusMessage("Mise a jour enregistree.");
+    setIsLoading(false);
+  }
+
+  function updateDiscipline(index: number, nextValue: Partial<Discipline>) {
+    setData((previous) => {
+      const disciplines = [...previous.disciplines];
+      disciplines[index] = { ...disciplines[index], ...nextValue };
+      return { ...previous, disciplines };
+    });
+  }
+
+  function updateSchedule(slotId: string, nextValue: Partial<ScheduleSlot>) {
+    setData((previous) => {
+      const schedule = previous.schedule.map((slot) =>
+        slot.id === slotId ? { ...slot, ...nextValue } : slot
+      );
+      return { ...previous, schedule };
+    });
+  }
+
+  function addScheduleForDiscipline(disciplineId: string) {
+    setData((previous) => ({
+      ...previous,
+      schedule: [
+        ...previous.schedule,
+        {
+          id: randomId("slot"),
+          disciplineId,
+          day: "",
+          startTime: "",
+          endTime: "",
+          location: "",
+          active: true,
+        },
+      ],
+    }));
+  }
+
+  function removeSchedule(slotId: string) {
+    setData((previous) => ({
+      ...previous,
+      schedule: previous.schedule.filter((slot) => slot.id !== slotId),
+    }));
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
+        <div className="mx-auto mt-20 w-full max-w-md rounded-2xl bg-white p-6 shadow-sm">
+          <p className="text-slate-700">{isLoading ? "Chargement..." : "Verification..."}</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
+      <h1 className="text-3xl font-bold text-slate-900">Dashboard administration</h1>
+      <p className="mt-2 text-slate-700">
+        Configure les disciplines comme des pages article: coach, horaires, materiel, prix, evenements.
+      </p>
+
+      <form onSubmit={saveData} className="mt-6 space-y-6">
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-900">Informations generales</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Nom de l'association
+              <input
+                value={data.association.name}
+                onChange={(event) =>
+                  setData((prev) => ({ ...prev, association: { ...prev.association, name: event.target.value } }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Nom de l'association"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Ville
+              <input
+                value={data.association.city}
+                onChange={(event) =>
+                  setData((prev) => ({ ...prev, association: { ...prev.association, city: event.target.value } }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Ville"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Email de contact
+              <input
+                value={data.association.contactEmail}
+                onChange={(event) =>
+                  setData((prev) => ({
+                    ...prev,
+                    association: { ...prev.association, contactEmail: event.target.value },
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Email de contact"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Lien Facebook
+              <input
+                value={data.association.facebookUrl}
+                onChange={(event) =>
+                  setData((prev) => ({
+                    ...prev,
+                    association: { ...prev.association, facebookUrl: event.target.value },
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Lien Facebook"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+              Adresse
+              <input
+                value={data.association.address}
+                onChange={(event) =>
+                  setData((prev) => ({ ...prev, association: { ...prev.association, address: event.target.value } }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Adresse"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900">Disciplines (pages dynamiques)</h2>
+            <button
+              type="button"
+              onClick={() =>
+                setData((prev) => ({
+                  ...prev,
+                  disciplines: [
+                    ...prev.disciplines,
+                    {
+                      id: randomId("discipline"),
+                      name: "",
+                      slug: "",
+                      description: "",
+                      teacher: "",
+                      coachBio: "",
+                      coachPhotoUrl: "/logo.png",
+                      imageUrl: "/logo.png",
+                      galleryImages: [],
+                      whatToBring: [],
+                      providedItems: [],
+                      priceInfo: "",
+                      contactEmail: prev.association.contactEmail,
+                      ctaText: "Demander un essai",
+                      allowTrialRequest: true,
+                      highlights: [],
+                      events: [],
+                      active: true,
+                    },
+                  ],
+                }))
+              }
+              className="rounded-xl border border-slate-300 px-3 py-1 text-sm font-semibold"
+            >
+              Ajouter
+            </button>
+          </div>
+          <div className="mt-4 space-y-4">
+            {data.disciplines.map((discipline, index) => {
+              const isOpen = openDisciplineId === discipline.id;
+              const disciplineSchedule = data.schedule.filter((slot) => slot.disciplineId === discipline.id);
+              return (
+              <article key={discipline.id} className="rounded-xl border border-slate-200 p-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenDisciplineId(isOpen ? null : discipline.id)}
+                  className="flex w-full items-center justify-between gap-4 text-left"
+                >
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {discipline.name || `Discipline ${index + 1}`}
+                  </h3>
+                  <span className="text-sm font-medium text-cyan-700">{isOpen ? "Replier" : "Ouvrir"}</span>
+                </button>
+                {isOpen ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Nom de la discipline
+                    <input
+                      value={discipline.name}
+                      onChange={(event) => {
+                        const name = event.target.value;
+                        updateDiscipline(index, {
+                          name,
+                          slug: discipline.slug ? discipline.slug : slugify(name),
+                        });
+                      }}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Nom"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Slug URL
+                    <input
+                      value={discipline.slug}
+                      onChange={(event) => updateDiscipline(index, { slug: slugify(event.target.value) })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Slug URL"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Nom du coach
+                    <input
+                      value={discipline.teacher}
+                      onChange={(event) => updateDiscipline(index, { teacher: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Coach"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Email de contact discipline
+                    <input
+                      value={discipline.contactEmail}
+                      onChange={(event) => updateDiscipline(index, { contactEmail: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Email de contact discipline"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Image principale discipline (URL)
+                    <input
+                      value={discipline.imageUrl}
+                      onChange={(event) => updateDiscipline(index, { imageUrl: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Image URL"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Photo du coach (URL)
+                    <input
+                      value={discipline.coachPhotoUrl ?? ""}
+                      onChange={(event) => updateDiscipline(index, { coachPhotoUrl: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Photo coach URL"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Description
+                    <textarea
+                      value={discipline.description}
+                      onChange={(event) => updateDiscipline(index, { description: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      rows={2}
+                      placeholder="Description"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Bio du coach
+                    <textarea
+                      value={discipline.coachBio}
+                      onChange={(event) => updateDiscipline(index, { coachBio: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      rows={2}
+                      placeholder="Bio coach"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Infos tarif
+                    <input
+                      value={discipline.priceInfo}
+                      onChange={(event) => updateDiscipline(index, { priceInfo: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Infos tarif"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Materiel a apporter
+                    <textarea
+                      value={arrayToLines(discipline.whatToBring)}
+                      onChange={(event) => updateDiscipline(index, { whatToBring: linesToArray(event.target.value) })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      rows={4}
+                      placeholder="1 ligne = 1 item"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Materiel fourni
+                    <textarea
+                      value={arrayToLines(discipline.providedItems)}
+                      onChange={(event) => updateDiscipline(index, { providedItems: linesToArray(event.target.value) })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      rows={4}
+                      placeholder="1 ligne = 1 item"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Texte du bouton d'essai
+                    <input
+                      value={discipline.ctaText}
+                      onChange={(event) => updateDiscipline(index, { ctaText: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Texte bouton essai"
+                    />
+                  </label>
+                  <div className="sm:col-span-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">Horaires de cette discipline</p>
+                      <button
+                        type="button"
+                        onClick={() => addScheduleForDiscipline(discipline.id)}
+                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold"
+                      >
+                        Ajouter un horaire
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {disciplineSchedule.length > 0 ? (
+                        disciplineSchedule.map((slot) => (
+                          <div key={slot.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                                Jour
+                                <input
+                                  value={slot.day}
+                                  onChange={(event) => updateSchedule(slot.id, { day: event.target.value })}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                                  placeholder="Ex: Lundi"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                                Lieu
+                                <input
+                                  value={slot.location}
+                                  onChange={(event) => updateSchedule(slot.id, { location: event.target.value })}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                                  placeholder="Lieu"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                                Heure debut
+                                <input
+                                  value={slot.startTime}
+                                  onChange={(event) => updateSchedule(slot.id, { startTime: event.target.value })}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                                  placeholder="Ex: 10:00"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                                Heure fin
+                                <input
+                                  value={slot.endTime}
+                                  onChange={(event) => updateSchedule(slot.id, { endTime: event.target.value })}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                                  placeholder="Ex: 11:00"
+                                />
+                              </label>
+                            </div>
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => removeSchedule(slot.id)}
+                                className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700"
+                              >
+                                Supprimer cet horaire
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-600">Aucun horaire pour cette discipline.</p>
+                      )}
+                    </div>
+                  </div>
+                </div> : null}
+              </article>
+            );
+            })}
+          </div>
+        </section>
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="rounded-xl bg-cyan-700 px-5 py-3 font-semibold text-white disabled:opacity-50"
+        >
+          Enregistrer
+        </button>
+      </form>
+
+      {statusMessage ? (
+        <p className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">{statusMessage}</p>
+      ) : null}
+    </main>
+  );
+}

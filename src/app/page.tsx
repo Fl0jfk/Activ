@@ -1,65 +1,145 @@
 import Image from "next/image";
+import Link from "next/link";
+import { readSiteData } from "@/lib/site-data";
+import ActivityOrientation from "@/components/activity-orientation";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const data = await readSiteData();
+  const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
+  const activeSchedule = data.schedule.filter((slot) => slot.active);
+  const featuredEvents = activeDisciplines.flatMap((discipline) =>
+    discipline.events
+      .filter((event) => event.featuredOnHome)
+      .map((event) => ({ ...event, disciplineName: discipline.name, slug: discipline.slug }))
+  );
+  const latestNews = [...featuredEvents].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-8 pt-12">
+      <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-10">
+        <div className="space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-white/90">
+              {data.association.city}
+            </p>
+            <h1 className="text-3xl font-bold text-white sm:text-5xl">{data.association.name}</h1>
+            <p className="text-lg text-white/95">{data.association.tagline}</p>
+            <p className="text-sm text-white/90">
+              Rejoins une association locale qui fait bouger Sainte-Croix. Cours sportifs et culturels, ambiance bienveillante, progression adaptee a chacun.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={data.association.facebookUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-50"
+              >
+                Voir la page Facebook
+              </a>
+              <span className="rounded-full border border-white/40 bg-white/15 px-3 py-2 text-xs font-semibold text-white">
+                Activer, bouger, renforcer, partager
+              </span>
+            </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      <section id="actualites" className="panel mt-8 p-6 sm:p-8">
+          <h2 className="panel-title">Actualites de l&apos;association</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {latestNews.length > 0 ? (
+              latestNews.map((event) => (
+              <Link
+                key={event.id}
+                href={`/disciplines/${event.slug}`}
+                className="rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <p className="text-xs font-semibold uppercase text-orange-700">{event.disciplineName}</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900">{event.title}</h3>
+                <p className="mt-1 text-sm text-slate-700">{event.date}</p>
+                <p className="mt-2 text-sm text-slate-700">{event.description}</p>
+              </Link>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+                Pas encore d&apos;actualites publiees. Ajoute des evenements dans une discipline depuis l&apos;admin.
+              </div>
+            )}
+          </div>
+      </section>
+
+      <section id="programme" className="panel mt-8 p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="panel-title">Planning hebdomadaire</h2>
+          <span className="gradient-chip">Mise a jour dynamique</span>
         </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-700">
+                <th className="py-2 pr-4">Jour</th>
+                <th className="py-2 pr-4">Horaire</th>
+                <th className="py-2 pr-4">Discipline</th>
+                <th className="py-2 pr-4">Lieu</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeSchedule.map((slot) => {
+                const discipline = data.disciplines.find((item) => item.id === slot.disciplineId);
+
+                return (
+                  <tr key={slot.id} className="border-b border-slate-100 transition hover:bg-cyan-50/50">
+                    <td className="py-3 pr-4 font-medium text-slate-900">{slot.day}</td>
+                    <td className="py-3 pr-4 text-slate-700">
+                      {slot.startTime} - {slot.endTime}
+                    </td>
+                    <td className="py-3 pr-4 text-slate-700">{discipline?.name ?? "A definir"}</td>
+                    <td className="py-3 pr-4 text-slate-700">{slot.location}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <ActivityOrientation disciplines={activeDisciplines} />
+
+      <section id="disciplines" className="panel mt-8 p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="panel-title">Disciplines disponibles</h2>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+            {activeDisciplines.length} activites
+          </span>
+        </div>
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          {activeDisciplines.slice(0, 6).map((discipline) => (
+            <Link
+              key={discipline.id}
+              href={`/disciplines/${discipline.slug}`}
+              className="group relative overflow-hidden rounded-2xl border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/35 to-fuchsia-50/50 p-4 transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-fuchsia-200/55 blur-xl" />
+              <Image
+                src={discipline.imageUrl}
+                alt={discipline.name}
+                width={700}
+                height={380}
+                className="h-44 w-full rounded-xl object-cover"
+              />
+              <h3 className="mt-4 text-xl font-semibold text-slate-900 group-hover:text-cyan-700">{discipline.name}</h3>
+              <p className="mt-2 text-slate-700">{discipline.description}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
       </main>
-    </div>
+      <footer className="mt-2 w-full border-t border-white/30 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-3 px-4 py-8 text-sm sm:px-8">
+          <p className="text-md text-slate-300">© 2026 Sainte-Croix-sur-Buchy</p>
+        </div>
+      </footer>
+    </>
   );
 }

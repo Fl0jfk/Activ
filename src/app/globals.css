@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f2f7ff;
+  --foreground: #1e293b;
 }
 
 @theme inline {
@@ -12,15 +12,46 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background:
+    radial-gradient(circle at 10% 10%, #c4f1ff 0%, transparent 30%),
+    radial-gradient(circle at 90% 0%, #ffd8ef 0%, transparent 28%),
+    radial-gradient(circle at 80% 90%, #ffe6b8 0%, transparent 35%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(8,47,73,0.08)] backdrop-blur-sm;
+  }
+
+  .panel-title {
+    @apply text-2xl font-bold text-slate-900;
+  }
+
+  .gradient-chip {
+    @apply rounded-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 px-4 py-2 text-sm font-semibold text-white;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
