@@ -9,13 +9,8 @@ export default async function Home() {
   const data = await readSiteData();
   const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
   const activeSchedule = data.schedule.filter((slot) => slot.active);
-  const featuredEvents = activeDisciplines.flatMap((discipline) =>
-    discipline.events
-      .filter((event) => event.featuredOnHome)
-      .map((event) => ({ ...event, disciplineName: discipline.name, slug: discipline.slug }))
-  );
+  const featuredEvents = activeDisciplines.flatMap((discipline) => discipline.events.filter((event) => event.featuredOnHome).map((event) => ({ ...event, disciplineName: discipline.name, slug: discipline.slug })));
   const latestNews = [...featuredEvents].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
-
   return (
     <>
       <main className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-8 pt-12">

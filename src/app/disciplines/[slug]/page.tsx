@@ -2,11 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { readSiteData } from "@/lib/site-data";
 
-type PageProps = {
-  params: Promise<{
-    slug: string;
-  }>;
-};
+type PageProps = { params: Promise<{ slug: string; }>};
 
 export const dynamic = "force-dynamic";
 
@@ -14,29 +10,15 @@ export default async function DisciplinePage({ params }: PageProps) {
   const { slug } = await params;
   const data = await readSiteData();
   const discipline = data.disciplines.find((item) => item.slug === slug && item.active);
-
-  if (!discipline) {
-    notFound();
-  }
-
-  const disciplineSchedule = data.schedule.filter(
-    (slot) => slot.active && slot.disciplineId === discipline.id
-  );
-
+  if (!discipline) { notFound()}
+  const disciplineSchedule = data.schedule.filter( (slot) => slot.active && slot.disciplineId === discipline.id);
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
       <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-8">
-        <Image
-          src={discipline.imageUrl}
-          alt={discipline.name}
-          width={1000}
-          height={500}
-          className="h-60 w-full rounded-2xl object-cover shadow-2xl"
-        />
+        <Image src={discipline.imageUrl} alt={discipline.name} width={1000} height={500} className="h-60 w-full rounded-2xl object-cover shadow-2xl"/>
         <h1 className="mt-6 text-3xl font-bold text-white">{discipline.name}</h1>
         <p className="mt-2 text-white/95">{discipline.description}</p>
       </header>
-
       <section className="mt-6 grid gap-6 md:grid-cols-2">
         <article className="panel p-6">
           <h2 className="text-xl font-bold text-slate-900">Coach</h2>
@@ -94,7 +76,6 @@ export default async function DisciplinePage({ params }: PageProps) {
           </ul>
         </article>
       </section>
-
       <section className="panel mt-6 p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-slate-900">Horaires de cette discipline</h2>
@@ -112,7 +93,6 @@ export default async function DisciplinePage({ params }: PageProps) {
           )}
         </div>
       </section>
-
       {discipline.events.length > 0 ? (
         <section className="panel mt-6 p-6">
           <h2 className="text-xl font-bold text-slate-900">Evenements de la discipline</h2>

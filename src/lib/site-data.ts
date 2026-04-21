@@ -93,12 +93,7 @@ async function readDefaultLocalData(): Promise<AssociationData> {
 }
 
 function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
 
 function normalizeSiteData(data: AssociationData): AssociationData {
@@ -115,8 +110,7 @@ function normalizeSiteData(data: AssociationData): AssociationData {
           },
         ],
         notes:
-          data.association.organisation?.notes ??
-          "L'organigramme peut etre ajuste depuis les donnees JSON.",
+          data.association.organisation?.notes ?? "L'organigramme peut etre ajuste depuis les donnees JSON.",
       },
     },
     disciplines: data.disciplines.map((discipline) => ({
@@ -149,23 +143,14 @@ function normalizeSiteData(data: AssociationData): AssociationData {
 export async function readSiteData(): Promise<AssociationData> {
   const { bucketName, siteDataKey } = requireBucketConfig();
   const s3 = createS3Client();
-
   try {
     const object = await s3.send(
-      new GetObjectCommand({
-        Bucket: bucketName,
-        Key: siteDataKey,
-      })
+      new GetObjectCommand({ Bucket: bucketName, Key: siteDataKey})
     );
-
-    if (!object.Body) {
-      throw new Error("S3 object body is empty.");
-    }
-
+    if (!object.Body) { throw new Error("S3 object body is empty.")}
     const content = await object.Body.transformToString();
     return normalizeSiteData(JSON.parse(content) as AssociationData);
   } catch {
-    // First run: bootstrap from local seed JSON, then persist it to S3.
     const seedData = await readDefaultLocalData();
     await writeSiteData(seedData);
     return seedData;
@@ -176,13 +161,5 @@ export async function writeSiteData(data: AssociationData): Promise<void> {
   const normalizedData = normalizeSiteData(data);
   const { bucketName, siteDataKey } = requireBucketConfig();
   const s3 = createS3Client();
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: siteDataKey,
-      Body: JSON.stringify(normalizedData, null, 2),
-      ContentType: "application/json; charset=utf-8",
-    })
-  );
+  await s3.send( new PutObjectCommand({ Bucket: bucketName, Key: siteDataKey, Body: JSON.stringify(normalizedData, null, 2), ContentType: "application/json; charset=utf-8",}));
 }
