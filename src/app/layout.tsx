@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import SiteHeader from "@/components/site-header";
+import Header from "@/components/header";
 import { readSiteData } from "@/lib/site-data";
 import "./globals.css";
 
@@ -15,24 +15,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Activ' Sainte-Croix Sport et Culture",
-  description:
-    "Association sportive locale: disciplines, planning et informations pratiques.",
+  description:"Association sportive locale: disciplines, planning et informations pratiques.",
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default async function RootLayout({ children}: Readonly<{ children: React.ReactNode;}>) {
   const data = await readSiteData();
-
   return (
-    <html
-      lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        <SiteHeader facebookUrl={data.association.facebookUrl} />
+        <Header facebookUrl={data.association.facebookUrl} />
         {children}
       </body>
     </html>

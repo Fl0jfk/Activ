@@ -6,10 +6,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 const HEADER_PX = 64;
-
-type SiteHeaderProps = {
-  facebookUrl: string;
-};
+type SiteHeaderProps = { facebookUrl: string};
 
 const NAV = [
   { href: "#actualites", label: "Actualités", isAppRoute: false },
@@ -19,13 +16,7 @@ const NAV = [
   { href: "/association", label: "Organigramme", isAppRoute: true },
 ] as const;
 
-function MobileMenu({
-  facebookUrl,
-  onClose,
-}: {
-  facebookUrl: string;
-  onClose: () => void;
-}) {
+function MobileMenu({ facebookUrl, onClose,}: { facebookUrl: string; onClose: () => void}) {
   return (
     <>
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
@@ -62,15 +53,12 @@ function MobileMenu({
   );
 }
 
-export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
+export default function Header({ facebookUrl }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => {
-      setIsMobile(mq.matches);
-    };
+    const apply = () => { setIsMobile(mq.matches)};
     const onChange = (event: MediaQueryListEvent) => {
       setIsMobile(event.matches);
       if (!event.matches) setOpen(false);
@@ -79,14 +67,12 @@ export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
-
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [open]);
-
   useEffect(() => {
     if (!open) return;
     const onEsc = (e: KeyboardEvent) => {
@@ -95,9 +81,7 @@ export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
   }, [open]);
-
   const close = () => setOpen(false);
-
   const overlay =
     typeof document !== "undefined" &&
     open &&
@@ -113,25 +97,14 @@ export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
       </div>,
       document.body
     );
-
   return (
     <>
       <header className="fixed left-0 right-0 top-0 z-[100] flex h-16 w-full items-center bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
           <Link href="/" onClick={close}>
-            <Image
-              src="/logo.png"
-              alt="Activ Sainte-Croix"
-              width={100}
-              height={100}
-            />
+            <Image src="/logo.png" alt="Activ Sainte-Croix" width={100} height={100}/>
           </Link>
-
-          {/* Bureau */}
-          <nav
-            className="shrink-0 items-center gap-8"
-            style={{ display: isMobile ? "none" : "flex" }}
-          >
+          <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
             {NAV.map((item) =>
               item.isAppRoute ? (
                 <Link
@@ -160,8 +133,6 @@ export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
               Facebook
             </a>
           </nav>
-
-          {/* Mobile */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -188,9 +159,7 @@ export default function SiteHeader({ facebookUrl }: SiteHeaderProps) {
           </button>
         </div>
       </header>
-
       <div className="h-16 shrink-0" aria-hidden />
-
       {overlay}
     </>
   );
