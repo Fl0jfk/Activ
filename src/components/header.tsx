@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { UserButton, useUser } from "@clerk/nextjs";
 
 const HEADER_PX = 64;
 type SiteHeaderProps = { facebookUrl: string};
@@ -17,6 +18,7 @@ const NAV = [
 ] as const;
 
 function MobileMenu({ facebookUrl, onClose,}: { facebookUrl: string; onClose: () => void}) {
+  const { isSignedIn } = useUser();
   return (
     <>
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
@@ -38,6 +40,15 @@ function MobileMenu({ facebookUrl, onClose,}: { facebookUrl: string; onClose: ()
           })}
         </nav>
         <div className="mt-auto pt-8">
+          {!isSignedIn ? (
+            <Link
+              href="/sign-in"
+              onClick={onClose}
+              className="mb-3 block w-full rounded-2xl border border-slate-300 py-3 text-center text-[16px] font-semibold text-slate-800 transition-colors hover:bg-slate-50"
+            >
+              Se connecter
+            </Link>
+          ) : null}
           <a
             href={facebookUrl}
             target="_blank"
@@ -54,6 +65,7 @@ function MobileMenu({ facebookUrl, onClose,}: { facebookUrl: string; onClose: ()
 }
 
 export default function Header({ facebookUrl }: SiteHeaderProps) {
+  const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -132,6 +144,15 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
             >
               Facebook
             </a>
+            {!isSignedIn ? (
+              <Link
+                href="/sign-in"
+                className="rounded-full border border-slate-300 px-4 py-1.5 text-[13px] font-semibold text-slate-800 transition-colors hover:bg-slate-100"
+              >
+                Connexion
+              </Link>
+            ) : null}
+            {isSignedIn ? <UserButton afterSignOutUrl="/" /> : null}
           </nav>
           <button
             type="button"

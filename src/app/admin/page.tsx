@@ -1,9 +1,5 @@
-import AdminLoginForm from "./login-form";
+import { redirect } from "next/navigation";
 
-export default function AdminLoginPage() {
-  return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
-      <AdminLoginForm />
-    </main>
-  );
+export default function AdminEntryPage() {
+  redirect("/admin/dashboard");
 }

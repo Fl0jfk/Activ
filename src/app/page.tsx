@@ -5,7 +5,13 @@ import ActivityOrientation from "@/components/activity-orientation";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ preregistration?: string }>;
+}) {
+  const params = await searchParams;
+  const preregistrationReceived = params.preregistration === "received";
   const data = await readSiteData();
   const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
   const activeSchedule = data.schedule.filter((slot) => slot.active);
@@ -14,6 +20,11 @@ export default async function Home() {
   return (
     <>
       <main className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-8 pt-12">
+      {preregistrationReceived ? (
+        <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Nous avons bien recu votre demande de pre-inscription. Vous recevrez un email dans quelques jours, une fois votre demande validee par le bureau de l&apos;association. Ensuite, vous pourrez acceder a votre espace.
+        </div>
+      ) : null}
       <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-10">
         <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-wide text-white/90">
@@ -33,6 +44,12 @@ export default async function Home() {
               >
                 Voir la page Facebook
               </a>
+              <Link
+                href="/preinscription"
+                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-400"
+              >
+                Faire une pre-inscription
+              </Link>
               <span className="rounded-full border border-white/40 bg-white/15 px-3 py-2 text-xs font-semibold text-white">
                 Activer, bouger, renforcer, partager
               </span>
@@ -125,6 +142,9 @@ export default async function Home() {
               />
               <h3 className="mt-4 text-xl font-semibold text-slate-900 group-hover:text-cyan-700">{discipline.name}</h3>
               <p className="mt-2 text-slate-700">{discipline.description}</p>
+              <span className="mt-3 inline-block rounded-lg bg-cyan-700 px-3 py-1 text-xs font-semibold text-white">
+                Je me pre-inscris
+              </span>
             </Link>
           ))}
         </div>

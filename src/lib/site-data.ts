@@ -7,6 +7,7 @@ export type Discipline = {
   slug: string;
   description: string;
   teacher: string;
+  teachers: string[];
   coachBio: string;
   coachPhotoUrl?: string;
   imageUrl: string;
@@ -14,6 +15,7 @@ export type Discipline = {
   whatToBring: string[];
   providedItems: string[];
   priceInfo: string;
+  annualFee: string;
   contactEmail: string;
   ctaText: string;
   allowTrialRequest: boolean;
@@ -31,6 +33,7 @@ export type Discipline = {
 export type ScheduleSlot = {
   id: string;
   disciplineId: string;
+  teacherName: string;
   day: string;
   startTime: string;
   endTime: string;
@@ -119,6 +122,12 @@ function normalizeSiteData(data: AssociationData): AssociationData {
       slug: discipline.slug ?? slugify(discipline.name || discipline.id),
       description: discipline.description ?? "",
       teacher: discipline.teacher ?? "",
+      teachers:
+        Array.isArray(discipline.teachers) && discipline.teachers.length > 0
+          ? discipline.teachers.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+          : discipline.teacher
+            ? [discipline.teacher]
+            : [],
       coachBio: discipline.coachBio ?? "",
       coachPhotoUrl: discipline.coachPhotoUrl ?? discipline.imageUrl ?? "/logo.png",
       imageUrl: discipline.imageUrl ?? "/logo.png",
@@ -126,6 +135,7 @@ function normalizeSiteData(data: AssociationData): AssociationData {
       whatToBring: discipline.whatToBring ?? [],
       providedItems: discipline.providedItems ?? [],
       priceInfo: discipline.priceInfo ?? "Tarif sur demande.",
+      annualFee: discipline.annualFee ?? "",
       contactEmail: discipline.contactEmail ?? data.association.contactEmail,
       ctaText: discipline.ctaText ?? "Demander un cours d'essai",
       allowTrialRequest: discipline.allowTrialRequest ?? true,
@@ -135,6 +145,7 @@ function normalizeSiteData(data: AssociationData): AssociationData {
     })),
     schedule: data.schedule.map((slot) => ({
       ...slot,
+      teacherName: slot.teacherName ?? "",
       active: slot.active ?? true,
     })),
   };

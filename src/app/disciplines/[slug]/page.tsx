@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSiteData } from "@/lib/site-data";
 
@@ -11,6 +12,7 @@ export default async function DisciplinePage({ params }: PageProps) {
   const data = await readSiteData();
   const discipline = data.disciplines.find((item) => item.slug === slug && item.active);
   if (!discipline) { notFound()}
+  const teacherList = discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
   const disciplineSchedule = data.schedule.filter( (slot) => slot.active && slot.disciplineId === discipline.id);
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
@@ -21,35 +23,44 @@ export default async function DisciplinePage({ params }: PageProps) {
       </header>
       <section className="mt-6 grid gap-6 md:grid-cols-2">
         <article className="panel p-6">
-          <h2 className="text-xl font-bold text-slate-900">Coach</h2>
+          <h2 className="text-xl font-bold text-slate-900">Enseignants</h2>
           <div className="mt-3 flex items-center gap-3">
             <Image
               src={discipline.coachPhotoUrl ?? discipline.imageUrl}
-              alt={`Photo de ${discipline.teacher}`}
+              alt={`Photo de ${teacherList[0]}`}
               width={56}
               height={56}
               className="h-14 w-14 rounded-full border border-slate-200 object-cover"
             />
-            <p className="text-slate-800">{discipline.teacher}</p>
+            <div>
+              {teacherList.map((teacher) => (
+                <p key={teacher} className="text-slate-800">{teacher}</p>
+              ))}
+            </div>
           </div>
           <p className="mt-2 text-slate-700">{discipline.coachBio}</p>
         </article>
         <article className="panel p-6">
           <h2 className="text-xl font-bold text-slate-900">Tarif et contact</h2>
           <p className="mt-2 text-slate-700">{discipline.priceInfo}</p>
+          {discipline.annualFee ? (
+            <p className="mt-2 text-slate-700">
+              <span className="font-semibold">Licence a l&apos;annee:</span> {discipline.annualFee}
+            </p>
+          ) : null}
           <p className="mt-2 text-slate-700">
-            Contact:{" "}
+            Contact discipline:{" "}
             <a href={`mailto:${discipline.contactEmail}`} className="font-semibold text-cyan-700 hover:underline">
               {discipline.contactEmail}
             </a>
           </p>
           {discipline.allowTrialRequest ? (
-            <a
-              href={`mailto:${discipline.contactEmail}?subject=${encodeURIComponent(`Demande d'essai - ${discipline.name}`)}`}
+            <Link
+              href="/preinscription"
               className="mt-4 inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              {discipline.ctaText}
-            </a>
+              {discipline.ctaText} (sans compte)
+            </Link>
           ) : null}
         </article>
       </section>
@@ -86,6 +97,7 @@ export default async function DisciplinePage({ params }: PageProps) {
             disciplineSchedule.map((slot) => (
               <div key={slot.id} className="rounded-xl border border-cyan-100 bg-cyan-50/50 px-4 py-3 text-slate-700">
                 <span className="font-semibold text-slate-900">{slot.day}</span> - {slot.startTime} / {slot.endTime} ({slot.location})
+                {slot.teacherName ? <span className="ml-2 text-sm">- {slot.teacherName}</span> : null}
               </div>
             ))
           ) : (

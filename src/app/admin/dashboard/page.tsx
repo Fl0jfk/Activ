@@ -1,10 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data";
-
-const STORAGE_KEY = "activ_admin_password";
 
 const emptyData: AssociationData = {
   association: {
@@ -48,61 +45,48 @@ function slugify(value: string): string {
 }
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
   const [data, setData] = useState<AssociationData>(emptyData);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [openDisciplineId, setOpenDisciplineId] = useState<string | null>(null);
 
-  const loadData = useCallback(async (adminPassword: string) => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setStatusMessage("");
 
-    const response = await fetch("/api/admin/site-data", {
-      headers: { "x-admin-password": adminPassword },
-    });
+    const response = await fetch("/api/admin/site-data");
 
     if (!response.ok) {
-      sessionStorage.removeItem(STORAGE_KEY);
-      setIsAuthenticated(false);
-      router.replace("/admin");
+      setIsForbidden(response.status === 401);
+      setHasAccess(false);
+      setIsLoading(false);
       return;
     }
 
     const payload = (await response.json()) as AssociationData;
     setData(payload);
-    setIsAuthenticated(true);
+    setHasAccess(true);
+    setIsForbidden(false);
     setStatusMessage("Donnees chargees.");
     setIsLoading(false);
-  }, [router]);
+  }, []);
 
   useEffect(() => {
-    const savedPassword = sessionStorage.getItem(STORAGE_KEY);
-    if (!savedPassword) {
-      router.replace("/admin");
-      return;
-    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData(savedPassword);
-  }, [loadData, router]);
+    void loadData();
+  }, [loadData]);
 
   async function saveData(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setStatusMessage("");
 
-    const adminPassword = sessionStorage.getItem(STORAGE_KEY);
-    if (!adminPassword) {
-      router.replace("/admin");
-      return;
-    }
-
     const response = await fetch("/api/admin/site-data", {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        "x-admin-password": adminPassword,
       },
       body: JSON.stringify(data),
     });
@@ -142,6 +126,7 @@ export default function AdminDashboardPage() {
         {
           id: randomId("slot"),
           disciplineId,
+          teacherName: "",
           day: "",
           startTime: "",
           endTime: "",
@@ -159,11 +144,47 @@ export default function AdminDashboardPage() {
     }));
   }
 
-  if (!isAuthenticated) {
+  function updateBoardMember(index: number, next: { fullName?: string; role?: string; email?: string }) {
+    setData((previous) => {
+      const boardMembers = [...previous.association.organisation.boardMembers];
+      boardMembers[index] = { ...boardMembers[index], ...next };
+      return {
+        ...previous,
+        association: {
+          ...previous.association,
+          organisation: { ...previous.association.organisation, boardMembers },
+        },
+      };
+    });
+  }
+
+  function addBoardMember() {
+    setData((previous) => ({
+      ...previous,
+      association: {
+        ...previous.association,
+        organisation: {
+          ...previous.association.organisation,
+          boardMembers: [
+            ...previous.association.organisation.boardMembers,
+            { id: randomId("board"), fullName: "", role: "", email: "" },
+          ],
+        },
+      },
+    }));
+  }
+
+  if (!hasAccess) {
     return (
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
         <div className="mx-auto mt-20 w-full max-w-md rounded-2xl bg-white p-6 shadow-sm">
-          <p className="text-slate-700">{isLoading ? "Chargement..." : "Verification..."}</p>
+          <p className="text-slate-700">
+            {isLoading
+              ? "Verification des droits..."
+              : isForbidden
+                ? "Acces reserve aux profils president ou secretary dans publicMetadata.functions."
+                : "Verification..."}
+          </p>
         </div>
       </main>
     );
@@ -181,7 +202,7 @@ export default function AdminDashboardPage() {
           <h2 className="text-xl font-bold text-slate-900">Informations generales</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-              Nom de l'association
+              Nom de l&apos;association
               <input
                 value={data.association.name}
                 onChange={(event) =>
@@ -246,6 +267,60 @@ export default function AdminDashboardPage() {
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900">Organigramme (bureau)</h2>
+            <button
+              type="button"
+              onClick={addBoardMember}
+              className="rounded-xl border border-slate-300 px-3 py-1 text-sm font-semibold"
+            >
+              Ajouter un membre
+            </button>
+          </div>
+          <label className="mt-4 flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Note d&apos;organigramme
+            <textarea
+              value={data.association.organisation.notes}
+              onChange={(event) =>
+                setData((prev) => ({
+                  ...prev,
+                  association: {
+                    ...prev.association,
+                    organisation: { ...prev.association.organisation, notes: event.target.value },
+                  },
+                }))
+              }
+              className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+              rows={2}
+            />
+          </label>
+          <div className="mt-4 space-y-3">
+            {data.association.organisation.boardMembers.map((member, index) => (
+              <div key={member.id} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-3">
+                <input
+                  value={member.fullName}
+                  onChange={(event) => updateBoardMember(index, { fullName: event.target.value })}
+                  className="rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Nom complet"
+                />
+                <input
+                  value={member.role}
+                  onChange={(event) => updateBoardMember(index, { role: event.target.value })}
+                  className="rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Role"
+                />
+                <input
+                  value={member.email}
+                  onChange={(event) => updateBoardMember(index, { email: event.target.value })}
+                  className="rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Email"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Disciplines (pages dynamiques)</h2>
             <button
               type="button"
@@ -260,6 +335,7 @@ export default function AdminDashboardPage() {
                       slug: "",
                       description: "",
                       teacher: "",
+                      teachers: [],
                       coachBio: "",
                       coachPhotoUrl: "/logo.png",
                       imageUrl: "/logo.png",
@@ -267,6 +343,7 @@ export default function AdminDashboardPage() {
                       whatToBring: [],
                       providedItems: [],
                       priceInfo: "",
+                      annualFee: "",
                       contactEmail: prev.association.contactEmail,
                       ctaText: "Demander un essai",
                       allowTrialRequest: true,
@@ -324,12 +401,16 @@ export default function AdminDashboardPage() {
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-                    Nom du coach
-                    <input
-                      value={discipline.teacher}
-                      onChange={(event) => updateDiscipline(index, { teacher: event.target.value })}
+                    Enseignants (1 ligne = 1 enseignant)
+                    <textarea
+                      value={arrayToLines(discipline.teachers ?? (discipline.teacher ? [discipline.teacher] : []))}
+                      onChange={(event) => {
+                        const teachers = linesToArray(event.target.value);
+                        updateDiscipline(index, { teachers, teacher: teachers[0] ?? "" });
+                      }}
                       className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                      placeholder="Coach"
+                      rows={3}
+                      placeholder="Ex: Claire Martin"
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
@@ -388,6 +469,15 @@ export default function AdminDashboardPage() {
                       placeholder="Infos tarif"
                     />
                   </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Licence a l&apos;annee
+                    <input
+                      value={discipline.annualFee ?? ""}
+                      onChange={(event) => updateDiscipline(index, { annualFee: event.target.value })}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      placeholder="Ex: 180 EUR / an"
+                    />
+                  </label>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                     Materiel a apporter
                     <textarea
@@ -409,7 +499,7 @@ export default function AdminDashboardPage() {
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-                    Texte du bouton d'essai
+                    Texte du bouton d&apos;essai
                     <input
                       value={discipline.ctaText}
                       onChange={(event) => updateDiscipline(index, { ctaText: event.target.value })}
@@ -450,6 +540,21 @@ export default function AdminDashboardPage() {
                                   className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
                                   placeholder="Lieu"
                                 />
+                              </label>
+                              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                                Enseignant
+                                <select
+                                  value={slot.teacherName ?? ""}
+                                  onChange={(event) => updateSchedule(slot.id, { teacherName: event.target.value })}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                                >
+                                  <option value="">A definir</option>
+                                  {(discipline.teachers ?? []).map((teacher) => (
+                                    <option key={teacher} value={teacher}>
+                                      {teacher}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
                               <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                                 Heure debut

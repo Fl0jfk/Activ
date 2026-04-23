@@ -8,12 +8,15 @@ export default async function AssociationPage() {
 
   const teachers = data.disciplines
     .filter((discipline) => discipline.active)
-    .map((discipline) => ({
-      id: discipline.id,
-      fullName: discipline.teacher || "Coach a definir",
-      disciplineName: discipline.name,
-      email: discipline.contactEmail,
-    }));
+    .flatMap((discipline) => {
+      const list = discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
+      return list.map((teacherName, idx) => ({
+        id: `${discipline.id}-${idx}`,
+        fullName: teacherName || "Coach a definir",
+        disciplineName: discipline.name,
+        email: discipline.contactEmail,
+      }));
+    });
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
@@ -40,14 +43,16 @@ export default async function AssociationPage() {
       <section className="panel mt-6 p-6 sm:p-8">
         <h2 className="panel-title">Equipe enseignante (auto depuis disciplines)</h2>
         <p className="mt-2 text-slate-600">
-          Cette liste est dynamique: chaque discipline active ajoute automatiquement son enseignant ici.
+          Cette liste est dynamique: chaque discipline active ajoute automatiquement ses enseignants ici.
+          Le contact se fait via l&apos;email de la discipline.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {teachers.map((teacher) => (
             <article key={teacher.id} className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4">
               <p className="text-xs font-semibold uppercase text-cyan-700">{teacher.disciplineName}</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">{teacher.fullName}</h3>
-              <a href={`mailto:${teacher.email}`} className="mt-2 inline-block text-sm text-slate-700 hover:underline">
+              <p className="mt-2 text-xs font-semibold uppercase text-slate-500">Contact discipline</p>
+              <a href={`mailto:${teacher.email}`} className="inline-block text-sm text-slate-700 hover:underline">
                 {teacher.email}
               </a>
             </article>

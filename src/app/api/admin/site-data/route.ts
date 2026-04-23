@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
+import { canAccessAdminSpace, getCurrentUserContext } from "@/lib/clerk";
 
-function hasValidPassword(request: NextRequest): boolean {
-  const configuredPassword = process.env.ADMIN_PASSWORD;
-  const providedPassword = request.headers.get("x-admin-password");
-  if (!configuredPassword) { return false;}
-  return providedPassword === configuredPassword;
+async function canManageSiteData() {
+  const user = await getCurrentUserContext();
+  if (!user) {
+    return false;
+  }
+  return canAccessAdminSpace(user.publicFunctions);
 }
 
-export async function GET(request: NextRequest) {
-  if (!hasValidPassword(request)) { return NextResponse.json({ message: "Non autorise." }, { status: 401 })}
+export async function GET() {
+  if (!(await canManageSiteData())) {
+    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  }
 
   try {
     const data = await readSiteData();
@@ -24,7 +28,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!hasValidPassword(request)) { return NextResponse.json({ message: "Non autorise." }, { status: 401 })}
+  if (!(await canManageSiteData())) {
+    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  }
   try {
     const payload = await request.json();
     await writeSiteData(payload);
