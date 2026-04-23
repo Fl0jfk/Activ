@@ -28,7 +28,7 @@ type Application = {
   paymentMethod: "cash" | "check" | "bank_transfer" | "card" | "other" | "";
   licenseEndDate: string | null;
   notes: string;
-  fullName?: string;
+  fullName: string;
 };
 
 type EspaceHubProps = {

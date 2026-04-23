@@ -152,7 +152,7 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
                 Connexion
               </Link>
             ) : null}
-            {isSignedIn ? <UserButton afterSignOutUrl="/" /> : null}
+            {isSignedIn ? <UserButton /> : null}
           </nav>
           <button
             type="button"

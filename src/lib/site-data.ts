@@ -91,8 +91,27 @@ function requireBucketConfig() {
 }
 
 async function readDefaultLocalData(): Promise<AssociationData> {
-  const content = await readFile(defaultSiteDataPath, "utf-8");
-  return normalizeSiteData(JSON.parse(content) as AssociationData);
+  try {
+    const content = await readFile(defaultSiteDataPath, "utf-8");
+    return normalizeSiteData(JSON.parse(content) as AssociationData);
+  } catch {
+    return normalizeSiteData({
+      association: {
+        name: "Activ Sainte-Croix",
+        tagline: "Association sportive",
+        city: "Sainte-Croix",
+        contactEmail: "contact@activ-saintecroix.fr",
+        facebookUrl: "https://facebook.com",
+        address: "Mairie de Sainte-Croix",
+        organisation: {
+          boardMembers: [],
+          notes: "Organigramme a completer.",
+        },
+      },
+      disciplines: [],
+      schedule: [],
+    });
+  }
 }
 
 function slugify(value: string): string {
@@ -163,7 +182,11 @@ export async function readSiteData(): Promise<AssociationData> {
     return normalizeSiteData(JSON.parse(content) as AssociationData);
   } catch {
     const seedData = await readDefaultLocalData();
-    await writeSiteData(seedData);
+    try {
+      await writeSiteData(seedData);
+    } catch {
+      // S3 may be unavailable in build/deploy environments; keep local fallback.
+    }
     return seedData;
   }
 }
