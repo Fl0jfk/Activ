@@ -8,17 +8,16 @@ import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dos
 import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
 import TrialSlotsPanel from "@/components/trial-slots-panel";
 import type { RegistrationApplication } from "@/lib/club-data";
+import type { TrialSlotSummary } from "@/lib/club-types";
+import type { DisciplineOption } from "@/lib/discipline-options";
 import type { WeekScheduleEntry } from "@/lib/schedule-week";
-
-type DisciplineOption = { id: string; name: string };
-type TrialSlot = { id: string; disciplineId: string; title: string; startsAt: string; capacity: number };
 
 type BureauCockpitProps = {
   canManageSite: boolean;
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
   disciplines: DisciplineOption[];
-  slots: TrialSlot[];
+  slots: TrialSlotSummary[];
   applications: RegistrationApplication[];
   weekSchedule: WeekScheduleEntry[];
 };
@@ -218,7 +217,6 @@ export default function BureauCockpit({
           </div>
         </section>
       ) : null}
-
       {canManageSite ? (
         <section>
           <h2 className="mb-3 text-xl font-bold text-slate-900">Contenu du site</h2>

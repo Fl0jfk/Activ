@@ -1,12 +1,7 @@
 import type { ClubData } from "@/lib/club-data";
+import { countTrialSlotRegistrations } from "@/lib/trial-slots";
 import { buildMistralActivitiesContext } from "@/lib/schedule-week";
 import type { AssociationData } from "@/lib/site-data-types";
-
-function countSlotRegistrations(clubData: ClubData, slotId: string): number {
-  return clubData.applications.filter(
-    (entry) => entry.trialSlotId === slotId && entry.status !== "rejected",
-  ).length;
-}
 
 export function buildOrientationContext(
   siteData: AssociationData,
@@ -36,7 +31,7 @@ export function buildOrientationContext(
     .filter((slot) => slot.active && new Date(slot.startsAt).getTime() >= now)
     .map((slot) => {
       const discipline = disciplineById.get(slot.disciplineId);
-      const registered = countSlotRegistrations(clubData, slot.id);
+      const registered = countTrialSlotRegistrations(clubData.applications, slot.id);
       const placesRestantes = Math.max(0, slot.capacity - registered);
       return {
         id: slot.id,

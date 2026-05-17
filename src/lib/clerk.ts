@@ -1,7 +1,8 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
+import type { AppRole } from "@/lib/roles";
 
-export type AppRole = "member" | "staff" | "coach" | "direction";
+export type { AppRole } from "@/lib/roles";
 export type MembershipStatus = "pending" | "approved" | "rejected";
 export type RegistrationState = "pending" | "espace_active" | "registered" | "rejected";
 

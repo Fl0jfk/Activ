@@ -1,4 +1,4 @@
-import type { AppRole } from "@/lib/clerk";
+import type { AppRole } from "@/lib/roles";
 
 /** Utilisateur Clerk (forme minimale pour la lecture du rôle). */
 export type ClerkUserLike = {
@@ -25,10 +25,6 @@ function parseRoleValue(value: unknown): AppRole | null {
   const normalized = value.trim().toLowerCase();
   if (normalized === "member" || normalized === "staff" || normalized === "coach" || normalized === "direction") {
     return normalized;
-  }
-  // Ancien compte Clerk encore en « admin »
-  if (normalized === "admin" || normalized === "administrator") {
-    return "direction";
   }
   return null;
 }

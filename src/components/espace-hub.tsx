@@ -6,24 +6,10 @@ import CoachPortal from "@/components/coach-portal";
 import MemberPortal from "@/components/member-portal";
 import type { RegistrationApplication } from "@/lib/club-data";
 import { isDossierEnCours } from "@/lib/dossier-workflow";
+import type { TrialSlotSummary } from "@/lib/club-types";
+import type { DisciplineOption } from "@/lib/discipline-options";
+import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
 import type { WeekScheduleEntry } from "@/lib/schedule-week";
-
-type DisciplineOption = { id: string; name: string };
-type TrialSlot = { id: string; disciplineId: string; title: string; startsAt: string; capacity: number };
-
-type UpcomingEvent = {
-  id: string;
-  title: string;
-  date: string;
-  description: string;
-  disciplineName: string;
-};
-
-type PendingDocument = {
-  applicationId: string;
-  label: string;
-  uploadUrl: string;
-} | null;
 
 type EspaceTab = "member" | "cockpit" | "coach";
 
@@ -36,7 +22,7 @@ type EspaceHubProps = {
   membershipStatus: "pending" | "approved" | "rejected";
   hasFullMembership: boolean;
   disciplines: DisciplineOption[];
-  slots: TrialSlot[];
+  slots: TrialSlotSummary[];
   myApplications: RegistrationApplication[];
   allApplications: RegistrationApplication[];
   weekSchedule: WeekScheduleEntry[];

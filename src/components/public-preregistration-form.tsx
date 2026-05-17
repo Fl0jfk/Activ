@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type DisciplineOption = { id: string; name: string };
+import type { DisciplineOption } from "@/lib/discipline-options";
 
 type PublicPreregistrationFormProps = {
   disciplines: DisciplineOption[];

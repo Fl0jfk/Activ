@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { ApplicationDossierPhase, PaymentMethod, RegistrationApplication } from "@/lib/club-data";
+import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import type { PaymentMethod, RegistrationApplication } from "@/lib/club-data";
 import {
   PAYMENT_METHOD_OPTIONS,
   PROCESSING_PHASE_DESCRIPTIONS,
@@ -11,18 +12,12 @@ import {
   type DossierProcessingPhase,
 } from "@/lib/dossier-workflow";
 
-type UpdatePayload = {
-  status?: RegistrationApplication["status"];
-  dossierPhase?: ApplicationDossierPhase;
-  trialAttended?: boolean;
-  paymentStatus?: RegistrationApplication["paymentStatus"];
-  paymentMethod?: RegistrationApplication["paymentMethod"];
-};
+export type { ApplicationUpdatePayload as UpdatePayload };
 
 type DossierPanelProps = {
   application: RegistrationApplication;
   disciplineName?: string;
-  onUpdate: (applicationId: string, payload: UpdatePayload) => Promise<void>;
+  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
   onRequestDocument: (applicationId: string) => Promise<void>;
   onValidateEspace: (applicationId: string) => Promise<void>;
   onReject: (applicationId: string) => Promise<void>;

@@ -10,26 +10,13 @@ import {
 } from "@/lib/dossier-workflow";
 import type { WeekScheduleEntry } from "@/lib/schedule-week";
 
-type DisciplineOption = { id: string; name: string };
-type TrialSlot = { id: string; disciplineId: string; title: string; startsAt: string; capacity: number };
-
-type UpcomingEvent = {
-  id: string;
-  title: string;
-  date: string;
-  description: string;
-  disciplineName: string;
-};
-
-type PendingDocument = {
-  applicationId: string;
-  label: string;
-  uploadUrl: string;
-} | null;
+import type { TrialSlotSummary } from "@/lib/club-types";
+import type { DisciplineOption } from "@/lib/discipline-options";
+import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
 
 type MemberPortalProps = {
   disciplines: DisciplineOption[];
-  slots: TrialSlot[];
+  slots: TrialSlotSummary[];
   applications: RegistrationApplication[];
   membershipStatus: "pending" | "approved" | "rejected";
   hasFullMembership: boolean;

@@ -1,4 +1,5 @@
 import PublicPreregistrationForm from "@/components/public-preregistration-form";
+import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +11,7 @@ type PageProps = {
 export default async function PreinscriptionPage({ searchParams }: PageProps) {
   const { discipline: disciplineParam } = await searchParams;
   const siteData = await readSiteData();
-  const disciplines = siteData.disciplines
-    .filter((discipline) => discipline.active)
-    .map((discipline) => ({
-      id: discipline.id,
-      name: discipline.name,
-      slug: discipline.slug,
-    }));
+  const disciplines = getActiveDisciplineOptions(siteData);
 
   const matchedDiscipline = disciplineParam
     ? disciplines.find((d) => d.slug === disciplineParam || d.id === disciplineParam)

@@ -1,28 +1,28 @@
+import { jsonError, jsonOk } from "@/lib/api-response";
+import { requireClubOps } from "@/lib/api-auth";
+import { loadClubData, requireApplication, saveClubData } from "@/lib/club-repository";
+import { syncClerkAfterEspaceValidation } from "@/lib/registration-clerk-sync";
 import { NextResponse } from "next/server";
-import { buildMemberClerkMetadata, canAccessClubOperations, getCurrentUserContext, updateUserMetadata } from "@/lib/clerk";
-import { readClubData, writeClubData } from "@/lib/club-data";
 
 export async function POST(
   _request: Request,
   context: { params: Promise<{ applicationId: string }> },
 ) {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser || !canAccessClubOperations(currentUser)) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireClubOps();
+  if (!auth.ok) {
+    return auth.response;
   }
 
   const { applicationId } = await context.params;
-  const data = await readClubData();
-  const application = data.applications.find((entry) => entry.id === applicationId);
-  if (!application) {
-    return NextResponse.json({ message: "Demande introuvable." }, { status: 404 });
+  const data = await loadClubData();
+  const applicationResult = requireApplication(data, applicationId);
+  if (applicationResult instanceof NextResponse) {
+    return applicationResult;
   }
+  const application = applicationResult;
 
   if (!application.clerkUserId) {
-    return NextResponse.json(
-      { message: "Aucun compte Clerk lie a ce dossier." },
-      { status: 400 },
-    );
+    return jsonError("Aucun compte Clerk lie a ce dossier.", 400);
   }
 
   application.dossierPhase = "documents";
@@ -34,18 +34,10 @@ export async function POST(
     member.updatedAt = new Date().toISOString();
   }
 
-  const disciplineIds = application.disciplineId ? [application.disciplineId] : [];
-  const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
-    disciplineIds,
-    espaceValidated: true,
-    membershipStatus: "pending",
-    registrationState: "espace_active",
-  });
+  await syncClerkAfterEspaceValidation(application);
+  await saveClubData(data);
 
-  await updateUserMetadata(application.clerkUserId, privateMetadata, publicMetadata);
-  await writeClubData(data);
-
-  return NextResponse.json({
+  return jsonOk({
     message: "Espace membre active. Le candidat peut se connecter.",
   });
 }

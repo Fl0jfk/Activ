@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getApplicationDossierPhase } from "@/lib/dossier-workflow";
+import type { AppRole } from "@/lib/roles";
+import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 
 export type PaymentStatus = "unpaid" | "partial" | "paid";
 export type ApplicationStatus = "pending" | "awaiting_document" | "approved" | "rejected";
@@ -11,7 +12,7 @@ export type ApplicationDossierPhase =
   | "finalized";
 export type PaymentMethod = "cash" | "check" | "bank_transfer" | "card" | "other" | "";
 
-export type ClubMemberRole = "member" | "staff" | "coach" | "direction";
+export type ClubMemberRole = AppRole;
 
 export type ClubMember = {
   clerkUserId: string;
@@ -96,44 +97,6 @@ export type ClubData = {
 const defaultClubDataPath = `${process.cwd()}/data/club-data.json`;
 const defaultClubDataKey = "data/club-data.json";
 
-function createS3Client() {
-  return new S3Client({
-    region: process.env.REGION || "eu-west-1",
-    credentials: {
-      accessKeyId: process.env.ACCESS_KEY_ID || "",
-      secretAccessKey: process.env.SECRET_ACCESS_KEY || "",
-    },
-  });
-}
-
-function requireBucketConfig() {
-  const bucketName = process.env.BUCKET_NAME;
-  if (!bucketName) {
-    throw new Error("Missing BUCKET_NAME environment variable.");
-  }
-
-  return {
-    bucketName,
-    clubDataKey: process.env.CLUB_DATA_KEY || defaultClubDataKey,
-  };
-}
-
-function inferDossierPhaseFromLegacy(application: RegistrationApplication): ApplicationDossierPhase {
-  if (application.dossierPhase) {
-    return application.dossierPhase;
-  }
-  if (application.status === "approved" && application.paymentStatus === "paid") {
-    return "finalized";
-  }
-  if (application.status === "approved") {
-    return "payment";
-  }
-  if (application.clerkUserId) {
-    return "documents";
-  }
-  return "reception";
-}
-
 function normalizeClubData(data: ClubData): ClubData {
   return {
     members: data.members ?? [],
@@ -151,7 +114,7 @@ function normalizeClubData(data: ClubData): ClubData {
       trialSlotId: application.trialSlotId ?? null,
       paymentMethod: application.paymentMethod ?? "",
       licenseEndDate: application.licenseEndDate ?? null,
-      dossierPhase: inferDossierPhaseFromLegacy(application),
+      dossierPhase: getApplicationDossierPhase(application),
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
     coachAbsenceRequests: data.coachAbsenceRequests ?? [],
@@ -159,20 +122,16 @@ function normalizeClubData(data: ClubData): ClubData {
   };
 }
 
-export async function readClubData(): Promise<ClubData> {
-  const { bucketName, clubDataKey } = requireBucketConfig();
-  const s3 = createS3Client();
+function clubDataKey(): string {
+  return process.env.CLUB_DATA_KEY || defaultClubDataKey;
+}
 
+export async function readClubData(): Promise<ClubData> {
   try {
-    const object = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: clubDataKey }));
-    if (!object.Body) {
-      throw new Error("S3 object body is empty.");
-    }
-    const content = await object.Body.transformToString();
-    return normalizeClubData(JSON.parse(content) as ClubData);
+    const raw = await readJsonFromS3<ClubData>(clubDataKey());
+    return normalizeClubData(raw);
   } catch {
-    const content = await readFile(defaultClubDataPath, "utf-8");
-    const seedData = normalizeClubData(JSON.parse(content) as ClubData);
+    const seedData = normalizeClubData(await readLocalJsonFile<ClubData>(defaultClubDataPath));
     await writeClubData(seedData);
     return seedData;
   }
@@ -180,15 +139,5 @@ export async function readClubData(): Promise<ClubData> {
 
 export async function writeClubData(data: ClubData): Promise<void> {
   const normalized = normalizeClubData({ ...data, updatedAt: new Date().toISOString() });
-  const { bucketName, clubDataKey } = requireBucketConfig();
-  const s3 = createS3Client();
-
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: clubDataKey,
-      Body: JSON.stringify(normalized, null, 2),
-      ContentType: "application/json; charset=utf-8",
-    }),
-  );
+  await writeJsonToS3(clubDataKey(), normalized);
 }

@@ -1,14 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { jsonError, jsonOk } from "@/lib/api-response";
+import { requireClubOps } from "@/lib/api-auth";
 import { readClubData, writeClubData } from "@/lib/club-data";
-import { canAccessClubOperations, getCurrentUserContext } from "@/lib/clerk";
-
-function randomId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { randomId } from "@/lib/ids";
 
 export async function GET() {
   const data = await readClubData();
-  return NextResponse.json(
+  return jsonOk(
     data.trialSlots
       .filter((slot) => slot.active)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
@@ -16,9 +14,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser || !canAccessClubOperations(currentUser)) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireClubOps();
+  if (!auth.ok) {
+    return auth.response;
   }
 
   try {
@@ -30,7 +28,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (!payload.disciplineId || !payload.title || !payload.startsAt) {
-      return NextResponse.json({ message: "Champs requis manquants." }, { status: 400 });
+      return jsonError("Champs requis manquants.", 400);
     }
 
     const data = await readClubData();
@@ -44,9 +42,9 @@ export async function POST(request: NextRequest) {
     });
 
     await writeClubData(data);
-    return NextResponse.json({ message: "Creneau cree." }, { status: 201 });
+    return jsonOk({ message: "Creneau cree." }, 201);
   } catch (error) {
     console.error("Failed to create trial slot", error);
-    return NextResponse.json({ message: "Erreur serveur." }, { status: 500 });
+    return jsonError("Erreur serveur.", 500);
   }
 }

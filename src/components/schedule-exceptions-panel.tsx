@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AssociationData } from "@/lib/site-data-types";
+import { randomId } from "@/lib/ids";
 import { buildWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
 
 export default function ScheduleExceptionsPanel() {
@@ -29,10 +30,6 @@ export default function ScheduleExceptionsPanel() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  function randomId(prefix: string) {
-    return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
-  }
 
   function addScheduleException(scheduleSlotId: string, date: string, reason: string) {
     if (!data || !reason.trim()) return;

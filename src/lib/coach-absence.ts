@@ -5,9 +5,7 @@ import { formatDayLabelFr } from "@/lib/schedule-week";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
 import type { ScheduleException } from "@/lib/site-data-types";
 
-function randomId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
-}
+import { randomId } from "@/lib/ids";
 
 export async function approveCoachAbsenceRequest(
   requestId: string,

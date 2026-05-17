@@ -3,6 +3,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data-types";
 import { DAY_LABELS, type DayOfWeek } from "@/lib/schedule-constants";
+import { randomId } from "@/lib/ids";
+import { slugify } from "@/lib/slug";
 
 const DAY_OPTIONS = (Object.entries(DAY_LABELS) as [string, string][]).map(([value, label]) => ({
   value: Number(value) as DayOfWeek,
@@ -27,10 +29,6 @@ const emptyData: AssociationData = {
   scheduleExceptions: [],
 };
 
-function randomId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function linesToArray(value: string): string[] {
   return value
     .split("\n")
@@ -40,15 +38,6 @@ function linesToArray(value: string): string[] {
 
 function arrayToLines(value: string[]): string {
   return value.join("\n");
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
 }
 
 export default function AdminDashboardPage({ embedded = false }: { embedded?: boolean }) {

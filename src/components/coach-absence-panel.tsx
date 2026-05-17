@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CoachAbsenceRequest } from "@/lib/club-data";
 
-type Discipline = { id: string; name: string };
+import type { DisciplineOption } from "@/lib/discipline-options";
 
 type CoachAbsencePanelProps = {
-  disciplines: Discipline[];
+  disciplines: DisciplineOption[];
 };
 
 export default function CoachAbsencePanel({ disciplines }: CoachAbsencePanelProps) {

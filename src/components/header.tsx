@@ -143,7 +143,14 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
       <header className="fixed left-0 right-0 top-0 z-[100] flex h-16 w-full items-center bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
           <Link href="/" onClick={close}>
-            <Image src="/logo.png" alt="Activ Sainte-Croix" width={100} height={100} />
+            <Image
+              src="/logo.png"
+              alt="Activ Sainte-Croix"
+              width={100}
+              height={100}
+              className="h-20 w-auto"
+              priority
+            />
           </Link>
           <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
             {NAV_DESKTOP.map((item) =>

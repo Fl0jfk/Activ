@@ -1,39 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { jsonError, jsonOk } from "@/lib/api-response";
+import { isUserBureau, requireUser } from "@/lib/api-auth";
+import { canAccessClubOperations, updateUserMetadata } from "@/lib/clerk";
 import { readClubData, writeClubData } from "@/lib/club-data";
 import {
-  canAccessClubOperations,
-  getCurrentUserContext,
-  isCoach,
-  isDirection,
-  isStaff,
-  updateUserMetadata,
-} from "@/lib/clerk";
-
-function randomId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-}
+  buildRegistrationApplication,
+  upsertMemberForApplication,
+} from "@/lib/registration-application";
+import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
 export async function GET() {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) {
+    return auth.response;
   }
 
   const data = await readClubData();
-  const admin = canAccessClubOperations(currentUser);
+  const admin = canAccessClubOperations(auth.value);
 
   if (admin) {
-    return NextResponse.json(data.applications);
+    return jsonOk(data.applications);
   }
 
-  return NextResponse.json(data.applications.filter((entry) => entry.clerkUserId === currentUser.userId));
+  return jsonOk(data.applications.filter((entry) => entry.clerkUserId === auth.value.userId));
 }
 
 export async function POST(request: NextRequest) {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) {
+    return auth.response;
   }
+  const currentUser = auth.value;
 
   try {
     const payload = (await request.json()) as {
@@ -59,15 +56,18 @@ export async function POST(request: NextRequest) {
       !payload.postalCode ||
       !payload.city
     ) {
-      return NextResponse.json({ message: "Champs requis manquants." }, { status: 400 });
+      return jsonError("Champs requis manquants.", 400);
     }
 
     const hasTrialRequest = Boolean(payload.trialSlotId);
     const data = await readClubData();
-    if (hasTrialRequest) {
-      const slot = data.trialSlots.find((entry) => entry.id === payload.trialSlotId && entry.active);
-      if (!slot) {
-        return NextResponse.json({ message: "Creneau d'essai introuvable." }, { status: 404 });
+    if (hasTrialRequest && payload.trialSlotId && payload.disciplineId) {
+      const validation = validateTrialSlotForRegistration(data, {
+        disciplineId: payload.disciplineId,
+        trialSlotId: payload.trialSlotId,
+      });
+      if (!validation.ok) {
+        return jsonError(validation.message, validation.status);
       }
     }
 
@@ -79,57 +79,30 @@ export async function POST(request: NextRequest) {
     );
 
     if (alreadyApplied) {
-      return NextResponse.json({ message: "Vous avez deja une demande en attente pour ce creneau." }, { status: 409 });
+      return jsonError("Vous avez deja une demande en attente pour ce creneau.", 409);
     }
 
-    const createdAt = new Date().toISOString();
-
-    data.applications.unshift({
-      id: randomId("app"),
-      clerkUserId: currentUser.userId,
-      fullName: `${payload.firstName.trim()} ${payload.lastName.trim()}`.trim(),
-      email: (payload.email?.trim() || currentUser.email).trim(),
-      firstName: payload.firstName.trim(),
-      lastName: payload.lastName.trim(),
-      phone: payload.phone.trim(),
-      address: payload.address.trim(),
-      postalCode: payload.postalCode.trim(),
-      city: payload.city.trim(),
-      documents: Array.isArray(payload.documents) ? payload.documents : [],
-      requestKind: "trial_and_preregistration",
+    const email = (payload.email?.trim() || currentUser.email).trim();
+    const application = buildRegistrationApplication({
       disciplineId: payload.disciplineId,
-      trialSlotId: hasTrialRequest ? (payload.trialSlotId ?? null) : null,
-      motivation: payload.motivation?.trim() ?? "",
-      createdAt,
-      status: "pending",
-      dossierPhase: "reception",
-      trialAttended: false,
-      paymentStatus: "unpaid",
-      paymentMethod: "",
-      licenseEndDate: null,
-      notes: "",
+      trialSlotId: hasTrialRequest ? payload.trialSlotId : null,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      phone: payload.phone,
+      address: payload.address,
+      postalCode: payload.postalCode,
+      city: payload.city,
+      email,
+      motivation: payload.motivation,
+      documents: payload.documents,
+      clerkUserId: currentUser.userId,
     });
 
-    const existingMember = data.members.find((entry) => entry.clerkUserId === currentUser.userId);
-    if (existingMember) {
-      existingMember.fullName = currentUser.fullName;
-      existingMember.email = (payload.email?.trim() || currentUser.email).trim();
-      existingMember.updatedAt = createdAt;
-    } else {
-      data.members.push({
-        clerkUserId: currentUser.userId,
-        fullName: currentUser.fullName,
-        email: currentUser.email,
-        role: currentUser.role,
-        functions: [],
-        membershipStatus: "pending",
-        updatedAt: createdAt,
-      });
-    }
-
+    data.applications.unshift(application);
+    upsertMemberForApplication(data.members, currentUser, email);
     await writeClubData(data);
 
-    const isBureau = isDirection(currentUser) || isStaff(currentUser) || isCoach(currentUser);
+    const isBureau = isUserBureau(currentUser);
     await updateUserMetadata(
       currentUser.userId,
       {
@@ -138,13 +111,13 @@ export async function POST(request: NextRequest) {
       },
       {
         hasPendingRegistrationRequest: !isBureau,
-        lastRegistrationRequestAt: createdAt,
-      }
+        lastRegistrationRequestAt: application.createdAt,
+      },
     );
 
-    return NextResponse.json({ message: "Demande envoyee." }, { status: 201 });
+    return jsonOk({ message: "Demande envoyee." }, 201);
   } catch (error) {
     console.error("Failed to create registration application", error);
-    return NextResponse.json({ message: "Erreur serveur." }, { status: 500 });
+    return jsonError("Erreur serveur.", 500);
   }
 }

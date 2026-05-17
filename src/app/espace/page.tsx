@@ -12,6 +12,7 @@ import {
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
 import { readClubData } from "@/lib/club-data";
+import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { readSiteData } from "@/lib/site-data";
 import { buildWeekSchedule } from "@/lib/schedule-week";
 
@@ -24,12 +25,7 @@ export default async function EspacePage() {
   }
 
   const [siteData, clubData] = await Promise.all([readSiteData(), readClubData()]);
-  const disciplines = siteData.disciplines
-    .filter((discipline) => discipline.active)
-    .map((discipline) => ({
-      id: discipline.id,
-      name: discipline.name,
-    }));
+  const disciplines = getActiveDisciplineOptions(siteData);
 
   const clubOps = canAccessClubOperations(currentUser);
   const manageSite = canManageSiteData(currentUser);

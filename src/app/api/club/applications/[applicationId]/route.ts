@@ -1,81 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type ApplicationDossierPhase, readClubData, writeClubData } from "@/lib/club-data";
-import {
-  buildMemberClerkMetadata,
-  canAccessClubOperations,
-  getCurrentUserContext,
-  updateUserMetadata,
-} from "@/lib/clerk";
-
-function resolveRegistrationState(
-  application: { status: string; paymentStatus: string; dossierPhase?: ApplicationDossierPhase },
-  espaceValidated: boolean,
-): "pending" | "espace_active" | "registered" | "rejected" {
-  if (application.status === "rejected") {
-    return "rejected";
-  }
-  if (application.status === "approved" && application.paymentStatus === "paid") {
-    return "registered";
-  }
-  if (espaceValidated) {
-    return "espace_active";
-  }
-  return "pending";
-}
-
-function isEspaceValidated(phase: ApplicationDossierPhase | undefined): boolean {
-  return phase === "documents" || phase === "payment" || phase === "finalized";
-}
+import { jsonError, jsonOk } from "@/lib/api-response";
+import { requireUser } from "@/lib/api-auth";
+import { canAccessClubOperations } from "@/lib/clerk";
+import { loadClubData, requireApplication, saveClubData } from "@/lib/club-repository";
+import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import { computeMembershipStatus, syncClerkAfterAdminPatch } from "@/lib/registration-clerk-sync";
+import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ applicationId: string }> },
 ) {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireUser();
+  if (!auth.ok) {
+    return auth.response;
   }
+  const currentUser = auth.value;
   const isAdmin = canAccessClubOperations(currentUser);
 
   const { applicationId } = await context.params;
 
   try {
-    const payload = (await request.json()) as {
-      status?: "pending" | "awaiting_document" | "approved" | "rejected";
-      trialAttended?: boolean;
-      paymentStatus?: "unpaid" | "partial" | "paid";
-      paymentMethod?: "cash" | "check" | "bank_transfer" | "card" | "other" | "";
-      notes?: string;
-      role?: "member" | "staff" | "coach" | "direction";
-      licenseEndDate?: string | null;
-      trialSlotId?: string;
-      dossierPhase?: ApplicationDossierPhase;
-    };
+    const payload = (await request.json()) as ApplicationUpdatePayload;
 
-    const data = await readClubData();
-    const application = data.applications.find((entry) => entry.id === applicationId);
-    if (!application) {
-      return NextResponse.json({ message: "Demande introuvable." }, { status: 404 });
+    const data = await loadClubData();
+    const applicationResult = requireApplication(data, applicationId);
+    if (applicationResult instanceof NextResponse) {
+      return applicationResult;
     }
+    const application = applicationResult;
     const isOwner = application.clerkUserId !== null && application.clerkUserId === currentUser.userId;
 
     if (!isAdmin && !isOwner) {
-      return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+      return jsonError("Non autorisé.", 401);
     }
 
     if (!isAdmin && payload.trialSlotId) {
-      const slot = data.trialSlots.find((entry) => entry.id === payload.trialSlotId && entry.active);
-      if (!slot) {
-        return NextResponse.json({ message: "Creneau d'essai introuvable." }, { status: 404 });
+      const validation = validateTrialSlotForRegistration(data, {
+        disciplineId: application.disciplineId,
+        trialSlotId: payload.trialSlotId,
+      });
+      if (!validation.ok) {
+        return jsonError(validation.message, validation.status);
       }
       application.trialSlotId = payload.trialSlotId;
       application.requestKind = "trial_and_preregistration";
-      await writeClubData(data);
-      return NextResponse.json({ message: "Demande d'essai ajoutee." });
+      await saveClubData(data);
+      return jsonOk({ message: "Demande d'essai ajoutee." });
     }
 
     if (!isAdmin) {
-      return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+      return jsonError("Non autorisé.", 401);
     }
 
     if (payload.status) {
@@ -106,16 +81,7 @@ export async function PATCH(
       application.dossierPhase = "payment";
     }
 
-    const finalRegistrationDone =
-      application.status === "approved" && application.paymentStatus === "paid";
-    const computedMembershipStatus = finalRegistrationDone
-      ? "approved"
-      : application.status === "rejected"
-        ? "rejected"
-        : "pending";
-
-    const espaceValidated = isEspaceValidated(application.dossierPhase);
-    const disciplineIds = application.disciplineId ? [application.disciplineId] : [];
+    const computedMembershipStatus = computeMembershipStatus(application);
 
     const member = data.members.find((entry) => entry.clerkUserId === application.clerkUserId);
     if (member) {
@@ -126,27 +92,20 @@ export async function PATCH(
       member.updatedAt = new Date().toISOString();
     }
 
-    await writeClubData(data);
+    await saveClubData(data);
 
     const nextRole = payload.role ?? member?.role ?? "member";
 
     if (application.clerkUserId) {
-      const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
-        disciplineIds,
-        espaceValidated,
-        membershipStatus: computedMembershipStatus,
-        registrationState: resolveRegistrationState(application, espaceValidated),
-      });
-      await updateUserMetadata(application.clerkUserId, privateMetadata, {
-        ...publicMetadata,
+      await syncClerkAfterAdminPatch({
+        application,
         displayRole: nextRole,
-        hasPendingRegistrationRequest: !finalRegistrationDone,
       });
     }
 
-    return NextResponse.json({ message: "Mise a jour effectuee." });
+    return jsonOk({ message: "Mise a jour effectuee." });
   } catch (error) {
     console.error("Failed to update application", error);
-    return NextResponse.json({ message: "Erreur serveur." }, { status: 500 });
+    return jsonError("Erreur serveur.", 500);
   }
 }

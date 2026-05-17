@@ -4,13 +4,9 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export type TrialSlotOption = {
-  id: string;
-  title: string;
-  startsAt: string;
-  capacity: number;
-  registeredCount: number;
-};
+import { formatTrialSlotDate, type TrialSlotListItem } from "@/lib/trial-slots";
+
+export type TrialSlotOption = TrialSlotListItem;
 
 type TrialBookingFormProps = {
   disciplineId: string;
@@ -18,17 +14,6 @@ type TrialBookingFormProps = {
   disciplineSlug: string;
   slots: TrialSlotOption[];
 };
-
-function formatSlotDate(iso: string): string {
-  return new Date(iso).toLocaleString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function TrialBookingForm({
   disciplineId,
@@ -146,7 +131,7 @@ export default function TrialBookingForm({
                       />
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-900">{slot.title}</p>
-                        <p className="mt-1 text-sm text-slate-700">{formatSlotDate(slot.startsAt)}</p>
+                        <p className="mt-1 text-sm text-slate-700">{formatTrialSlotDate(slot.startsAt)}</p>
                         <p className="mt-1 text-xs text-slate-500">
                           {full
                             ? "Complet"

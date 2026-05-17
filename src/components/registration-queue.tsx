@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import DossierPanel from "@/components/dossier-panel";
+import { useClubApplicationActions } from "@/hooks/useClubApplicationActions";
 import type { RegistrationApplication } from "@/lib/club-data";
+import type { DisciplineOption } from "@/lib/discipline-options";
 import {
   DOSSIER_STEP_LABELS,
   filterApplicationsByQueue,
@@ -13,20 +15,10 @@ import {
 
 export type { QueueFilter };
 
-type Discipline = { id: string; name: string };
-
 type RegistrationQueueProps = {
-  disciplines: Discipline[];
+  disciplines: DisciplineOption[];
   applications: RegistrationApplication[];
   queueFilter: QueueFilter;
-};
-
-type UpdatePayload = {
-  status?: RegistrationApplication["status"];
-  dossierPhase?: RegistrationApplication["dossierPhase"];
-  trialAttended?: boolean;
-  paymentStatus?: RegistrationApplication["paymentStatus"];
-  paymentMethod?: RegistrationApplication["paymentMethod"];
 };
 
 export default function RegistrationQueue({
@@ -35,70 +27,20 @@ export default function RegistrationQueue({
   queueFilter,
 }: RegistrationQueueProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
+  const { message, setMessage, updateApplication, validateEspace, rejectApplication, requestDocument } =
+    useClubApplicationActions();
 
   const filtered = useMemo(
     () => filterApplicationsByQueue(applications, queueFilter),
-    [applications, queueFilter]
+    [applications, queueFilter],
   );
-
-  async function updateApplication(applicationId: string, payload: UpdatePayload) {
-    const response = await fetch(`/api/club/applications/${applicationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (response.ok) {
-      window.location.reload();
-    } else {
-      const body = (await response.json()) as { message?: string };
-      setMessage(body.message ?? "Erreur de mise à jour.");
-    }
-  }
-
-  async function validateEspace(applicationId: string) {
-    const response = await fetch(`/api/club/applications/${applicationId}/validate-espace`, {
-      method: "POST",
-    });
-    const body = (await response.json()) as { message?: string };
-    if (response.ok) {
-      setMessage(body.message ?? "Espace membre activé.");
-      window.location.reload();
-    } else {
-      setMessage(body.message ?? "Impossible d'activer l'espace.");
-    }
-  }
-
-  async function rejectApplication(applicationId: string) {
-    const response = await fetch(`/api/club/applications/${applicationId}/reject`, {
-      method: "POST",
-    });
-    const body = (await response.json()) as { message?: string };
-    if (response.ok) {
-      setMessage(body.message ?? "Dossier refusé.");
-      window.location.reload();
-    } else {
-      setMessage(body.message ?? "Impossible de refuser le dossier.");
-    }
-  }
 
   async function requestMissingDocument(applicationId: string) {
     const label = window.prompt("Quelle pièce demander ? (ex: certificat médical)", "certificat médical");
-    if (!label) return;
-    const response = await fetch(`/api/club/applications/${applicationId}/request-document`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentLabel: label }),
-    });
-    const body = (await response.json()) as { message?: string; secureLink?: string };
-    if (response.ok) {
-      setMessage(
-        `${body.message ?? "Demande envoyée."} ${body.secureLink ? `Lien : ${body.secureLink}` : ""}`.trim()
-      );
-      window.location.reload();
-    } else {
-      setMessage(body.message ?? "Impossible d'envoyer la demande.");
+    if (!label) {
+      return;
     }
+    await requestDocument(applicationId, label);
   }
 
   function toggleExpanded(applicationId: string) {

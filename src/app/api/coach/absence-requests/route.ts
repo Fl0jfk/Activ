@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserContext, isCoach } from "@/lib/clerk";
 import { readClubData, writeClubData } from "@/lib/club-data";
+import { randomId } from "@/lib/ids";
 import { readSiteData } from "@/lib/site-data";
 import { buildCoachUpcomingSessions } from "@/lib/schedule-week";
 
 export const dynamic = "force-dynamic";
-
-function randomId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUserContext();
