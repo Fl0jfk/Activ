@@ -1,5 +1,6 @@
 "use client";
 
+import { renderChatMessageContent } from "@/lib/chat-message-links";
 import { FormEvent, useState } from "react";
 
 type ChatMessage = {
@@ -13,7 +14,7 @@ export default function ActivityOrientation() {
     {
       role: "assistant",
       content:
-        "Salut, je suis l'assistant Activ'. Dis-moi ce que tu recherches (détente, cardio, débutant, mal de dos...) et je te conseillerai une activité adaptée. Pour essayer une discipline, je vous orienterai vers une séance d'essai planifiée ou vers la page contact.",
+        "Salut, je suis l'assistant Activ'. Dis-moi ce que tu recherches (détente, cardio, débutant, mal de dos...) et je te conseillerai une activité adaptée. Pour essayer une discipline, je vous orienterai vers une séance d'essai planifiée ou vers la [page contact](/contact).",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +61,7 @@ export default function ActivityOrientation() {
         {
           role: "assistant",
           content:
-            "Désolé, je ne peux pas répondre pour le moment. Réessayez dans quelques instants ou contactez l'association.",
+            "Désolé, je ne peux pas répondre pour le moment. Réessayez dans quelques instants ou [contactez l'association](/contact).",
         },
       ]);
     } finally {
@@ -85,7 +86,7 @@ export default function ActivityOrientation() {
                 : "ml-auto bg-slate-900 text-white"
             }`}
           >
-            {message.content}
+            {renderChatMessageContent(message.content)}
           </div>
         ))}
         {isLoading ? (
