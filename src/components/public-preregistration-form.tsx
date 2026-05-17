@@ -1,20 +1,25 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type DisciplineOption = { id: string; name: string };
-type TrialSlot = { id: string; disciplineId: string; title: string; startsAt: string };
 
 type PublicPreregistrationFormProps = {
   disciplines: DisciplineOption[];
-  slots: TrialSlot[];
+  initialDisciplineId?: string;
 };
 
-export default function PublicPreregistrationForm({ disciplines, slots }: PublicPreregistrationFormProps) {
+export default function PublicPreregistrationForm({
+  disciplines,
+  initialDisciplineId,
+}: PublicPreregistrationFormProps) {
   const router = useRouter();
-  const [disciplineId, setDisciplineId] = useState(disciplines[0]?.id ?? "");
-  const [trialSlotId, setTrialSlotId] = useState("");
+  const defaultDisciplineId =
+    initialDisciplineId && disciplines.some((d) => d.id === initialDisciplineId)
+      ? initialDisciplineId
+      : (disciplines[0]?.id ?? "");
+  const [disciplineId, setDisciplineId] = useState(defaultDisciplineId);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -29,11 +34,6 @@ export default function PublicPreregistrationForm({ disciplines, slots }: Public
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-
-  const disciplineSlots = useMemo(
-    () => slots.filter((slot) => slot.disciplineId === disciplineId),
-    [disciplineId, slots],
-  );
 
   async function uploadDocument(file: File) {
     const formData = new FormData();
@@ -78,7 +78,6 @@ export default function PublicPreregistrationForm({ disciplines, slots }: Public
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         disciplineId,
-        trialSlotId: trialSlotId || undefined,
         firstName,
         lastName,
         phone,
@@ -96,7 +95,6 @@ export default function PublicPreregistrationForm({ disciplines, slots }: Public
     setIsLoading(false);
     if (response.ok) {
       setMotivation("");
-      setTrialSlotId("");
       setPassword("");
       setPasswordConfirm("");
       setDocuments([]);
@@ -109,17 +107,15 @@ export default function PublicPreregistrationForm({ disciplines, slots }: Public
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold text-slate-900">Pre-inscription</h1>
         <p className="mt-2 text-slate-700">
-          Remplis ce formulaire unique. Ton compte sera cree automatiquement en arriere-plan.
+          Formulaire de pré-inscription complète (sans journée d&apos;essai). Pour réserver un créneau d&apos;essai,
+          utilisez la fiche de la discipline concernée.
         </p>
         <form onSubmit={handleSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Discipline
             <select
               value={disciplineId}
-              onChange={(event) => {
-                setDisciplineId(event.target.value);
-                setTrialSlotId("");
-              }}
+              onChange={(event) => setDisciplineId(event.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
             >
               {disciplines.map((discipline) => (
@@ -199,21 +195,6 @@ export default function PublicPreregistrationForm({ disciplines, slots }: Public
               </ul>
             </div>
           ) : null}
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-            Date d&apos;essai (optionnel)
-            <select
-              value={trialSlotId}
-              onChange={(event) => setTrialSlotId(event.target.value)}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-            >
-              <option value="">Je choisis plus tard</option>
-              {disciplineSlots.map((slot) => (
-                <option key={slot.id} value={slot.id}>
-                  {new Date(slot.startsAt).toLocaleString("fr-FR")} - {slot.title}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
             Message (optionnel)
             <textarea

@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
-import { canAccessAdminSpace, getCurrentUserContext } from "@/lib/clerk";
-
-async function canManageSiteData() {
-  const user = await getCurrentUserContext();
-  if (!user) {
-    return false;
-  }
-  return canAccessAdminSpace(user.publicFunctions);
-}
+import type { AssociationData } from "@/lib/site-data-types";
+import {
+  canAccessClubOperations,
+  canManageSiteData as userCanManageSiteData,
+  getCurrentUserContext,
+} from "@/lib/clerk";
 
 export async function GET() {
-  if (!(await canManageSiteData())) {
+  const user = await getCurrentUserContext();
+  if (!user || !canAccessClubOperations(user)) {
     return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   }
 
@@ -28,15 +26,31 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!(await canManageSiteData())) {
+  const user = await getCurrentUserContext();
+  if (!user) {
     return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   }
+
   try {
-    const payload = await request.json();
-    await writeSiteData(payload);
-    return NextResponse.json({ message: "Donnees enregistrees." });
+    const payload = (await request.json()) as Partial<AssociationData>;
+
+    if (userCanManageSiteData(user)) {
+      await writeSiteData(payload as AssociationData);
+      return NextResponse.json({ message: "Donnees enregistrees." });
+    }
+
+    if (canAccessClubOperations(user) && payload.scheduleExceptions) {
+      const current = await readSiteData();
+      await writeSiteData({
+        ...current,
+        scheduleExceptions: payload.scheduleExceptions,
+      });
+      return NextResponse.json({ message: "Exceptions de planning enregistrees." });
+    }
+
+    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   } catch (error) {
     console.error("Failed to save admin site data", error);
-    return NextResponse.json({ message: "Impossible d'enregistrer les donnees." },{ status: 500 });
+    return NextResponse.json({ message: "Impossible d'enregistrer les donnees." }, { status: 500 });
   }
 }

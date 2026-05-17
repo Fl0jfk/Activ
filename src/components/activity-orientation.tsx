@@ -1,92 +1,78 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import type { Discipline } from "@/lib/site-data";
-
-type ActivityOrientationProps = {
-  disciplines: Discipline[];
-};
+import { FormEvent, useState } from "react";
 
 type ChatMessage = {
   role: "assistant" | "user";
   content: string;
 };
 
-export default function ActivityOrientation({ disciplines }: ActivityOrientationProps) {
+export default function ActivityOrientation() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content:
-        "Salut, je suis l'assistant Activ'. Tu cherches plutot une activite sportive ou culturelle ?",
+        "Salut, je suis l'assistant Activ'. Dis-moi ce que tu recherches (détente, cardio, débutant, mal de dos...) et je te conseillerai une activité adaptée. Pour essayer une discipline, je vous orienterai vers une séance d'essai planifiée ou vers la page contact.",
     },
   ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const availableDisciplines = useMemo(
-    () => disciplines.filter((discipline) => discipline.active),
-    [disciplines]
-  );
-
-  function getSuggestion(prompt: string): Discipline | null {
-    const normalizedPrompt = prompt.toLowerCase();
-
-    const discipline = availableDisciplines.find((item) => {
-      const text = `${item.name} ${item.description}`.toLowerCase();
-
-      if (
-        normalizedPrompt.includes("doux") ||
-        normalizedPrompt.includes("souple") ||
-        normalizedPrompt.includes("zen")
-      ) {
-        return text.includes("yoga") || text.includes("pilates");
-      }
-      if (
-        normalizedPrompt.includes("cardio") ||
-        normalizedPrompt.includes("intense") ||
-        normalizedPrompt.includes("energie")
-      ) {
-        return text.includes("cardio") || text.includes("renforcement");
-      }
-      if (normalizedPrompt.includes("dos") || normalizedPrompt.includes("posture")) {
-        return text.includes("pilates");
-      }
-      if (normalizedPrompt.includes("souplesse") || normalizedPrompt.includes("respiration")) {
-        return text.includes("yoga");
-      }
-      if (normalizedPrompt.includes("debutant")) {
-        return true;
-      }
-      return false;
-    });
-
-    return discipline ?? availableDisciplines[0] ?? null;
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const prompt = input.trim();
-    if (!prompt) {
+    if (!prompt || isLoading) {
       return;
     }
 
-    const suggestion = getSuggestion(prompt);
-    const assistantReply = suggestion
-      ? `Je te conseille de commencer par ${suggestion.name}. ${suggestion.description}`
-      : "Je n'ai pas encore assez d'informations. Dis-moi si tu preferes quelque chose de doux, cardio, posture ou souplesse.";
-
-    setMessages((previous) => [
-      ...previous,
-      { role: "user", content: prompt },
-      { role: "assistant", content: assistantReply },
-    ]);
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: prompt }];
+    setMessages(nextMessages);
     setInput("");
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/orientation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+        }),
+      });
+
+      const payload = (await response.json()) as { reply?: string; error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Impossible de contacter l'assistant.");
+      }
+
+      setMessages((previous) => [
+        ...previous,
+        { role: "assistant", content: payload.reply ?? "Je n'ai pas pu formuler une réponse." },
+      ]);
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error ? submitError.message : "Une erreur est survenue.";
+      setError(message);
+      setMessages((previous) => [
+        ...previous,
+        {
+          role: "assistant",
+          content:
+            "Désolé, je ne peux pas répondre pour le moment. Réessayez dans quelques instants ou contactez l'association.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
-    <section id="orientation" className="panel mt-8 p-6 sm:p-8">
+    <section id="orientation" className="anchor-section panel mt-8 p-6 sm:p-8">
       <h2 className="panel-title">Assistant d&apos;orientation Activ&apos;</h2>
       <p className="mt-2 text-slate-600">
-        Version chatbot: ecris librement ce que tu recherches, et on te propose une activite.
+        Conseiller intelligent alimenté par Mistral, basé sur les activités actives et le planning de la semaine.
       </p>
 
       <div className="hide-scrollbar mt-5 max-h-72 space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-white/80 p-4">
@@ -102,26 +88,29 @@ export default function ActivityOrientation({ disciplines }: ActivityOrientation
             {message.content}
           </div>
         ))}
+        {isLoading ? (
+          <p className="text-sm text-slate-500">L&apos;assistant réfléchit...</p>
+        ) : null}
       </div>
+
+      {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
 
       <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm"
+          disabled={isLoading}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm disabled:opacity-60"
           placeholder="Ex: Je veux reprendre doucement, j'ai mal au dos..."
         />
         <button
           type="submit"
-          className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 px-4 py-2 text-sm font-semibold text-white"
+          disabled={isLoading}
+          className="rounded-xl bg-gradient-to-r from-fuchsia-600 to-cyan-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
-          Envoyer
+          {isLoading ? "..." : "Envoyer"}
         </button>
       </form>
-
-      <p className="mt-3 text-xs text-slate-500">
-        Ensuite, on remplacera cette logique par Mistral pour un vrai dialogue intelligent.
-      </p>
     </section>
   );
 }

@@ -1,34 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import type { RegistrationApplication } from "@/lib/club-data";
 
 type Discipline = { id: string; name: string };
-type Application = {
-  id: string;
-  fullName: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  address: string;
-  postalCode: string;
-  city: string;
-  documents: { name: string; url: string; uploadedAt: string }[];
-  requestKind: "trial_and_preregistration" | "trial_only";
-  disciplineId: string;
-  trialSlotId: string | null;
-  motivation: string;
-  status: "pending" | "awaiting_document" | "approved" | "rejected";
-  trialAttended: boolean;
-  paymentStatus: "unpaid" | "partial" | "paid";
-  paymentMethod: "cash" | "check" | "bank_transfer" | "card" | "other" | "";
-  licenseEndDate: string | null;
-  notes: string;
-};
 
 type ClubAdminPanelProps = {
   disciplines: Discipline[];
-  applications: Application[];
+  applications: RegistrationApplication[];
 };
 
 export default function ClubAdminPanel({ disciplines, applications }: ClubAdminPanelProps) {

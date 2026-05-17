@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readClubData, writeClubData } from "@/lib/club-data";
-import { canAccessAdminSpace, getCurrentUserContext, updateUserMetadata } from "@/lib/clerk";
+import { type ApplicationDossierPhase, readClubData, writeClubData } from "@/lib/club-data";
+import {
+  buildMemberClerkMetadata,
+  canAccessClubOperations,
+  getCurrentUserContext,
+  updateUserMetadata,
+} from "@/lib/clerk";
+
+function resolveRegistrationState(
+  application: { status: string; paymentStatus: string; dossierPhase?: ApplicationDossierPhase },
+  espaceValidated: boolean,
+): "pending" | "espace_active" | "registered" | "rejected" {
+  if (application.status === "rejected") {
+    return "rejected";
+  }
+  if (application.status === "approved" && application.paymentStatus === "paid") {
+    return "registered";
+  }
+  if (espaceValidated) {
+    return "espace_active";
+  }
+  return "pending";
+}
+
+function isEspaceValidated(phase: ApplicationDossierPhase | undefined): boolean {
+  return phase === "documents" || phase === "payment" || phase === "finalized";
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -10,7 +35,7 @@ export async function PATCH(
   if (!currentUser) {
     return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   }
-  const isAdmin = canAccessAdminSpace(currentUser.publicFunctions);
+  const isAdmin = canAccessClubOperations(currentUser);
 
   const { applicationId } = await context.params;
 
@@ -21,10 +46,10 @@ export async function PATCH(
       paymentStatus?: "unpaid" | "partial" | "paid";
       paymentMethod?: "cash" | "check" | "bank_transfer" | "card" | "other" | "";
       notes?: string;
-      role?: "admin" | "member" | "coach";
-      functions?: string[];
+      role?: "member" | "staff" | "coach" | "direction";
       licenseEndDate?: string | null;
       trialSlotId?: string;
+      dossierPhase?: ApplicationDossierPhase;
     };
 
     const data = await readClubData();
@@ -71,22 +96,31 @@ export async function PATCH(
     if (payload.licenseEndDate === null || typeof payload.licenseEndDate === "string") {
       application.licenseEndDate = payload.licenseEndDate;
     }
+    if (payload.dossierPhase) {
+      application.dossierPhase = payload.dossierPhase;
+    }
+
+    if (application.status === "approved" && application.paymentStatus === "paid") {
+      application.dossierPhase = "finalized";
+    } else if (application.status === "approved" && application.paymentStatus !== "paid") {
+      application.dossierPhase = "payment";
+    }
 
     const finalRegistrationDone =
-      application.status === "approved" && application.trialAttended && application.paymentStatus === "paid";
+      application.status === "approved" && application.paymentStatus === "paid";
     const computedMembershipStatus = finalRegistrationDone
       ? "approved"
       : application.status === "rejected"
         ? "rejected"
         : "pending";
 
+    const espaceValidated = isEspaceValidated(application.dossierPhase);
+    const disciplineIds = application.disciplineId ? [application.disciplineId] : [];
+
     const member = data.members.find((entry) => entry.clerkUserId === application.clerkUserId);
     if (member) {
       if (payload.role) {
         member.role = payload.role;
-      }
-      if (Array.isArray(payload.functions)) {
-        member.functions = payload.functions;
       }
       member.membershipStatus = computedMembershipStatus;
       member.updatedAt = new Date().toISOString();
@@ -95,24 +129,19 @@ export async function PATCH(
     await writeClubData(data);
 
     const nextRole = payload.role ?? member?.role ?? "member";
-    const nextFunctions = Array.isArray(payload.functions) ? payload.functions : (member?.functions ?? []);
-    const membershipStatus = computedMembershipStatus;
 
     if (application.clerkUserId) {
-      await updateUserMetadata(
-        application.clerkUserId,
-        {
-          role: nextRole,
-          functions: nextFunctions,
-          membershipStatus,
-        },
-        {
-          displayRole: nextFunctions[0] ?? nextRole,
-          functions: nextFunctions,
-          hasPendingRegistrationRequest: !finalRegistrationDone && application.status === "pending",
-          registrationState: finalRegistrationDone ? "registered" : application.status,
-        },
-      );
+      const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
+        disciplineIds,
+        espaceValidated,
+        membershipStatus: computedMembershipStatus,
+        registrationState: resolveRegistrationState(application, espaceValidated),
+      });
+      await updateUserMetadata(application.clerkUserId, privateMetadata, {
+        ...publicMetadata,
+        displayRole: nextRole,
+        hasPendingRegistrationRequest: !finalRegistrationDone,
+      });
     }
 
     return NextResponse.json({ message: "Mise a jour effectuee." });

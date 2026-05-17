@@ -1,67 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
+import type { AssociationData, ScheduleSlot } from "@/lib/site-data-types";
 
-export type Discipline = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  teacher: string;
-  teachers: string[];
-  coachBio: string;
-  coachPhotoUrl?: string;
-  imageUrl: string;
-  galleryImages: string[];
-  whatToBring: string[];
-  providedItems: string[];
-  priceInfo: string;
-  annualFee: string;
-  contactEmail: string;
-  ctaText: string;
-  allowTrialRequest: boolean;
-  highlights: string[];
-  events: {
-    id: string;
-    title: string;
-    date: string;
-    description: string;
-    featuredOnHome: boolean;
-  }[];
-  active: boolean;
-};
-
-export type ScheduleSlot = {
-  id: string;
-  disciplineId: string;
-  teacherName: string;
-  day: string;
-  startTime: string;
-  endTime: string;
-  location: string;
-  active: boolean;
-};
-
-export type AssociationData = {
-  association: {
-    name: string;
-    tagline: string;
-    city: string;
-    contactEmail: string;
-    facebookUrl: string;
-    address: string;
-    organisation: {
-      boardMembers: {
-        id: string;
-        fullName: string;
-        role: string;
-        email: string;
-      }[];
-      notes: string;
-    };
-  };
-  disciplines: Discipline[];
-  schedule: ScheduleSlot[];
-};
+export type { DayOfWeek } from "@/lib/schedule-constants";
+export { DAY_LABELS, dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
+export type {
+  AssociationData,
+  Discipline,
+  DisciplineEvent,
+  ScheduleException,
+  ScheduleSlot,
+} from "@/lib/site-data-types";
 
 const defaultSiteDataPath = `${process.cwd()}/data/site-data.json`;
 const defaultSiteDataKey = "data/site-data.json";
@@ -110,15 +60,34 @@ async function readDefaultLocalData(): Promise<AssociationData> {
       },
       disciplines: [],
       schedule: [],
+      scheduleExceptions: [],
     });
   }
 }
 
 function slugify(value: string): string {
-  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 }
 
-function normalizeSiteData(data: AssociationData): AssociationData {
+function normalizeScheduleSlot(slot: ScheduleSlot): ScheduleSlot {
+  const dayOfWeek = parseDayOfWeek(
+    (slot as ScheduleSlot & { dayOfWeek?: number }).dayOfWeek ?? slot.day
+  );
+  return {
+    ...slot,
+    teacherName: slot.teacherName ?? "",
+    dayOfWeek,
+    day: dayLabelFromOfWeek(dayOfWeek),
+    active: slot.active ?? true,
+  };
+}
+
+export function normalizeSiteData(data: AssociationData): AssociationData {
   return {
     association: {
       ...data.association,
@@ -159,13 +128,22 @@ function normalizeSiteData(data: AssociationData): AssociationData {
       ctaText: discipline.ctaText ?? "Demander un cours d'essai",
       allowTrialRequest: discipline.allowTrialRequest ?? true,
       highlights: discipline.highlights ?? [],
-      events: discipline.events ?? [],
+      events: (discipline.events ?? []).map((event) => ({
+        id: event.id,
+        title: event.title ?? "",
+        date: event.date ?? "",
+        description: event.description ?? "",
+        featuredOnHome: event.featuredOnHome ?? false,
+      })),
       active: discipline.active ?? true,
     })),
-    schedule: data.schedule.map((slot) => ({
-      ...slot,
-      teacherName: slot.teacherName ?? "",
-      active: slot.active ?? true,
+    schedule: data.schedule.map((slot) => normalizeScheduleSlot(slot)),
+    scheduleExceptions: (data.scheduleExceptions ?? []).map((exception) => ({
+      id: exception.id,
+      scheduleSlotId: exception.scheduleSlotId,
+      date: exception.date,
+      status: "cancelled" as const,
+      reason: exception.reason ?? "",
     })),
   };
 }
@@ -174,10 +152,10 @@ export async function readSiteData(): Promise<AssociationData> {
   const { bucketName, siteDataKey } = requireBucketConfig();
   const s3 = createS3Client();
   try {
-    const object = await s3.send(
-      new GetObjectCommand({ Bucket: bucketName, Key: siteDataKey})
-    );
-    if (!object.Body) { throw new Error("S3 object body is empty.")}
+    const object = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: siteDataKey }));
+    if (!object.Body) {
+      throw new Error("S3 object body is empty.");
+    }
     const content = await object.Body.transformToString();
     return normalizeSiteData(JSON.parse(content) as AssociationData);
   } catch {
@@ -195,5 +173,12 @@ export async function writeSiteData(data: AssociationData): Promise<void> {
   const normalizedData = normalizeSiteData(data);
   const { bucketName, siteDataKey } = requireBucketConfig();
   const s3 = createS3Client();
-  await s3.send( new PutObjectCommand({ Bucket: bucketName, Key: siteDataKey, Body: JSON.stringify(normalizedData, null, 2), ContentType: "application/json; charset=utf-8",}));
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: siteDataKey,
+      Body: JSON.stringify(normalizedData, null, 2),
+      ContentType: "application/json; charset=utf-8",
+    })
+  );
 }

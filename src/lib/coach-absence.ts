@@ -1,0 +1,100 @@
+import type { CoachAbsenceRequest } from "@/lib/club-data";
+import { readClubData, writeClubData } from "@/lib/club-data";
+import { sendEmail } from "@/lib/mailer";
+import { formatDayLabelFr } from "@/lib/schedule-week";
+import { readSiteData, writeSiteData } from "@/lib/site-data";
+import type { ScheduleException } from "@/lib/site-data-types";
+
+function randomId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function approveCoachAbsenceRequest(
+  requestId: string,
+  reviewedByUserId: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const [clubData, siteData] = await Promise.all([readClubData(), readSiteData()]);
+  const request = clubData.coachAbsenceRequests.find((r) => r.id === requestId);
+
+  if (!request) {
+    return { ok: false, message: "Demande introuvable." };
+  }
+  if (request.status !== "pending") {
+    return { ok: false, message: "Cette demande a déjà été traitée." };
+  }
+
+  const discipline = siteData.disciplines.find((d) => d.id === request.disciplineId);
+  const reason = `Absence coach : ${request.reason}`;
+
+  const exceptions = siteData.scheduleExceptions ?? [];
+  const existingIndex = exceptions.findIndex(
+    (ex) => ex.scheduleSlotId === request.scheduleSlotId && ex.date === request.sessionDate
+  );
+
+  const exception: ScheduleException = {
+    id: existingIndex >= 0 ? exceptions[existingIndex].id : randomId("exc"),
+    scheduleSlotId: request.scheduleSlotId,
+    date: request.sessionDate,
+    status: "cancelled",
+    reason,
+  };
+
+  if (existingIndex >= 0) {
+    exceptions[existingIndex] = exception;
+  } else {
+    exceptions.push(exception);
+  }
+
+  await writeSiteData({ ...siteData, scheduleExceptions: exceptions });
+
+  request.status = "approved";
+  request.reviewedAt = new Date().toISOString();
+  request.reviewedByUserId = reviewedByUserId;
+  await writeClubData(clubData);
+
+  const sessionLabel = formatDayLabelFr(request.sessionDate);
+  const disciplineName = discipline?.name ?? "votre activité";
+  const recipients = clubData.applications.filter(
+    (app) => app.status === "approved" && app.disciplineId === request.disciplineId
+  );
+
+  const uniqueEmails = [...new Set(recipients.map((app) => app.email).filter(Boolean))];
+  for (const email of uniqueEmails) {
+    await sendEmail({
+      to: email,
+      subject: `Séance annulée — ${disciplineName}`,
+      text: `Bonjour,\n\nLa séance du ${sessionLabel} (${disciplineName}) est annulée.\nMotif : ${request.reason}\n\nSportivement,\nL'équipe`,
+      html: `<p>Bonjour,</p><p>La séance du <strong>${sessionLabel}</strong> (<strong>${disciplineName}</strong>) est annulée.</p><p>Motif : ${request.reason}</p><p>Sportivement,<br/>L'équipe</p>`,
+    });
+  }
+
+  return { ok: true };
+}
+
+export async function rejectCoachAbsenceRequest(
+  requestId: string,
+  reviewedByUserId: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const clubData = await readClubData();
+  const request = clubData.coachAbsenceRequests.find((r) => r.id === requestId);
+
+  if (!request) {
+    return { ok: false, message: "Demande introuvable." };
+  }
+  if (request.status !== "pending") {
+    return { ok: false, message: "Cette demande a déjà été traitée." };
+  }
+
+  request.status = "rejected";
+  request.reviewedAt = new Date().toISOString();
+  request.reviewedByUserId = reviewedByUserId;
+  await writeClubData(clubData);
+
+  return { ok: true };
+}
+
+export function listPendingCoachAbsences(requests: CoachAbsenceRequest[]): CoachAbsenceRequest[] {
+  return requests
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+}

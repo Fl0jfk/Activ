@@ -3,16 +3,40 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 
 export type PaymentStatus = "unpaid" | "partial" | "paid";
 export type ApplicationStatus = "pending" | "awaiting_document" | "approved" | "rejected";
+export type ApplicationDossierPhase =
+  | "reception"
+  | "espace_validation"
+  | "documents"
+  | "payment"
+  | "finalized";
 export type PaymentMethod = "cash" | "check" | "bank_transfer" | "card" | "other" | "";
+
+export type ClubMemberRole = "member" | "staff" | "coach" | "direction";
 
 export type ClubMember = {
   clerkUserId: string;
   fullName: string;
   email: string;
-  role: "admin" | "member" | "coach";
+  role: ClubMemberRole;
   functions: string[];
   membershipStatus: "pending" | "approved" | "rejected";
   updatedAt: string;
+};
+
+export type CoachAbsenceRequestStatus = "pending" | "approved" | "rejected";
+
+export type CoachAbsenceRequest = {
+  id: string;
+  clerkUserId: string;
+  coachName: string;
+  disciplineId: string;
+  scheduleSlotId: string;
+  sessionDate: string;
+  reason: string;
+  status: CoachAbsenceRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedByUserId?: string;
 };
 
 export type TrialSlot = {
@@ -42,6 +66,7 @@ export type RegistrationApplication = {
   motivation: string;
   createdAt: string;
   status: ApplicationStatus;
+  dossierPhase?: ApplicationDossierPhase;
   trialAttended: boolean;
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
@@ -64,6 +89,7 @@ export type ClubData = {
   trialSlots: TrialSlot[];
   applications: RegistrationApplication[];
   documentRequestTokens: DocumentRequestToken[];
+  coachAbsenceRequests: CoachAbsenceRequest[];
   updatedAt: string;
 };
 
@@ -92,6 +118,22 @@ function requireBucketConfig() {
   };
 }
 
+function inferDossierPhaseFromLegacy(application: RegistrationApplication): ApplicationDossierPhase {
+  if (application.dossierPhase) {
+    return application.dossierPhase;
+  }
+  if (application.status === "approved" && application.paymentStatus === "paid") {
+    return "finalized";
+  }
+  if (application.status === "approved") {
+    return "payment";
+  }
+  if (application.clerkUserId) {
+    return "documents";
+  }
+  return "reception";
+}
+
 function normalizeClubData(data: ClubData): ClubData {
   return {
     members: data.members ?? [],
@@ -109,8 +151,10 @@ function normalizeClubData(data: ClubData): ClubData {
       trialSlotId: application.trialSlotId ?? null,
       paymentMethod: application.paymentMethod ?? "",
       licenseEndDate: application.licenseEndDate ?? null,
+      dossierPhase: inferDossierPhaseFromLegacy(application),
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
+    coachAbsenceRequests: data.coachAbsenceRequests ?? [],
     updatedAt: data.updatedAt ?? new Date().toISOString(),
   };
 }

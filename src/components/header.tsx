@@ -4,61 +4,88 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { UserButton, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
+import ClerkUserButton from "@/components/clerk-user-button";
 
 const HEADER_PX = 64;
-type SiteHeaderProps = { facebookUrl: string};
+type SiteHeaderProps = { facebookUrl: string };
 
-const NAV = [
-  { href: "#actualites", label: "Actualités", isAppRoute: false },
-  { href: "#programme", label: "Programme", isAppRoute: false },
-  { href: "#orientation", label: "Orientation", isAppRoute: false },
-  { href: "#disciplines", label: "Disciplines", isAppRoute: false },
+const NAV_ITEMS = [
+  { href: "/#actualites", label: "Actualités", isAppRoute: false, mobileOnly: true },
+  { href: "/#programme", label: "Programme", isAppRoute: false },
+  { href: "/#orientation", label: "Orientation", isAppRoute: false, mobileOnly: true },
+  { href: "/#disciplines", label: "Disciplines", isAppRoute: false },
   { href: "/association", label: "Organigramme", isAppRoute: true },
+  { href: "/contact", label: "Contact", isAppRoute: true },
 ] as const;
 
-function MobileMenu({ facebookUrl, onClose,}: { facebookUrl: string; onClose: () => void}) {
+const NAV_MOBILE = NAV_ITEMS;
+const NAV_DESKTOP = NAV_ITEMS.filter((item) => !("mobileOnly" in item && item.mobileOnly));
+
+const MOBILE_LIST_ROW =
+  "flex min-h-[60px] items-center border-b border-slate-200/90 py-[18px] text-[21px] font-semibold tracking-tight";
+
+function MobileMenu({ facebookUrl, onClose }: { facebookUrl: string; onClose: () => void }) {
   const { isSignedIn } = useUser();
+
   return (
     <>
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-10 pt-6">
-        <nav className="flex flex-col">
-          {NAV.map((item, i) => {
-            const row =
-              "flex items-center py-[18px] text-[21px] font-semibold tracking-tight text-slate-900 transition-colors hover:text-cyan-700 active:text-cyan-700";
-            const sep = i < NAV.length - 1 ? " border-b border-slate-200/90" : "";
-            return item.isAppRoute ? (
-              <Link key={item.href} href={item.href} className={row + sep} onClick={onClose}>
+        <nav className="flex flex-col" aria-label="Menu principal">
+          {NAV_MOBILE.map((item) =>
+            item.isAppRoute ? (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-cyan-700 active:text-cyan-700`}
+                onClick={onClose}
+              >
                 {item.label}
               </Link>
             ) : (
-              <a key={item.href} href={item.href} className={row + sep} onClick={onClose}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-cyan-700 active:text-cyan-700`}
+                onClick={onClose}
+              >
                 {item.label}
-              </a>
-            );
-          })}
-        </nav>
-        <div className="mt-auto pt-8">
-          {!isSignedIn ? (
-            <Link
-              href="/sign-in"
-              onClick={onClose}
-              className="mb-3 block w-full rounded-2xl border border-slate-300 py-3 text-center text-[16px] font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-            >
-              Se connecter
-            </Link>
-          ) : null}
+              </Link>
+            ),
+          )}
+          <div className={`${MOBILE_LIST_ROW} gap-3`}>
+            {isSignedIn ? (
+              <>
+                <ClerkUserButton />
+                <Link
+                  href="/espace"
+                  onClick={onClose}
+                  className="flex-1 text-slate-900 transition-colors hover:text-cyan-700 active:text-cyan-700"
+                >
+                  Mon espace
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/sign-in"
+                onClick={onClose}
+                className="w-full text-slate-900 transition-colors hover:text-cyan-700 active:text-cyan-700"
+              >
+                Connexion
+              </Link>
+            )}
+          </div>
           <a
             href={facebookUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onClose}
-            className="block w-full rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 py-4 text-center text-[16px] font-semibold text-white shadow-md transition-opacity hover:opacity-90"
+            className={`${MOBILE_LIST_ROW} text-blue-600 transition-colors hover:text-blue-700 active:text-blue-800`}
           >
-            Voir sur Facebook
+            Facebook
           </a>
-        </div>
+        </nav>
       </div>
     </>
   );
@@ -70,7 +97,9 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
-    const apply = () => { setIsMobile(mq.matches)};
+    const apply = () => {
+      setIsMobile(mq.matches);
+    };
     const onChange = (event: MediaQueryListEvent) => {
       setIsMobile(event.matches);
       if (!event.matches) setOpen(false);
@@ -114,10 +143,10 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
       <header className="fixed left-0 right-0 top-0 z-[100] flex h-16 w-full items-center bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
           <Link href="/" onClick={close}>
-            <Image src="/logo.png" alt="Activ Sainte-Croix" width={100} height={100}/>
+            <Image src="/logo.png" alt="Activ Sainte-Croix" width={100} height={100} />
           </Link>
           <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
-            {NAV.map((item) =>
+            {NAV_DESKTOP.map((item) =>
               item.isAppRoute ? (
                 <Link
                   key={item.href}
@@ -127,14 +156,14 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
                   {item.label}
                 </Link>
               ) : (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
                   className="text-[13px] font-medium text-slate-800 transition-colors hover:text-cyan-700"
                 >
                   {item.label}
-                </a>
-              ),
+                </Link>
+              )
             )}
             <a
               href={facebookUrl}
@@ -151,8 +180,9 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
               >
                 Connexion
               </Link>
-            ) : null}
-            {isSignedIn ? <UserButton /> : null}
+            ) : (
+              <ClerkUserButton />
+            )}
           </nav>
           <button
             type="button"

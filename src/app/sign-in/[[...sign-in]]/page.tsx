@@ -16,7 +16,12 @@ export default async function SignInPage({
         </div>
       ) : null}
       <div className="mx-auto mt-8 flex w-full justify-center">
-        <SignIn path="/sign-in" signUpUrl="/preinscription" forceRedirectUrl="/espace" />
+        <SignIn
+          path="/sign-in"
+          signUpUrl="/preinscription"
+          forceRedirectUrl="/espace"
+          fallbackRedirectUrl="/espace"
+        />
       </div>
     </main>
   );

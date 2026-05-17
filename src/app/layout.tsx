@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
+import AppClerkProvider from "@/components/clerk-provider";
 import Header from "@/components/header";
 import { readSiteData } from "@/lib/site-data";
 import "./globals.css";
@@ -22,13 +22,13 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children}: Readonly<{ children: React.ReactNode;}>) {
   const data = await readSiteData();
   return (
-    <ClerkProvider>
+    <AppClerkProvider>
       <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
         <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
           <Header facebookUrl={data.association.facebookUrl} />
           {children}
         </body>
       </html>
-    </ClerkProvider>
+    </AppClerkProvider>
   );
 }

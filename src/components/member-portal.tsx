@@ -1,39 +1,59 @@
 "use client";
 
+import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import type { RegistrationApplication } from "@/lib/club-data";
+import {
+  getMemberInscriptionLabel,
+  getMemberInscriptionStep,
+  stepBadgeClass,
+} from "@/lib/dossier-workflow";
+import type { WeekScheduleEntry } from "@/lib/schedule-week";
 
 type DisciplineOption = { id: string; name: string };
 type TrialSlot = { id: string; disciplineId: string; title: string; startsAt: string; capacity: number };
-type Application = {
+
+type UpcomingEvent = {
   id: string;
-  requestKind: "trial_and_preregistration" | "trial_only";
-  firstName: string;
-  lastName: string;
-  phone: string;
-  address: string;
-  postalCode: string;
-  city: string;
-  email: string;
-  documents: { name: string; url: string; uploadedAt: string }[];
-  disciplineId: string;
-  trialSlotId: string | null;
-  motivation: string;
-  createdAt: string;
-  status: "pending" | "awaiting_document" | "approved" | "rejected";
-  trialAttended: boolean;
-  paymentStatus: "unpaid" | "partial" | "paid";
-  paymentMethod: "cash" | "check" | "bank_transfer" | "card" | "other" | "";
-  licenseEndDate: string | null;
-  notes: string;
+  title: string;
+  date: string;
+  description: string;
+  disciplineName: string;
 };
+
+type PendingDocument = {
+  applicationId: string;
+  label: string;
+  uploadUrl: string;
+} | null;
 
 type MemberPortalProps = {
   disciplines: DisciplineOption[];
   slots: TrialSlot[];
-  applications: Application[];
+  applications: RegistrationApplication[];
+  membershipStatus: "pending" | "approved" | "rejected";
+  hasFullMembership: boolean;
+  weekSchedule: WeekScheduleEntry[];
+  upcomingEvents: UpcomingEvent[];
+  pendingDocument: PendingDocument;
 };
 
-export default function MemberPortal({ disciplines, slots, applications }: MemberPortalProps) {
+const PAYMENT_LABELS: Record<RegistrationApplication["paymentStatus"], string> = {
+  unpaid: "Non payé",
+  partial: "Partiel",
+  paid: "Payé",
+};
+
+export default function MemberPortal({
+  disciplines,
+  slots,
+  applications,
+  membershipStatus,
+  hasFullMembership,
+  weekSchedule,
+  upcomingEvents,
+  pendingDocument,
+}: MemberPortalProps) {
   const [disciplineId, setDisciplineId] = useState(disciplines[0]?.id ?? "");
   const [trialSlotId, setTrialSlotId] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -51,17 +71,46 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
 
   const disciplineSlots = useMemo(
     () => slots.filter((slot) => slot.disciplineId === disciplineId),
-    [disciplineId, slots],
+    [disciplineId, slots]
   );
+
+  const latestApplication = applications[0] ?? null;
+  const inscriptionStep = latestApplication ? getMemberInscriptionStep(latestApplication) : null;
+  const isInscriptionFinalized = inscriptionStep === "finalized" || hasFullMembership;
+
+  const myDisciplineNames = useMemo(() => {
+    const ids = new Set(applications.map((a) => a.disciplineId));
+    return disciplines.filter((d) => ids.has(d.id)).map((d) => d.name);
+  }, [applications, disciplines]);
+
+  const nextSession = useMemo(() => {
+    const upcoming = weekSchedule
+      .filter((e) => !e.cancelled)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+    return upcoming[0] ?? null;
+  }, [weekSchedule]);
+
+  const cancelledThisWeek = useMemo(
+    () => weekSchedule.filter((e) => e.cancelled),
+    [weekSchedule]
+  );
+
   const pendingWithoutTrial = applications.filter(
-    (application) => !application.trialSlotId && (application.status === "pending" || application.status === "awaiting_document"),
+    (application) =>
+      !application.trialSlotId &&
+      (application.status === "pending" || application.status === "awaiting_document")
   );
 
   async function uploadDocument(file: File) {
     const body = new FormData();
     body.append("file", file);
     const response = await fetch("/api/club/documents", { method: "POST", body });
-    const payload = (await response.json()) as { message?: string; name?: string; url?: string; uploadedAt?: string };
+    const payload = (await response.json()) as {
+      message?: string;
+      name?: string;
+      url?: string;
+      uploadedAt?: string;
+    };
     if (!response.ok || !payload.name || !payload.url || !payload.uploadedAt) {
       throw new Error(payload.message ?? "Upload impossible.");
     }
@@ -70,15 +119,13 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
 
   async function handleFilesChange(event: ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
-    if (!files || files.length === 0) {
-      return;
-    }
+    if (!files || files.length === 0) return;
     setIsUploading(true);
     setMessage("");
     try {
       const uploaded = await Promise.all(Array.from(files).map((file) => uploadDocument(file)));
       setDocuments((previous) => [...previous, ...uploaded]);
-      setMessage("Documents ajoutes.");
+      setMessage("Documents ajoutés.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Erreur d'upload.");
     } finally {
@@ -108,28 +155,17 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
         documents,
       }),
     });
-
     const payload = (await response.json()) as { message?: string };
-    setMessage(payload.message ?? (response.ok ? "Demande envoyee." : "Erreur."));
+    setMessage(payload.message ?? (response.ok ? "Demande envoyée." : "Erreur."));
     setIsLoading(false);
     if (response.ok) {
-      setFirstName("");
-      setLastName("");
-      setPhone("");
-      setAddress("");
-      setPostalCode("");
-      setCity("");
-      setEmail("");
-      setMotivation("");
-      setDocuments([]);
-      setTrialSlotId("");
       window.location.reload();
     }
   }
 
   async function addTrialRequest(applicationId: string, selectedTrialSlotId: string) {
     if (!selectedTrialSlotId) {
-      setMessage("Selectionne un creneau d'essai.");
+      setMessage("Sélectionnez un créneau d'essai.");
       return;
     }
     const response = await fetch(`/api/club/applications/${applicationId}`, {
@@ -138,25 +174,222 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
       body: JSON.stringify({ trialSlotId: selectedTrialSlotId }),
     });
     const payload = (await response.json()) as { message?: string };
-    setMessage(payload.message ?? (response.ok ? "Demande d'essai ajoutee." : "Erreur."));
-    if (response.ok) {
-      window.location.reload();
-    }
+    setMessage(payload.message ?? (response.ok ? "Créneau d'essai ajouté." : "Erreur."));
+    if (response.ok) window.location.reload();
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
-      <h1 className="text-3xl font-bold text-slate-900">Mon espace</h1>
-      <p className="mt-2 text-slate-700">Demande une pre-inscription, choisis ta seance d&apos;essai et suis ton statut.</p>
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8">
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">Mon espace</h1>
+        <p className="mt-2 text-slate-700">Suivez votre inscription, vos séances et vos demandes.</p>
+      </header>
 
-      <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Nouvelle pre-inscription</h2>
+      {latestApplication && inscriptionStep ? (
+        <section className="rounded-2xl border border-cyan-200 bg-cyan-50/50 p-6">
+          <h2 className="text-xl font-bold text-slate-900">Mon inscription</h2>
+          {myDisciplineNames.length > 0 ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Activité{myDisciplineNames.length > 1 ? "s" : ""} :{" "}
+              <span className="font-medium text-slate-800">{myDisciplineNames.join(", ")}</span>
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span
+              className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${stepBadgeClass(inscriptionStep)}`}
+            >
+              {getMemberInscriptionLabel(latestApplication)}
+            </span>
+            {inscriptionStep === "awaiting_payment" ? (
+              <p className="text-sm text-slate-700">
+                Paiement : {PAYMENT_LABELS[latestApplication.paymentStatus]}
+              </p>
+            ) : null}
+            {latestApplication.trialAttended ? (
+              <p className="text-sm text-slate-600">Essai réalisé</p>
+            ) : null}
+          </div>
+          {!isInscriptionFinalized ? (
+            <p className="mt-3 text-sm text-slate-600">
+              Les horaires et événements de votre activité seront visibles une fois l&apos;inscription
+              finalisée par le bureau.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {pendingDocument ? (
+        <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+          <h2 className="text-lg font-bold text-rose-900">Pièce manquante</h2>
+          <p className="mt-2 text-sm text-rose-800">
+            Le bureau vous demande : <strong>{pendingDocument.label}</strong>. Un email vous a été envoyé
+            avec un lien sécurisé.
+          </p>
+          <Link
+            href={pendingDocument.uploadUrl}
+            className="mt-3 inline-block rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Déposer le document
+          </Link>
+        </section>
+      ) : null}
+
+      {isInscriptionFinalized ? (
+        <>
+          {cancelledThisWeek.length > 0 ? (
+            <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+              <h2 className="text-lg font-bold text-rose-900">Cours annulés cette semaine</h2>
+              <ul className="mt-3 space-y-2">
+                {cancelledThisWeek.map((entry) => (
+                  <li key={entry.id} className="text-sm text-rose-900">
+                    <span className="font-semibold">{entry.dayLabel}</span> — {entry.disciplineName},{" "}
+                    {entry.startTime}–{entry.endTime}
+                    {entry.location ? ` · ${entry.location}` : ""}
+                    {entry.cancelReason ? (
+                      <span className="mt-0.5 block text-rose-800">Motif : {entry.cancelReason}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {nextSession ? (
+            <section className="panel p-6">
+              <h2 className="text-xl font-bold text-slate-900">Ma prochaine séance</h2>
+              <p className="mt-1 text-xs font-semibold uppercase text-cyan-700">{nextSession.disciplineName}</p>
+              <p className="mt-2 text-slate-700">
+                <span className="font-semibold">{nextSession.dayLabel}</span>
+              </p>
+              <p className="text-sm text-slate-600">
+                {nextSession.startTime} - {nextSession.endTime} · {nextSession.location}
+                {nextSession.teacherName ? ` · ${nextSession.teacherName}` : ""}
+              </p>
+            </section>
+          ) : null}
+
+          {upcomingEvents.length > 0 ? (
+            <section className="panel p-6">
+              <h2 className="text-xl font-bold text-slate-900">Événements à venir</h2>
+              <p className="mt-1 text-sm text-slate-600">Uniquement pour votre/vos activité(s).</p>
+              <ul className="mt-4 space-y-4">
+                {upcomingEvents.map((event) => (
+                  <li key={event.id} className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold uppercase text-cyan-700">{event.disciplineName}</p>
+                    <h3 className="text-lg font-semibold text-slate-900">{event.title}</h3>
+                    <p className="text-sm text-slate-600">
+                      {new Date(event.date).toLocaleDateString("fr-FR", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                    {event.description ? (
+                      <p className="mt-2 text-sm text-slate-700">{event.description}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {weekSchedule.length > 0 ? (
+            <section className="panel p-6">
+              <h2 className="text-xl font-bold text-slate-900">Horaires de la semaine</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Vos activités uniquement — les cours annulés sont signalés en direct.
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-slate-600">
+                      <th className="py-2 pr-3">Jour</th>
+                      <th className="py-2 pr-3">Activité</th>
+                      <th className="py-2 pr-3">Horaire</th>
+                      <th className="py-2 pr-3">Lieu</th>
+                      <th className="py-2 pr-3">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weekSchedule.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className={
+                          entry.cancelled
+                            ? "border-b border-rose-100 bg-rose-50/80 text-rose-900"
+                            : "border-b border-slate-100"
+                        }
+                      >
+                        <td className="py-2 pr-3 font-medium">{entry.dayLabel}</td>
+                        <td className="py-2 pr-3">{entry.disciplineName}</td>
+                        <td className={`py-2 pr-3 ${entry.cancelled ? "line-through opacity-80" : ""}`}>
+                          {entry.startTime} - {entry.endTime}
+                        </td>
+                        <td className="py-2 pr-3">{entry.location}</td>
+                        <td className="py-2 pr-3">
+                          {entry.cancelled ? (
+                            <span className="font-semibold text-rose-700">
+                              Annulé
+                              {entry.cancelReason ? ` — ${entry.cancelReason}` : ""}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700">Prévu</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      <section className="panel p-6">
+        <h2 className="text-xl font-bold text-slate-900">Mes demandes</h2>
+        <div className="mt-4 space-y-3">
+          {applications.length === 0 ? (
+            <p className="text-sm text-slate-600">Aucune demande pour le moment.</p>
+          ) : (
+            applications.map((application) => {
+              const step = getMemberInscriptionStep(application);
+              return (
+                <article key={application.id} className="rounded-xl border border-slate-200 p-4">
+                  <p className="font-semibold text-slate-900">
+                    {disciplines.find((d) => d.id === application.disciplineId)?.name ?? "Discipline"}
+                  </p>
+                  <p className="mt-2">
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${stepBadgeClass(step)}`}
+                    >
+                      {getMemberInscriptionLabel(application)}
+                    </span>
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Essai : {application.trialAttended ? "Réalisé" : "Pas encore réalisé"}
+                  </p>
+                  {application.notes ? (
+                    <p className="mt-2 text-sm text-amber-800">Message du bureau : {application.notes}</p>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
+        </div>
+      </section>
+
+      <details className="panel p-6">
+        <summary className="cursor-pointer text-xl font-bold text-slate-900">
+          Déposer une nouvelle pré-inscription
+        </summary>
         <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Prenom
+            Prénom
             <input
               value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
+              onChange={(e) => setFirstName(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
@@ -165,35 +398,34 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
             Nom
             <input
               value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
+              onChange={(e) => setLastName(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Telephone
+            Téléphone
             <input
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(e) => setPhone(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Email de contact
+            Email
             <input
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-              placeholder="Laisse vide pour utiliser ton email Clerk"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
             Adresse
             <input
               value={address}
-              onChange={(event) => setAddress(event.target.value)}
+              onChange={(e) => setAddress(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
@@ -202,7 +434,7 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
             Code postal
             <input
               value={postalCode}
-              onChange={(event) => setPostalCode(event.target.value)}
+              onChange={(e) => setPostalCode(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
@@ -211,71 +443,60 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
             Ville
             <input
               value={city}
-              onChange={(event) => setCity(event.target.value)}
+              onChange={(e) => setCity(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               required
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-            Documents (certificat medical, justificatifs)
+            Documents
             <input
               type="file"
               multiple
               onChange={handleFilesChange}
               disabled={isUploading}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+              className="rounded-xl border border-slate-300 px-3 py-2"
             />
           </label>
-          {documents.length > 0 ? (
-            <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-slate-900">Documents ajoutes</p>
-              <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                {documents.map((doc) => (
-                  <li key={`${doc.url}-${doc.uploadedAt}`}>- {doc.name}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Discipline
             <select
               value={disciplineId}
-              onChange={(event) => {
-                setDisciplineId(event.target.value);
+              onChange={(e) => {
+                setDisciplineId(e.target.value);
                 setTrialSlotId("");
               }}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
             >
-              {disciplines.map((discipline) => (
-                <option key={discipline.id} value={discipline.id}>
-                  {discipline.name}
+              {disciplines.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Date d&apos;essai (optionnel)
+            Créneau d&apos;essai (optionnel)
             <select
               value={trialSlotId}
-              onChange={(event) => setTrialSlotId(event.target.value)}
+              onChange={(e) => setTrialSlotId(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
             >
-              <option value="">Je choisis plus tard</option>
+              <option value="">Plus tard</option>
               {disciplineSlots.map((slot) => (
                 <option key={slot.id} value={slot.id}>
-                  {new Date(slot.startsAt).toLocaleString("fr-FR")} - {slot.title}
+                  {new Date(slot.startsAt).toLocaleString("fr-FR")} — {slot.title}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-            Pourquoi veux-tu rejoindre cette activite&nbsp;?
+            Motivation
             <textarea
               value={motivation}
-              onChange={(event) => setMotivation(event.target.value)}
+              onChange={(e) => setMotivation(e.target.value)}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
               rows={3}
-              placeholder="Ex: Je souhaite commencer le yoga pour le renforcement et la souplesse."
             />
           </label>
           <button
@@ -286,30 +507,30 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
             Envoyer ma demande
           </button>
         </form>
-        {message ? <p className="mt-3 text-sm font-medium text-slate-700">{message}</p> : null}
-      </section>
+        {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}
+      </details>
 
       {pendingWithoutTrial.length > 0 ? (
-        <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">Ajouter une demande d&apos;essai plus tard</h2>
-          <div className="mt-4 space-y-3">
+        <section className="panel p-6">
+          <h2 className="text-lg font-bold text-slate-900">Choisir un créneau d&apos;essai</h2>
+          <div className="mt-3 space-y-3">
             {pendingWithoutTrial.map((application) => (
               <article key={application.id} className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm text-slate-700">
-                  Dossier en attente pour {application.firstName} {application.lastName}
+                  Dossier {application.firstName} {application.lastName}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {slots
                     .filter((slot) => slot.disciplineId === application.disciplineId)
                     .map((slot) => (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      onClick={() => void addTrialRequest(application.id, slot.id)}
-                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs"
-                    >
-                      {new Date(slot.startsAt).toLocaleDateString("fr-FR")} - {slot.title}
-                    </button>
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => void addTrialRequest(application.id, slot.id)}
+                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs"
+                      >
+                        {new Date(slot.startsAt).toLocaleDateString("fr-FR")} — {slot.title}
+                      </button>
                     ))}
                 </div>
               </article>
@@ -317,36 +538,6 @@ export default function MemberPortal({ disciplines, slots, applications }: Membe
           </div>
         </section>
       ) : null}
-
-      <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Mes demandes</h2>
-        <div className="mt-4 space-y-3">
-          {applications.length === 0 ? (
-            <p className="text-sm text-slate-600">Aucune demande pour le moment.</p>
-          ) : (
-            applications.map((application) => (
-              <article key={application.id} className="rounded-xl border border-slate-200 p-4">
-                <p className="text-sm text-slate-700">
-                  Statut: <span className="font-semibold">{application.status}</span> | Paiement:{" "}
-                  <span className="font-semibold">{application.paymentStatus}</span> | Essai realise:{" "}
-                  <span className="font-semibold">{application.trialAttended ? "Oui" : "Non"}</span>
-                </p>
-                <p className="mt-1 text-sm text-slate-700">
-                  Contact: {application.email} - {application.phone} - {application.address}
-                </p>
-                <p className="mt-1 text-sm text-slate-700">{application.postalCode} {application.city}</p>
-                {application.licenseEndDate ? (
-                  <p className="mt-1 text-sm text-slate-700">Fin de licence: {application.licenseEndDate}</p>
-                ) : null}
-                {application.documents.length > 0 ? (
-                  <p className="mt-1 text-sm text-slate-700">Documents fournis: {application.documents.length}</p>
-                ) : null}
-                {application.notes ? <p className="mt-1 text-sm text-slate-700">Note admin: {application.notes}</p> : null}
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-    </main>
+    </div>
   );
 }

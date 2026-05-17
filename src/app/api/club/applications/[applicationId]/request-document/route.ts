@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAdminSpace, getCurrentUserContext } from "@/lib/clerk";
+import { canAccessClubOperations, getCurrentUserContext } from "@/lib/clerk";
 import { readClubData, writeClubData } from "@/lib/club-data";
 import { sendEmail } from "@/lib/mailer";
 
@@ -12,7 +12,7 @@ export async function POST(
   context: { params: Promise<{ applicationId: string }> },
 ) {
   const currentUser = await getCurrentUserContext();
-  if (!currentUser || !canAccessAdminSpace(currentUser.publicFunctions)) {
+  if (!currentUser || !canAccessClubOperations(currentUser)) {
     return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   }
 
@@ -38,6 +38,7 @@ export async function POST(
     usedAt: null,
   });
   application.status = "awaiting_document";
+  application.dossierPhase = "documents";
   await writeClubData(data);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

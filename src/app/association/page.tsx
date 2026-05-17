@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +10,13 @@ export default async function AssociationPage() {
   const teachers = data.disciplines
     .filter((discipline) => discipline.active)
     .flatMap((discipline) => {
-      const list = discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
+      const list =
+        discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
       return list.map((teacherName, idx) => ({
         id: `${discipline.id}-${idx}`,
         fullName: teacherName || "Coach a definir",
         disciplineName: discipline.name,
+        slug: discipline.slug,
         email: discipline.contactEmail,
       }));
     });
@@ -21,18 +24,22 @@ export default async function AssociationPage() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
       <header className="panel mt-4 p-6 sm:p-8">
-        <h1 className="text-3xl font-bold text-slate-900">Organigramme de l&apos;association</h1>
-        <p className="mt-2 text-slate-700">{data.association.organisation.notes}</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-cyan-700">Association</p>
+        <h1 className="mt-1 text-3xl font-bold text-slate-900">Organigramme</h1>
+        <p className="mt-3 text-slate-700">{data.association.organisation.notes}</p>
       </header>
 
       <section className="panel mt-6 p-6 sm:p-8">
-        <h2 className="panel-title">Bureau</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <h2 className="panel-title">Bureau de l&apos;association</h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {boardMembers.map((member) => (
-            <article key={member.id} className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+            <article
+              key={member.id}
+              className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-cyan-50/40 p-5 shadow-sm"
+            >
               <p className="text-xs font-semibold uppercase text-cyan-700">{member.role}</p>
-              <h3 className="mt-1 text-xl font-semibold text-slate-900">{member.fullName}</h3>
-              <a href={`mailto:${member.email}`} className="mt-2 inline-block text-sm text-slate-700 hover:underline">
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">{member.fullName}</h3>
+              <a href={`mailto:${member.email}`} className="mt-3 inline-block text-sm text-slate-700 hover:underline">
                 {member.email}
               </a>
             </article>
@@ -41,18 +48,29 @@ export default async function AssociationPage() {
       </section>
 
       <section className="panel mt-6 p-6 sm:p-8">
-        <h2 className="panel-title">Equipe enseignante (auto depuis disciplines)</h2>
-        <p className="mt-2 text-slate-600">
-          Cette liste est dynamique: chaque discipline active ajoute automatiquement ses enseignants ici.
-          Le contact se fait via l&apos;email de la discipline.
+        <h2 className="panel-title">Equipe enseignante</h2>
+        <p className="mt-2 max-w-2xl text-slate-600">
+          Les enseignants sont renseignes dans chaque discipline. Contactez la discipline pour toute question
+          pedagogique.
         </p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {teachers.map((teacher) => (
-            <article key={teacher.id} className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4">
+            <article
+              key={teacher.id}
+              className="rounded-2xl border border-cyan-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
               <p className="text-xs font-semibold uppercase text-cyan-700">{teacher.disciplineName}</p>
-              <h3 className="mt-1 text-xl font-semibold text-slate-900">{teacher.fullName}</h3>
-              <p className="mt-2 text-xs font-semibold uppercase text-slate-500">Contact discipline</p>
-              <a href={`mailto:${teacher.email}`} className="inline-block text-sm text-slate-700 hover:underline">
+              <h3 className="mt-2 text-xl font-semibold text-slate-900">{teacher.fullName}</h3>
+              <Link
+                href={`/disciplines/${teacher.slug}`}
+                className="mt-2 inline-block text-sm font-medium text-cyan-700 hover:underline"
+              >
+                Voir la discipline
+              </Link>
+              <a
+                href={`mailto:${teacher.email}`}
+                className="mt-3 block text-sm text-slate-700 hover:underline"
+              >
                 {teacher.email}
               </a>
             </article>

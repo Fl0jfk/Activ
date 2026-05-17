@@ -1,21 +1,31 @@
 import PublicPreregistrationForm from "@/components/public-preregistration-form";
-import { readClubData } from "@/lib/club-data";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function PreinscriptionPage() {
-  const [siteData, clubData] = await Promise.all([readSiteData(), readClubData()]);
-  const disciplines = siteData.disciplines.filter((discipline) => discipline.active).map((discipline) => ({
-    id: discipline.id,
-    name: discipline.name,
-  }));
-  const slots = clubData.trialSlots.filter((slot) => slot.active).map((slot) => ({
-    id: slot.id,
-    disciplineId: slot.disciplineId,
-    title: slot.title,
-    startsAt: slot.startsAt,
-  }));
+type PageProps = {
+  searchParams: Promise<{ discipline?: string }>;
+};
 
-  return <PublicPreregistrationForm disciplines={disciplines} slots={slots} />;
+export default async function PreinscriptionPage({ searchParams }: PageProps) {
+  const { discipline: disciplineParam } = await searchParams;
+  const siteData = await readSiteData();
+  const disciplines = siteData.disciplines
+    .filter((discipline) => discipline.active)
+    .map((discipline) => ({
+      id: discipline.id,
+      name: discipline.name,
+      slug: discipline.slug,
+    }));
+
+  const matchedDiscipline = disciplineParam
+    ? disciplines.find((d) => d.slug === disciplineParam || d.id === disciplineParam)
+    : undefined;
+
+  return (
+    <PublicPreregistrationForm
+      disciplines={disciplines}
+      initialDisciplineId={matchedDiscipline?.id}
+    />
+  );
 }

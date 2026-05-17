@@ -45,6 +45,10 @@ body::-webkit-scrollbar {
   .gradient-chip {
     @apply rounded-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 px-4 py-2 text-sm font-semibold text-white;
   }
+
+  .anchor-section {
+    scroll-margin-top: 5rem;
+  }
 }
 
 .hide-scrollbar {

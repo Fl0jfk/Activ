@@ -2,22 +2,44 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSiteData } from "@/lib/site-data";
+import { buildDisciplineWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
 
-type PageProps = { params: Promise<{ slug: string; }>};
+type PageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ essai?: string }>;
+};
 
 export const dynamic = "force-dynamic";
 
-export default async function DisciplinePage({ params }: PageProps) {
+export default async function DisciplinePage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const { essai } = await searchParams;
+  const trialReserved = essai === "reserve";
   const data = await readSiteData();
   const discipline = data.disciplines.find((item) => item.slug === slug && item.active);
-  if (!discipline) { notFound()}
-  const teacherList = discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
-  const disciplineSchedule = data.schedule.filter( (slot) => slot.active && slot.disciplineId === discipline.id);
+  if (!discipline) {
+    notFound();
+  }
+  const teacherList =
+    discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
+  const weekSchedule = buildDisciplineWeekSchedule(data, discipline.id);
+  const weekLabel = formatWeekRangeLabel();
+
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
+      {trialReserved ? (
+        <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Votre réservation d&apos;essai a bien été enregistrée. Le bureau validera votre espace membre sous peu.
+        </div>
+      ) : null}
       <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-8">
-        <Image src={discipline.imageUrl} alt={discipline.name} width={1000} height={500} className="h-60 w-full rounded-2xl object-cover shadow-2xl"/>
+        <Image
+          src={discipline.imageUrl}
+          alt={discipline.name}
+          width={1000}
+          height={500}
+          className="h-60 w-full rounded-2xl object-cover shadow-2xl"
+        />
         <h1 className="mt-6 text-3xl font-bold text-white">{discipline.name}</h1>
         <p className="mt-2 text-white/95">{discipline.description}</p>
       </header>
@@ -34,7 +56,9 @@ export default async function DisciplinePage({ params }: PageProps) {
             />
             <div>
               {teacherList.map((teacher) => (
-                <p key={teacher} className="text-slate-800">{teacher}</p>
+                <p key={teacher} className="text-slate-800">
+                  {teacher}
+                </p>
               ))}
             </div>
           </div>
@@ -55,13 +79,28 @@ export default async function DisciplinePage({ params }: PageProps) {
             </a>
           </p>
           {discipline.allowTrialRequest ? (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={`/disciplines/${discipline.slug}/essai`}
+                className="inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                {discipline.ctaText}
+              </Link>
+              <Link
+                href={`/preinscription?discipline=${discipline.slug}`}
+                className="inline-block rounded-xl border border-cyan-700 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-50"
+              >
+                Pré-inscription complète
+              </Link>
+            </div>
+          ) : (
             <Link
-              href="/preinscription"
+              href={`/preinscription?discipline=${discipline.slug}`}
               className="mt-4 inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              {discipline.ctaText} (sans compte)
+              Je me pré-inscris
             </Link>
-          ) : null}
+          )}
         </article>
       </section>
 
@@ -87,17 +126,36 @@ export default async function DisciplinePage({ params }: PageProps) {
           </ul>
         </article>
       </section>
+
       <section className="panel mt-6 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-slate-900">Horaires de cette discipline</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Horaires cette semaine</h2>
+            <p className="mt-1 text-sm text-slate-600">{weekLabel}</p>
+          </div>
           <span className="gradient-chip">Toujours a jour</span>
         </div>
         <div className="mt-3 space-y-3">
-          {disciplineSchedule.length > 0 ? (
-            disciplineSchedule.map((slot) => (
-              <div key={slot.id} className="rounded-xl border border-cyan-100 bg-cyan-50/50 px-4 py-3 text-slate-700">
-                <span className="font-semibold text-slate-900">{slot.day}</span> - {slot.startTime} / {slot.endTime} ({slot.location})
-                {slot.teacherName ? <span className="ml-2 text-sm">- {slot.teacherName}</span> : null}
+          {weekSchedule.length > 0 ? (
+            weekSchedule.map((entry) => (
+              <div
+                key={entry.id}
+                className={`rounded-xl border px-4 py-3 ${
+                  entry.cancelled
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-cyan-100 bg-cyan-50/50 text-slate-700"
+                }`}
+              >
+                <span className={`font-semibold ${entry.cancelled ? "line-through" : "text-slate-900"}`}>
+                  {entry.dayLabel}
+                </span>{" "}
+                - {entry.startTime} / {entry.endTime} ({entry.location})
+                {entry.teacherName ? <span className="ml-2 text-sm">- {entry.teacherName}</span> : null}
+                {entry.cancelled ? (
+                  <p className="mt-1 text-sm font-semibold text-rose-700">
+                    Annule{entry.cancelReason ? ` : ${entry.cancelReason}` : ""}
+                  </p>
+                ) : null}
               </div>
             ))
           ) : (
@@ -105,6 +163,7 @@ export default async function DisciplinePage({ params }: PageProps) {
           )}
         </div>
       </section>
+
       {discipline.events.length > 0 ? (
         <section className="panel mt-6 p-6">
           <h2 className="text-xl font-bold text-slate-900">Evenements de la discipline</h2>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readClubData, writeClubData } from "@/lib/club-data";
-import { canAccessAdminSpace, getCurrentUserContext } from "@/lib/clerk";
+import { canAccessClubOperations, getCurrentUserContext } from "@/lib/clerk";
 
 function randomId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const currentUser = await getCurrentUserContext();
-  if (!currentUser || !canAccessAdminSpace(currentUser.publicFunctions)) {
+  if (!currentUser || !canAccessClubOperations(currentUser)) {
     return NextResponse.json({ message: "Non autorise." }, { status: 401 });
   }
 

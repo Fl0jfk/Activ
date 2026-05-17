@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readClubData, writeClubData } from "@/lib/club-data";
-import { canAccessAdminSpace, getCurrentUserContext, updateUserMetadata } from "@/lib/clerk";
+import {
+  canAccessClubOperations,
+  getCurrentUserContext,
+  isCoach,
+  isDirection,
+  isStaff,
+  updateUserMetadata,
+} from "@/lib/clerk";
 
 function randomId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -13,7 +20,7 @@ export async function GET() {
   }
 
   const data = await readClubData();
-  const admin = canAccessAdminSpace(currentUser.publicFunctions);
+  const admin = canAccessClubOperations(currentUser);
 
   if (admin) {
     return NextResponse.json(data.applications);
@@ -95,6 +102,7 @@ export async function POST(request: NextRequest) {
       motivation: payload.motivation?.trim() ?? "",
       createdAt,
       status: "pending",
+      dossierPhase: "reception",
       trialAttended: false,
       paymentStatus: "unpaid",
       paymentMethod: "",
@@ -113,21 +121,26 @@ export async function POST(request: NextRequest) {
         fullName: currentUser.fullName,
         email: currentUser.email,
         role: currentUser.role,
-        functions: currentUser.privateFunctions,
+        functions: [],
         membershipStatus: "pending",
         updatedAt: createdAt,
       });
     }
 
     await writeClubData(data);
-    await updateUserMetadata(currentUser.userId, {
-      role: currentUser.role,
-      functions: currentUser.privateFunctions,
-      membershipStatus: "pending",
-    }, {
-      hasPendingRegistrationRequest: true,
-      lastRegistrationRequestAt: createdAt,
-    });
+
+    const isBureau = isDirection(currentUser) || isStaff(currentUser) || isCoach(currentUser);
+    await updateUserMetadata(
+      currentUser.userId,
+      {
+        role: currentUser.role,
+        membershipStatus: isBureau ? "approved" : "pending",
+      },
+      {
+        hasPendingRegistrationRequest: !isBureau,
+        lastRegistrationRequestAt: createdAt,
+      }
+    );
 
     return NextResponse.json({ message: "Demande envoyee." }, { status: 201 });
   } catch (error) {

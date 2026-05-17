@@ -1,17 +1,25 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { readRoleFromClerkUser } from "@/lib/clerk-role";
 
-export type AppRole = "admin" | "member" | "coach";
+export type AppRole = "member" | "staff" | "coach" | "direction";
 export type MembershipStatus = "pending" | "approved" | "rejected";
+export type RegistrationState = "pending" | "espace_active" | "registered" | "rejected";
 
 export type AppPrivateMetadata = {
   role?: AppRole;
-  functions?: string[];
   membershipStatus?: MembershipStatus;
+  espaceValidated?: boolean;
+  disciplineIds?: string[];
+  coachDisciplineIds?: string[];
 };
 
 export type AppPublicMetadata = {
-  functions?: string[];
+  role?: AppRole;
+  membershipStatus?: MembershipStatus;
+  espaceValidated?: boolean;
+  disciplineIds?: string[];
   displayRole?: string;
+  registrationState?: RegistrationState;
 };
 
 export type CurrentUserContext = {
@@ -19,14 +27,10 @@ export type CurrentUserContext = {
   email: string;
   fullName: string;
   role: AppRole;
-  privateFunctions: string[];
-  publicFunctions: string[];
   membershipStatus: MembershipStatus;
+  espaceValidated: boolean;
+  disciplineIds: string[];
 };
-
-function normalizeRole(value: unknown): AppRole {
-  return value === "admin" || value === "coach" ? value : "member";
-}
 
 function normalizeMembershipStatus(value: unknown): MembershipStatus {
   if (value === "approved" || value === "rejected") {
@@ -35,19 +39,109 @@ function normalizeMembershipStatus(value: unknown): MembershipStatus {
   return "pending";
 }
 
-function normalizeFunctions(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+function normalizeEspaceValidated(value: unknown): boolean {
+  return value === true;
+}
+
+function normalizeDisciplineIds(privateMeta: AppPrivateMetadata, publicMeta: AppPublicMetadata): string[] {
+  if (Array.isArray(privateMeta.disciplineIds) && privateMeta.disciplineIds.length > 0) {
+    return privateMeta.disciplineIds.filter((id): id is string => typeof id === "string");
   }
-  return value.filter((item): item is string => typeof item === "string");
+  if (Array.isArray(publicMeta.disciplineIds) && publicMeta.disciplineIds.length > 0) {
+    return publicMeta.disciplineIds.filter((id): id is string => typeof id === "string");
+  }
+  const legacy = publicMeta as { preferredDisciplineId?: string };
+  if (typeof legacy.preferredDisciplineId === "string" && legacy.preferredDisciplineId) {
+    return [legacy.preferredDisciplineId];
+  }
+  return [];
 }
 
-export function isAdminRole(role: AppRole, functions: string[]) {
-  return role === "admin" || functions.includes("president") || functions.includes("secretary");
+/** Staff, coach et direction : jamais bloqués par une adhésion « en attente ». */
+function resolveMembershipStatus(role: AppRole, rawStatus: unknown): MembershipStatus {
+  if (role === "direction" || role === "staff" || role === "coach") {
+    return "approved";
+  }
+  return normalizeMembershipStatus(rawStatus);
 }
 
-export function canAccessAdminSpace(publicFunctions: string[]) {
-  return publicFunctions.includes("president") || publicFunctions.includes("secretary");
+function resolveEspaceValidated(role: AppRole, rawValue: unknown): boolean {
+  if (role === "direction" || role === "staff" || role === "coach") {
+    return true;
+  }
+  return normalizeEspaceValidated(rawValue);
+}
+
+export type BuildMemberClerkMetadataInput = {
+  disciplineIds: string[];
+  espaceValidated?: boolean;
+  membershipStatus?: MembershipStatus;
+  registrationState?: RegistrationState;
+};
+
+export function buildMemberClerkMetadata(input: BuildMemberClerkMetadataInput): {
+  privateMetadata: AppPrivateMetadata;
+  publicMetadata: AppPublicMetadata;
+} {
+  const espaceValidated = input.espaceValidated ?? false;
+  const membershipStatus = input.membershipStatus ?? "pending";
+  const registrationState = input.registrationState ?? (espaceValidated ? "espace_active" : "pending");
+
+  return {
+    privateMetadata: {
+      role: "member",
+      membershipStatus,
+      espaceValidated,
+      disciplineIds: input.disciplineIds,
+    },
+    publicMetadata: {
+      role: "member",
+      membershipStatus,
+      espaceValidated,
+      disciplineIds: input.disciplineIds,
+      registrationState,
+    },
+  };
+}
+
+export function isDirection(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "direction";
+}
+
+export function isStaff(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "staff";
+}
+
+export function isCoach(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "coach";
+}
+
+export function canAccessMemberSpace(
+  ctx: Pick<CurrentUserContext, "role" | "membershipStatus" | "espaceValidated">
+): boolean {
+  if (ctx.role === "coach" || ctx.role === "staff" || ctx.role === "direction") {
+    return true;
+  }
+  return ctx.espaceValidated === true;
+}
+
+export function hasFullMembership(ctx: Pick<CurrentUserContext, "role" | "membershipStatus">): boolean {
+  if (ctx.role === "coach" || ctx.role === "staff" || ctx.role === "direction") {
+    return true;
+  }
+  return ctx.membershipStatus === "approved";
+}
+
+export function canAccessClubOperations(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "staff" || ctx.role === "direction";
+}
+
+export function canManageSiteData(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "direction";
+}
+
+export function canApproveCoachAbsences(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return ctx.role === "direction";
 }
 
 export async function getCurrentUserContext(): Promise<CurrentUserContext | null> {
@@ -62,14 +156,18 @@ export async function getCurrentUserContext(): Promise<CurrentUserContext | null
   const publicMetadata = (user.publicMetadata ?? {}) as AppPublicMetadata;
   const firstEmail = user.emailAddresses.find((entry) => entry.id === user.primaryEmailAddressId);
 
+  const { role } = readRoleFromClerkUser(user);
+  const rawMembershipStatus = privateMetadata.membershipStatus ?? publicMetadata.membershipStatus;
+  const rawEspaceValidated = privateMetadata.espaceValidated ?? publicMetadata.espaceValidated;
+
   return {
     userId,
     email: firstEmail?.emailAddress ?? "",
     fullName: [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.username || "Membre",
-    role: normalizeRole(privateMetadata.role),
-    privateFunctions: normalizeFunctions(privateMetadata.functions),
-    publicFunctions: normalizeFunctions(publicMetadata.functions),
-    membershipStatus: normalizeMembershipStatus(privateMetadata.membershipStatus),
+    role,
+    membershipStatus: resolveMembershipStatus(role, rawMembershipStatus),
+    espaceValidated: resolveEspaceValidated(role, rawEspaceValidated),
+    disciplineIds: normalizeDisciplineIds(privateMetadata, publicMetadata),
   };
 }
 
@@ -83,4 +181,9 @@ export async function updateUserMetadata(
     privateMetadata,
     publicMetadata,
   });
+}
+
+export async function deleteClerkUser(userId: string): Promise<void> {
+  const client = await clerkClient();
+  await client.users.deleteUser(userId);
 }

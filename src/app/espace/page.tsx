@@ -1,8 +1,19 @@
 import { redirect } from "next/navigation";
+import EspaceAccessBlocked from "@/components/espace-access-blocked";
 import EspaceHub from "@/components/espace-hub";
-import { canAccessAdminSpace, getCurrentUserContext } from "@/lib/clerk";
+import {
+  canAccessClubOperations,
+  canAccessMemberSpace,
+  canApproveCoachAbsences,
+  canManageSiteData,
+  getCurrentUserContext,
+  isCoach,
+} from "@/lib/clerk";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { readRoleFromClerkUser } from "@/lib/clerk-role";
 import { readClubData } from "@/lib/club-data";
 import { readSiteData } from "@/lib/site-data";
+import { buildWeekSchedule } from "@/lib/schedule-week";
 
 export const dynamic = "force-dynamic";
 
@@ -13,31 +24,121 @@ export default async function EspacePage() {
   }
 
   const [siteData, clubData] = await Promise.all([readSiteData(), readClubData()]);
-  const disciplines = siteData.disciplines.filter((discipline) => discipline.active).map((discipline) => ({
-    id: discipline.id,
-    name: discipline.name,
-  }));
-  const canAccessAdmin = canAccessAdminSpace(currentUser.publicFunctions);
-  if (!canAccessAdmin && currentUser.membershipStatus !== "approved") {
-    return (
-      <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-8">
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-          <h1 className="text-2xl font-bold text-amber-900">Pre-inscription en attente de validation</h1>
-          <p className="mt-2 text-amber-800">
-            Ton compte est cree, mais l&apos;acces a l&apos;espace membre sera actif apres validation par le president ou la secretaire.
-          </p>
-        </section>
-      </main>
-    );
+  const disciplines = siteData.disciplines
+    .filter((discipline) => discipline.active)
+    .map((discipline) => ({
+      id: discipline.id,
+      name: discipline.name,
+    }));
+
+  const clubOps = canAccessClubOperations(currentUser);
+  const manageSite = canManageSiteData(currentUser);
+  const coachPortal = isCoach(currentUser);
+  const approveAbsences = canApproveCoachAbsences(currentUser);
+
+  const myApplications = clubData.applications.filter(
+    (application) => application.clerkUserId === currentUser.userId
+  );
+
+  let memberSpace = canAccessMemberSpace(currentUser);
+  if (!memberSpace && currentUser.role === "member") {
+    const legacyEspaceOk = myApplications.some((application) => {
+      const phase = application.dossierPhase;
+      return (
+        phase === "documents" ||
+        phase === "payment" ||
+        phase === "finalized" ||
+        (application.clerkUserId !== null &&
+          !phase &&
+          (application.status === "pending" || application.status === "awaiting_document"))
+      );
+    });
+    if (legacyEspaceOk) {
+      memberSpace = true;
+    }
   }
+
+  if (!memberSpace && !clubOps && !coachPortal) {
+    const { userId } = await auth();
+    let roleResolution = readRoleFromClerkUser({});
+    if (userId) {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      roleResolution = readRoleFromClerkUser(user);
+    }
+    return <EspaceAccessBlocked roleResolution={roleResolution} />;
+  }
+
+  const memberDisciplineIds = new Set(currentUser.disciplineIds);
+  for (const application of myApplications) {
+    if (application.disciplineId) {
+      memberDisciplineIds.add(application.disciplineId);
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingEvents = siteData.disciplines
+    .filter((d) => d.active && memberDisciplineIds.has(d.id))
+    .flatMap((d) =>
+      d.events.map((event) => ({
+        id: event.id,
+        title: event.title,
+        date: event.date,
+        description: event.description,
+        disciplineName: d.name,
+      }))
+    )
+    .filter((event) => event.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const weekSchedule = buildWeekSchedule(siteData).filter((entry) =>
+    memberDisciplineIds.has(entry.disciplineId)
+  );
+
+  let pendingDocument: {
+    applicationId: string;
+    label: string;
+    uploadUrl: string;
+  } | null = null;
+
+  const awaitingApp = myApplications.find((a) => a.status === "awaiting_document");
+  if (awaitingApp) {
+    const token = clubData.documentRequestTokens.find(
+      (t) => t.applicationId === awaitingApp.id && !t.usedAt && new Date(t.expiresAt) > new Date()
+    );
+    if (token) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      pendingDocument = {
+        applicationId: awaitingApp.id,
+        label: token.requestedDocumentLabel,
+        uploadUrl: `${baseUrl}/piece-jointe?token=${token.token}`,
+      };
+    }
+  }
+
+  const coachAbsencePendingCount = clubData.coachAbsenceRequests.filter(
+    (r) => r.status === "pending"
+  ).length;
+
+  const defaultTab = clubOps ? "cockpit" : coachPortal ? "coach" : "member";
 
   return (
     <EspaceHub
-      canAccessAdmin={canAccessAdmin}
+      canAccessClubOperations={clubOps}
+      canManageSite={manageSite}
+      canAccessCoachPortal={coachPortal}
+      canApproveCoachAbsences={approveAbsences}
+      coachAbsencePendingCount={coachAbsencePendingCount}
+      membershipStatus={currentUser.membershipStatus}
+      hasFullMembership={currentUser.membershipStatus === "approved" || clubOps || coachPortal}
       disciplines={disciplines}
       slots={clubData.trialSlots.filter((slot) => slot.active)}
-      myApplications={clubData.applications.filter((application) => application.clerkUserId === currentUser.userId)}
+      myApplications={myApplications}
       allApplications={clubData.applications}
+      weekSchedule={weekSchedule}
+      upcomingEvents={upcomingEvents}
+      pendingDocument={pendingDocument}
+      defaultTab={defaultTab}
     />
   );
 }

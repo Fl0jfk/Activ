@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
+import { buildMemberClerkMetadata } from "@/lib/clerk";
 import { readClubData, writeClubData } from "@/lib/club-data";
 
 function randomId(prefix: string) {
@@ -72,6 +73,18 @@ export async function POST(request: NextRequest) {
       if (!slot) {
         return NextResponse.json({ message: "Creneau d'essai introuvable." }, { status: 404 });
       }
+      if (slot.disciplineId !== payload.disciplineId) {
+        return NextResponse.json({ message: "Ce creneau ne correspond pas a la discipline choisie." }, { status: 400 });
+      }
+      if (new Date(slot.startsAt).getTime() < Date.now()) {
+        return NextResponse.json({ message: "Ce creneau d'essai est passe." }, { status: 400 });
+      }
+      const registered = data.applications.filter(
+        (entry) => entry.trialSlotId === slot.id && entry.status !== "rejected",
+      ).length;
+      if (registered >= slot.capacity) {
+        return NextResponse.json({ message: "Ce creneau d'essai est complet." }, { status: 409 });
+      }
     }
 
     const email = payload.email.trim().toLowerCase();
@@ -80,23 +93,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Une demande est deja en attente pour cet email." }, { status: 409 });
     }
 
+    const disciplineIds = [payload.disciplineId];
+    const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
+      disciplineIds,
+      espaceValidated: false,
+      membershipStatus: "pending",
+      registrationState: "pending",
+    });
+
     const client = await clerkClient();
     const createdUser = await client.users.createUser({
       firstName: payload.firstName.trim(),
       lastName: payload.lastName.trim(),
       emailAddress: [email],
       password: payload.password,
-      privateMetadata: {
-        role: "member",
-        functions: [],
-        membershipStatus: "pending",
-      },
-      publicMetadata: {
-        functions: [],
-        registrationState: "pending",
-        preferredDisciplineId: payload.disciplineId,
-        requestKind: "trial_and_preregistration",
-      },
+      privateMetadata,
+      publicMetadata,
     });
 
     try {
@@ -118,6 +130,7 @@ export async function POST(request: NextRequest) {
         motivation: payload.motivation?.trim() ?? "",
         createdAt: new Date().toISOString(),
         status: "pending",
+        dossierPhase: "reception",
         trialAttended: false,
         paymentStatus: "unpaid",
         paymentMethod: "",
@@ -136,7 +149,13 @@ export async function POST(request: NextRequest) {
       });
 
       await writeClubData(data);
-      return NextResponse.json({ message: "Pre-inscription envoyee et compte cree. Tu peux te connecter." }, { status: 201 });
+      return NextResponse.json(
+        {
+          message:
+            "Pre-inscription envoyee et compte cree. Votre espace membre sera active apres validation par le bureau.",
+        },
+        { status: 201 },
+      );
     } catch (error) {
       await client.users.deleteUser(createdUser.id);
       throw error;

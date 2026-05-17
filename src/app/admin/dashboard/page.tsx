@@ -1,7 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data";
+import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data-types";
+import { DAY_LABELS, type DayOfWeek } from "@/lib/schedule-constants";
+
+const DAY_OPTIONS = (Object.entries(DAY_LABELS) as [string, string][]).map(([value, label]) => ({
+  value: Number(value) as DayOfWeek,
+  label,
+}));
 
 const emptyData: AssociationData = {
   association: {
@@ -18,6 +24,7 @@ const emptyData: AssociationData = {
   },
   disciplines: [],
   schedule: [],
+  scheduleExceptions: [],
 };
 
 function randomId(prefix: string) {
@@ -44,7 +51,7 @@ function slugify(value: string): string {
     .replace(/(^-|-$)+/g, "");
 }
 
-export default function AdminDashboardPage() {
+export default function AdminDashboardPage({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<AssociationData>(emptyData);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -127,7 +134,8 @@ export default function AdminDashboardPage() {
           id: randomId("slot"),
           disciplineId,
           teacherName: "",
-          day: "",
+          day: DAY_LABELS[1],
+          dayOfWeek: 1,
           startTime: "",
           endTime: "",
           location: "",
@@ -182,7 +190,7 @@ export default function AdminDashboardPage() {
             {isLoading
               ? "Verification des droits..."
               : isForbidden
-                ? "Acces reserve aux profils president ou secretary dans publicMetadata.functions."
+                ? "Accès réservé au rôle direction."
                 : "Verification..."}
           </p>
         </div>
@@ -190,14 +198,21 @@ export default function AdminDashboardPage() {
     );
   }
 
-  return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
-      <h1 className="text-3xl font-bold text-slate-900">Dashboard administration</h1>
-      <p className="mt-2 text-slate-700">
-        Configure les disciplines comme des pages article: coach, horaires, materiel, prix, evenements.
-      </p>
+  const Wrapper = embedded ? "div" : "main";
+  const wrapperClass = embedded ? "space-y-6" : "mx-auto w-full max-w-6xl px-4 py-8 sm:px-8";
 
-      <form onSubmit={saveData} className="mt-6 space-y-6">
+  return (
+    <Wrapper className={wrapperClass}>
+      {!embedded ? (
+        <>
+          <h1 className="text-3xl font-bold text-slate-900">Dashboard administration</h1>
+          <p className="mt-2 text-slate-700">
+            Informations générales, organigramme et disciplines.
+          </p>
+        </>
+      ) : null}
+
+      <form onSubmit={saveData} className={embedded ? "space-y-6" : "mt-6 space-y-6"}>
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">Informations generales</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -525,12 +540,23 @@ export default function AdminDashboardPage() {
                             <div className="grid gap-2 sm:grid-cols-2">
                               <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                                 Jour
-                                <input
-                                  value={slot.day}
-                                  onChange={(event) => updateSchedule(slot.id, { day: event.target.value })}
+                                <select
+                                  value={slot.dayOfWeek}
+                                  onChange={(event) => {
+                                    const dayOfWeek = Number(event.target.value) as DayOfWeek;
+                                    updateSchedule(slot.id, {
+                                      dayOfWeek,
+                                      day: DAY_LABELS[dayOfWeek],
+                                    });
+                                  }}
                                   className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
-                                  placeholder="Ex: Lundi"
-                                />
+                                >
+                                  {DAY_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
                               <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                                 Lieu
@@ -610,6 +636,6 @@ export default function AdminDashboardPage() {
       {statusMessage ? (
         <p className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">{statusMessage}</p>
       ) : null}
-    </main>
+    </Wrapper>
   );
 }
