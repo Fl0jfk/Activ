@@ -1,17 +1,81 @@
 import { dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 import { slugify } from "@/lib/slug";
-import type { AssociationData, ScheduleSlot } from "@/lib/site-data-types";
+import { normalizeNewsDisciplineId } from "@/lib/site-news";
+import type { AssociationData, ScheduleSlot, SiteNewsItem } from "@/lib/site-data-types";
 
 export type { DayOfWeek } from "@/lib/schedule-constants";
 export { DAY_LABELS, dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
 export type {
   AssociationData,
   Discipline,
-  DisciplineEvent,
   ScheduleException,
   ScheduleSlot,
+  SiteNewsItem,
 } from "@/lib/site-data-types";
+
+type LegacyDisciplineEvent = {
+  id: string;
+  title?: string;
+  date?: string;
+  description?: string;
+  featuredOnHome?: boolean;
+  kind?: string;
+  location?: string;
+  startTime?: string;
+  endTime?: string;
+};
+
+type LegacyDiscipline = AssociationData["disciplines"][number] & {
+  events?: LegacyDisciplineEvent[];
+};
+
+type RawAssociationData = Omit<AssociationData, "news" | "disciplines"> & {
+  news?: SiteNewsItem[];
+  disciplines: LegacyDiscipline[];
+};
+
+function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
+  return {
+    id: item.id,
+    title: item.title ?? "",
+    date: item.date ?? "",
+    description: item.description ?? "",
+    kind: item.kind ?? "evenement",
+    location: item.location ?? "",
+    startTime: item.startTime ?? "",
+    endTime: item.endTime ?? "",
+    disciplineId: normalizeNewsDisciplineId(item.disciplineId),
+  };
+}
+
+function migrateLegacyDisciplineEvents(disciplines: LegacyDiscipline[]): SiteNewsItem[] {
+  const migrated: SiteNewsItem[] = [];
+  for (const discipline of disciplines) {
+    for (const event of discipline.events ?? []) {
+      migrated.push(
+        normalizeSiteNewsItem({
+          id: event.id,
+          title: event.title ?? "",
+          date: event.date ?? "",
+          description: event.description ?? "",
+          kind: event.kind ?? "evenement",
+          location: event.location ?? "",
+          startTime: event.startTime ?? "",
+          endTime: event.endTime ?? "",
+          disciplineId: discipline.id,
+        })
+      );
+    }
+  }
+  return migrated;
+}
+
+function resolveNews(data: RawAssociationData): SiteNewsItem[] {
+  const explicit = (data.news ?? []).map(normalizeSiteNewsItem);
+  if (explicit.length > 0) return explicit;
+  return migrateLegacyDisciplineEvents(data.disciplines);
+}
 
 const defaultSiteDataPath = `${process.cwd()}/data/site-data.json`;
 const defaultSiteDataKey = "data/site-data.json";
@@ -37,6 +101,7 @@ async function readDefaultLocalData(): Promise<AssociationData> {
           notes: "Organigramme a completer.",
         },
       },
+      news: [],
       disciplines: [],
       schedule: [],
       scheduleExceptions: [],
@@ -57,7 +122,8 @@ function normalizeScheduleSlot(slot: ScheduleSlot): ScheduleSlot {
   };
 }
 
-export function normalizeSiteData(data: AssociationData): AssociationData {
+export function normalizeSiteData(data: AssociationData | RawAssociationData): AssociationData {
+  const raw = data as RawAssociationData;
   return {
     association: {
       ...data.association,
@@ -98,16 +164,10 @@ export function normalizeSiteData(data: AssociationData): AssociationData {
       ctaText: discipline.ctaText ?? "Demander un cours d'essai",
       allowTrialRequest: discipline.allowTrialRequest ?? true,
       highlights: discipline.highlights ?? [],
-      events: (discipline.events ?? []).map((event) => ({
-        id: event.id,
-        title: event.title ?? "",
-        date: event.date ?? "",
-        description: event.description ?? "",
-        featuredOnHome: event.featuredOnHome ?? false,
-      })),
       active: discipline.active ?? true,
     })),
-    schedule: data.schedule.map((slot) => normalizeScheduleSlot(slot)),
+    news: resolveNews(raw),
+    schedule: raw.schedule.map((slot) => normalizeScheduleSlot(slot)),
     scheduleExceptions: (data.scheduleExceptions ?? []).map((exception) => ({
       id: exception.id,
       scheduleSlotId: exception.scheduleSlotId,

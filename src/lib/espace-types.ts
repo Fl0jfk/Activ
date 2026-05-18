@@ -4,6 +4,10 @@ export type UpcomingEvent = {
   date: string;
   description: string;
   disciplineName: string;
+  kind: string;
+  location: string;
+  startTime: string;
+  endTime: string;
 };
 
 export type PendingDocument = {

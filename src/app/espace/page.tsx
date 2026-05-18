@@ -73,18 +73,22 @@ export default async function EspacePage() {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcomingEvents = siteData.disciplines
-    .filter((d) => d.active && memberDisciplineIds.has(d.id))
-    .flatMap((d) =>
-      d.events.map((event) => ({
-        id: event.id,
-        title: event.title,
-        date: event.date,
-        description: event.description,
-        disciplineName: d.name,
-      }))
-    )
-    .filter((event) => event.date >= today)
+  const upcomingEvents = siteData.news
+    .filter((item) => item.date >= today)
+    .filter((item) => !item.disciplineId || memberDisciplineIds.has(item.disciplineId))
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      date: item.date,
+      description: item.description,
+      disciplineName: item.disciplineId
+        ? siteData.disciplines.find((d) => d.id === item.disciplineId)?.name ?? "Association"
+        : "Association",
+      kind: item.kind,
+      location: item.location,
+      startTime: item.startTime,
+      endTime: item.endTime,
+    }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const weekSchedule = buildWeekSchedule(siteData).filter((entry) =>

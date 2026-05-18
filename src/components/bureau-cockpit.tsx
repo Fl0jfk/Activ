@@ -6,6 +6,7 @@ import CoachAbsencePanel from "@/components/coach-absence-panel";
 import RegistrationQueue from "@/components/registration-queue";
 import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dossier-workflow";
 import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
+import SiteNewsPanel from "@/components/site-news-panel";
 import TrialSlotsPanel from "@/components/trial-slots-panel";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
@@ -116,6 +117,8 @@ export default function BureauCockpit({
           </button>
         ))}
       </section>
+
+      {canManageSite ? <SiteNewsPanel /> : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">{queueSectionTitle}</h2>

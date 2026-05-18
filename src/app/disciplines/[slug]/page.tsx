@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSiteData } from "@/lib/site-data";
 import { buildDisciplineWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
+import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -24,6 +25,9 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
     discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
   const weekSchedule = buildDisciplineWeekSchedule(data, discipline.id);
   const weekLabel = formatWeekRangeLabel();
+  const disciplineNews = data.news
+    .filter((item) => item.disciplineId === discipline.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8">
@@ -164,15 +168,23 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
         </div>
       </section>
 
-      {discipline.events.length > 0 ? (
+      {disciplineNews.length > 0 ? (
         <section className="panel mt-6 p-6">
-          <h2 className="text-xl font-bold text-slate-900">Evenements de la discipline</h2>
+          <h2 className="text-xl font-bold text-slate-900">Actualités de la discipline</h2>
           <div className="mt-4 space-y-3">
-            {discipline.events.map((event) => (
+            {disciplineNews.map((event) => (
               <article key={event.id} className="rounded-xl border border-orange-200 bg-orange-50/65 p-4">
-                <p className="text-sm font-semibold text-cyan-700">{event.date}</p>
-                <h3 className="text-lg font-semibold text-slate-900">{event.title}</h3>
-                <p className="mt-1 text-slate-700">{event.description}</p>
+                <p className="text-xs font-semibold uppercase text-orange-700">
+                  {newsKindLabel(event.kind)}
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">{event.title}</h3>
+                <p className="mt-1 text-sm text-cyan-800">{formatEventSchedule(event)}</p>
+                {event.location ? (
+                  <p className="mt-1 text-sm text-slate-600">Lieu : {event.location}</p>
+                ) : null}
+                {event.description ? (
+                  <p className="mt-2 text-slate-700">{event.description}</p>
+                ) : null}
               </article>
             ))}
           </div>

@@ -13,6 +13,7 @@ import type { WeekScheduleEntry } from "@/lib/schedule-week";
 import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
 import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
+import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
 
 type MemberPortalProps = {
   disciplines: DisciplineOption[];
@@ -262,16 +263,16 @@ export default function MemberPortal({
               <ul className="mt-4 space-y-4">
                 {upcomingEvents.map((event) => (
                   <li key={event.id} className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs font-semibold uppercase text-cyan-700">{event.disciplineName}</p>
+                    <p className="text-xs font-semibold uppercase text-cyan-700">
+                      {newsKindLabel(event.kind)} · {event.disciplineName}
+                    </p>
                     <h3 className="text-lg font-semibold text-slate-900">{event.title}</h3>
                     <p className="text-sm text-slate-600">
-                      {new Date(event.date).toLocaleDateString("fr-FR", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
+                      {formatEventSchedule(event)}
                     </p>
+                    {event.location ? (
+                      <p className="mt-1 text-sm text-slate-600">Lieu : {event.location}</p>
+                    ) : null}
                     {event.description ? (
                       <p className="mt-2 text-sm text-slate-700">{event.description}</p>
                     ) : null}

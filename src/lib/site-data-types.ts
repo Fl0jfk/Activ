@@ -1,11 +1,18 @@
 import type { DayOfWeek } from "@/lib/schedule-constants";
 
-export type DisciplineEvent = {
+/** Actualité gérée depuis le cockpit bureau (liste `news` du site). */
+export type SiteNewsItem = {
   id: string;
   title: string;
   date: string;
   description: string;
-  featuredOnHome: boolean;
+  /** tournoi, presentation, stage, portes_ouvertes, evenement, autre */
+  kind: string;
+  location: string;
+  startTime: string;
+  endTime: string;
+  /** Vide = actualité générale de l'association (sans discipline). */
+  disciplineId: string | null;
 };
 
 export type Discipline = {
@@ -27,7 +34,6 @@ export type Discipline = {
   ctaText: string;
   allowTrialRequest: boolean;
   highlights: string[];
-  events: DisciplineEvent[];
   active: boolean;
 };
 
@@ -69,6 +75,7 @@ export type AssociationData = {
       notes: string;
     };
   };
+  news: SiteNewsItem[];
   disciplines: Discipline[];
   schedule: ScheduleSlot[];
   scheduleExceptions: ScheduleException[];

@@ -2,6 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { readSiteData } from "@/lib/site-data";
 import { buildWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
+import {
+  formatEventSchedule,
+  newsKindLabel,
+  resolveNewsDisciplineLabel,
+  sortNewsByDateDesc,
+} from "@/lib/site-news";
 import ActivityOrientation from "@/components/activity-orientation";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +23,7 @@ export default async function Home({
   const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
   const weekSchedule = buildWeekSchedule(data);
   const weekLabel = formatWeekRangeLabel();
-  const featuredEvents = activeDisciplines.flatMap((discipline) =>
-    discipline.events
-      .filter((event) => event.featuredOnHome)
-      .map((event) => ({ ...event, disciplineName: discipline.name, slug: discipline.slug }))
-  );
-  const latestNews = [...featuredEvents].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+  const latestNews = sortNewsByDateDesc(data.news).slice(0, 4);
 
   return (
     <>
@@ -68,21 +69,41 @@ export default async function Home({
           <h2 className="panel-title">Actualités de l&apos;association</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {latestNews.length > 0 ? (
-              latestNews.map((event) => (
-                <Link
-                  key={event.id}
-                  href={`/disciplines/${event.slug}`}
-                  className="rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <p className="text-xs font-semibold uppercase text-orange-700">{event.disciplineName}</p>
-                  <h3 className="mt-1 text-lg font-bold text-slate-900">{event.title}</h3>
-                  <p className="mt-1 text-sm text-slate-700">{event.date}</p>
-                  <p className="mt-2 text-sm text-slate-700">{event.description}</p>
-                </Link>
-              ))
+              latestNews.map((item) => {
+                const discipline = item.disciplineId
+                  ? data.disciplines.find((entry) => entry.id === item.disciplineId)
+                  : null;
+                const cardClassName =
+                  "block rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md";
+                const cardContent = (
+                  <>
+                    <p className="text-xs font-semibold uppercase text-orange-700">
+                      {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
+                    </p>
+                    <h3 className="mt-1 text-lg font-bold text-slate-900">{item.title}</h3>
+                    <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
+                    {item.location ? (
+                      <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
+                    ) : null}
+                    {item.description ? (
+                      <p className="mt-2 text-sm text-slate-700">{item.description}</p>
+                    ) : null}
+                  </>
+                );
+
+                return discipline ? (
+                  <Link key={item.id} href={`/disciplines/${discipline.slug}`} className={cardClassName}>
+                    {cardContent}
+                  </Link>
+                ) : (
+                  <article key={item.id} className={cardClassName}>
+                    {cardContent}
+                  </article>
+                );
+              })
             ) : (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-                Pas encore d&apos;actualités publiées. Ajoutez des événements dans une discipline depuis l&apos;admin.
+                Pas encore d&apos;actualités publiées. Ajoutez-en depuis le cockpit bureau (section Actualités du site).
               </div>
             )}
           </div>
