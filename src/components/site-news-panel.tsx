@@ -24,6 +24,7 @@ export default function SiteNewsPanel() {
   const [data, setData] = useState<AssociationData | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraft] = useState<SiteNewsItem | null>(null);
 
   const loadData = useCallback(async () => {
@@ -49,12 +50,36 @@ export default function SiteNewsPanel() {
     [data]
   );
 
+  const persistSiteData = useCallback(
+    async (nextData: AssociationData, successMessage: string): Promise<boolean> => {
+      setIsSaving(true);
+      setStatusMessage("");
+      const response = await fetch("/api/admin/site-data", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextData),
+      });
+      if (!response.ok) {
+        setStatusMessage("Enregistrement impossible. Réessayez dans un instant.");
+        setIsSaving(false);
+        return false;
+      }
+      setData(nextData);
+      setStatusMessage(successMessage);
+      setIsSaving(false);
+      return true;
+    },
+    []
+  );
+
   function startCreate() {
     setDraft({ ...emptySiteNewsItem(), id: randomId("news") });
+    setStatusMessage("");
   }
 
   function startEdit(item: SiteNewsItem) {
     setDraft({ ...item });
+    setStatusMessage("");
   }
 
   function cancelEdit() {
@@ -65,11 +90,11 @@ export default function SiteNewsPanel() {
     setDraft((previous) => (previous ? { ...previous, ...patch } : previous));
   }
 
-  function applyDraftLocally() {
-    if (!data || !draft) return;
+  function buildNextDataWithDraft(): AssociationData | null {
+    if (!data || !draft) return null;
     if (!draft.title.trim() || !draft.date) {
       setStatusMessage("Le titre et la date sont obligatoires.");
-      return;
+      return null;
     }
 
     const normalized: SiteNewsItem = {
@@ -81,36 +106,26 @@ export default function SiteNewsPanel() {
     };
 
     const withoutDuplicate = data.news.filter((item) => item.id !== normalized.id);
-    setData({ ...data, news: sortNewsByDateDesc([...withoutDuplicate, normalized]) });
-    cancelEdit();
-    setStatusMessage("Actualité prête — cliquez sur « Enregistrer sur le site » pour publier.");
+    return { ...data, news: sortNewsByDateDesc([...withoutDuplicate, normalized]) };
   }
 
-  function removeNews(item: SiteNewsItem) {
+  async function applyDraft() {
+    const nextData = buildNextDataWithDraft();
+    if (!nextData) return;
+    const isEdit = data?.news.some((item) => item.id === draft?.id);
+    const saved = await persistSiteData(
+      nextData,
+      isEdit ? "Actualité mise à jour sur le site." : "Actualité publiée sur le site."
+    );
+    if (saved) cancelEdit();
+  }
+
+  async function removeNews(item: SiteNewsItem) {
     if (!data) return;
     if (!window.confirm(`Supprimer l'actualité « ${item.title} » ?`)) return;
-    setData({ ...data, news: data.news.filter((entry) => entry.id !== item.id) });
-    if (draft?.id === item.id) cancelEdit();
-    setStatusMessage("Actualité retirée — enregistrez pour appliquer sur le site public.");
-  }
-
-  async function saveNews() {
-    if (!data) return;
-    setIsLoading(true);
-    setStatusMessage("");
-    const response = await fetch("/api/admin/site-data", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      setStatusMessage("Enregistrement impossible.");
-      setIsLoading(false);
-      return;
-    }
-    setStatusMessage("Actualités enregistrées — visibles sur la page d'accueil.");
-    setIsLoading(false);
-    await loadData();
+    const nextData = { ...data, news: data.news.filter((entry) => entry.id !== item.id) };
+    const saved = await persistSiteData(nextData, "Actualité supprimée du site.");
+    if (saved && draft?.id === item.id) cancelEdit();
   }
 
   if (!data && isLoading) {
@@ -121,13 +136,16 @@ export default function SiteNewsPanel() {
     return <p className="text-sm text-rose-600">{statusMessage || "Actualités indisponibles."}</p>;
   }
 
+  const busy = isLoading || isSaving;
+
   return (
     <section className="rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50 p-5 shadow-sm">
       <div>
         <h2 className="text-lg font-bold text-slate-900">Actualités du site</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Gérées uniquement ici. La discipline est optionnelle : choisissez « Association (général) » pour une
-          actualité qui concerne tout le club.
+          Gérées uniquement ici. Chaque validation ou suppression est enregistrée automatiquement sur le site
+          public. La discipline est optionnelle : choisissez « Association (général) » pour une actualité qui
+          concerne tout le club.
         </p>
       </div>
 
@@ -135,7 +153,7 @@ export default function SiteNewsPanel() {
         <button
           type="button"
           onClick={startCreate}
-          disabled={Boolean(draft)}
+          disabled={busy || Boolean(draft)}
           className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-50"
         >
           Ajouter une actualité
@@ -158,6 +176,7 @@ export default function SiteNewsPanel() {
                       event.target.value === ASSOCIATION_GENERAL_NEWS ? null : event.target.value,
                   })
                 }
+                disabled={busy}
                 className={inputClass}
               >
                 <option value={ASSOCIATION_GENERAL_NEWS}>Association (général)</option>
@@ -174,6 +193,7 @@ export default function SiteNewsPanel() {
               <select
                 value={draft.kind}
                 onChange={(event) => updateDraft({ kind: event.target.value })}
+                disabled={busy}
                 className={inputClass}
               >
                 {NEWS_KIND_OPTIONS.map((option) => (
@@ -189,6 +209,7 @@ export default function SiteNewsPanel() {
                 type="date"
                 value={draft.date}
                 onChange={(event) => updateDraft({ date: event.target.value })}
+                disabled={busy}
                 className={inputClass}
                 required
               />
@@ -198,6 +219,7 @@ export default function SiteNewsPanel() {
               <input
                 value={draft.title}
                 onChange={(event) => updateDraft({ title: event.target.value })}
+                disabled={busy}
                 className={inputClass}
                 placeholder="Ex. Tournoi départemental, Portes ouvertes…"
                 required
@@ -209,6 +231,7 @@ export default function SiteNewsPanel() {
                 type="time"
                 value={draft.startTime}
                 onChange={(event) => updateDraft({ startTime: event.target.value })}
+                disabled={busy}
                 className={inputClass}
               />
             </label>
@@ -218,6 +241,7 @@ export default function SiteNewsPanel() {
                 type="time"
                 value={draft.endTime}
                 onChange={(event) => updateDraft({ endTime: event.target.value })}
+                disabled={busy}
                 className={inputClass}
               />
             </label>
@@ -226,6 +250,7 @@ export default function SiteNewsPanel() {
               <input
                 value={draft.location}
                 onChange={(event) => updateDraft({ location: event.target.value })}
+                disabled={busy}
                 className={inputClass}
                 placeholder="Ex. Gymnase municipal, mairie…"
               />
@@ -235,6 +260,7 @@ export default function SiteNewsPanel() {
               <textarea
                 value={draft.description}
                 onChange={(event) => updateDraft({ description: event.target.value })}
+                disabled={busy}
                 className={inputClass}
                 rows={3}
                 placeholder="Détails pratiques, inscription, public visé…"
@@ -244,15 +270,17 @@ export default function SiteNewsPanel() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={applyDraftLocally}
-              className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white"
+              onClick={() => void applyDraft()}
+              disabled={busy}
+              className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              Valider le formulaire
+              {isSaving ? "Enregistrement…" : "Enregistrer l'actualité"}
             </button>
             <button
               type="button"
               onClick={cancelEdit}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              disabled={busy}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
             >
               Annuler
             </button>
@@ -282,14 +310,16 @@ export default function SiteNewsPanel() {
                   <button
                     type="button"
                     onClick={() => startEdit(item)}
-                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                    disabled={busy}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
                   >
                     Modifier
                   </button>
                   <button
                     type="button"
-                    onClick={() => removeNews(item)}
-                    className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700"
+                    onClick={() => void removeNews(item)}
+                    disabled={busy}
+                    className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
                   >
                     Supprimer
                   </button>
@@ -304,15 +334,11 @@ export default function SiteNewsPanel() {
         )}
       </ul>
 
-      <button
-        type="button"
-        disabled={isLoading || Boolean(draft)}
-        onClick={() => void saveNews()}
-        className="mt-4 rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-      >
-        Enregistrer sur le site
-      </button>
-      {statusMessage ? <p className="mt-2 text-sm text-slate-600">{statusMessage}</p> : null}
+      {statusMessage ? (
+        <p className={`mt-3 text-sm ${statusMessage.includes("impossible") ? "text-rose-600" : "text-slate-600"}`}>
+          {statusMessage}
+        </p>
+      ) : null}
     </section>
   );
 }

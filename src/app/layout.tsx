@@ -25,7 +25,7 @@ export default async function RootLayout({ children}: Readonly<{ children: React
     <AppClerkProvider>
       <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
         <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-          <Header facebookUrl={data.association.facebookUrl} />
+          <Header facebookUrl={data.association.facebookUrl} showNewsNav={data.news.length > 0} />
           {children}
         </body>
       </html>

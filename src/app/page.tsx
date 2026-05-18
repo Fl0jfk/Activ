@@ -65,11 +65,11 @@ export default async function Home({
           </div>
         </header>
 
-        <section id="actualites" className="anchor-section panel mt-8 p-6 sm:p-8">
-          <h2 className="panel-title">Actualités de l&apos;association</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {latestNews.length > 0 ? (
-              latestNews.map((item) => {
+        {latestNews.length > 0 ? (
+          <section id="actualites" className="anchor-section panel mt-8 p-6 sm:p-8">
+            <h2 className="panel-title">Actualités de l&apos;association</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {latestNews.map((item) => {
                 const discipline = item.disciplineId
                   ? data.disciplines.find((entry) => entry.id === item.disciplineId)
                   : null;
@@ -100,14 +100,10 @@ export default async function Home({
                     {cardContent}
                   </article>
                 );
-              })
-            ) : (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-                Pas encore d&apos;actualités publiées. Ajoutez-en depuis le cockpit bureau (section Actualités du site).
-              </div>
-            )}
-          </div>
-        </section>
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section id="programme" className="anchor-section panel mt-8 p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">

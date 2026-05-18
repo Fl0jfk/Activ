@@ -8,7 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import ClerkUserButton from "@/components/clerk-user-button";
 
 const HEADER_PX = 64;
-type SiteHeaderProps = { facebookUrl: string };
+type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean };
 
 const NAV_ITEMS = [
   { href: "/#actualites", label: "Actualités", isAppRoute: false, mobileOnly: true },
@@ -19,13 +19,24 @@ const NAV_ITEMS = [
   { href: "/contact", label: "Contact", isAppRoute: true },
 ] as const;
 
-const NAV_MOBILE = NAV_ITEMS;
-const NAV_DESKTOP = NAV_ITEMS.filter((item) => !("mobileOnly" in item && item.mobileOnly));
-
 const MOBILE_LIST_ROW =
   "flex min-h-[60px] items-center border-b border-slate-200/90 py-[18px] text-[21px] font-semibold tracking-tight";
 
-function MobileMenu({ facebookUrl, onClose }: { facebookUrl: string; onClose: () => void }) {
+function navItems(showNewsNav: boolean) {
+  return NAV_ITEMS.filter(
+    (item) => showNewsNav || item.href !== "/#actualites"
+  );
+}
+
+function MobileMenu({
+  facebookUrl,
+  showNewsNav,
+  onClose,
+}: {
+  facebookUrl: string;
+  showNewsNav: boolean;
+  onClose: () => void;
+}) {
   const { isSignedIn } = useUser();
 
   return (
@@ -33,7 +44,7 @@ function MobileMenu({ facebookUrl, onClose }: { facebookUrl: string; onClose: ()
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-10 pt-6">
         <nav className="flex flex-col" aria-label="Menu principal">
-          {NAV_MOBILE.map((item) =>
+          {navItems(showNewsNav).map((item) =>
             item.isAppRoute ? (
               <Link
                 key={item.href}
@@ -91,7 +102,7 @@ function MobileMenu({ facebookUrl, onClose }: { facebookUrl: string; onClose: ()
   );
 }
 
-export default function Header({ facebookUrl }: SiteHeaderProps) {
+export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderProps) {
   const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -134,7 +145,7 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
         aria-modal="true"
         aria-label="Menu"
       >
-        <MobileMenu facebookUrl={facebookUrl} onClose={close} />
+        <MobileMenu facebookUrl={facebookUrl} showNewsNav={showNewsNav} onClose={close} />
       </div>,
       document.body
     );
@@ -153,7 +164,9 @@ export default function Header({ facebookUrl }: SiteHeaderProps) {
             />
           </Link>
           <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
-            {NAV_DESKTOP.map((item) =>
+            {navItems(showNewsNav)
+              .filter((item) => !("mobileOnly" in item && item.mobileOnly))
+              .map((item) =>
               item.isAppRoute ? (
                 <Link
                   key={item.href}
