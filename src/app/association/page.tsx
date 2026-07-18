@@ -39,7 +39,13 @@ export default async function AssociationPage() {
             >
               <p className="text-xs font-semibold uppercase text-cyan-700">{member.role}</p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">{member.fullName}</h3>
-              <a href={`mailto:${member.email}`} className="mt-3 inline-block text-sm text-slate-700 hover:underline">
+              {/* Emails masqués tant que les adresses ne sont pas validées */}
+              <a
+                href={`mailto:${member.email}`}
+                className="mt-3 hidden text-sm text-slate-700 hover:underline"
+                aria-hidden
+                tabIndex={-1}
+              >
                 {member.email}
               </a>
             </article>
@@ -67,9 +73,12 @@ export default async function AssociationPage() {
               >
                 Voir la discipline
               </Link>
+              {/* Emails masqués tant que les adresses ne sont pas validées */}
               <a
                 href={`mailto:${teacher.email}`}
-                className="mt-3 block text-sm text-slate-700 hover:underline"
+                className="mt-3 hidden text-sm text-slate-700 hover:underline"
+                aria-hidden
+                tabIndex={-1}
               >
                 {teacher.email}
               </a>
