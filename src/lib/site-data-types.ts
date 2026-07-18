@@ -1,17 +1,14 @@
 import type { DayOfWeek } from "@/lib/schedule-constants";
 
-/** Actualité gérée depuis le cockpit bureau (liste `news` du site). */
 export type SiteNewsItem = {
   id: string;
   title: string;
   date: string;
   description: string;
-  /** tournoi, presentation, stage, portes_ouvertes, evenement, autre */
   kind: string;
   location: string;
   startTime: string;
   endTime: string;
-  /** Vide = actualité générale de l'association (sans discipline). */
   disciplineId: string | null;
 };
 
