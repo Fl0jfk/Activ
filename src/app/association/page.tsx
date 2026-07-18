@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 export default async function AssociationPage() {
   const data = await readSiteData();
   const boardMembers = data.association.organisation.boardMembers;
-
   const teachers = data.disciplines
     .filter((discipline) => discipline.active)
     .flatMap((discipline) => {
