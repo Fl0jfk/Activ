@@ -1,5 +1,4 @@
 import ContactForm from "@/components/contact-form";
-import { isMailConfigured } from "@/lib/mailer";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +7,6 @@ export default async function ContactPage() {
   const data = await readSiteData();
   const { association } = data;
   const disciplineNames = data.disciplines.filter((d) => d.active).map((d) => d.name);
-  const mailConfigured = isMailConfigured();
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
@@ -29,9 +27,7 @@ export default async function ContactPage() {
 
       <ContactForm
         associationName={association.name}
-        contactEmail={association.contactEmail}
         disciplineNames={disciplineNames}
-        mailConfigured={mailConfigured}
       />
     </main>
   );

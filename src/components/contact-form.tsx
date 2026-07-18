@@ -5,16 +5,12 @@ import { FormEvent, useState } from "react";
 
 type ContactFormProps = {
   associationName: string;
-  contactEmail: string;
   disciplineNames: string[];
-  mailConfigured: boolean;
 };
 
 export default function ContactForm({
   associationName,
-  contactEmail,
   disciplineNames,
-  mailConfigured,
 }: ContactFormProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -32,11 +28,6 @@ export default function ContactForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!mailConfigured) {
-      setFeedback("L'envoi en ligne n'est pas encore activé. Utilisez l'e-mail ci-dessous.");
-      setIsSuccess(false);
-      return;
-    }
 
     setIsLoading(true);
     setFeedback("");
@@ -87,17 +78,6 @@ export default function ContactForm({
       <p className="mt-2 text-sm text-slate-600">
         Séance d&apos;essai, question sur une activité ou autre demande — {associationName} vous répond par e-mail.
       </p>
-
-      {!mailConfigured ? (
-        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          L&apos;envoi automatique n&apos;est pas encore configuré sur ce serveur. Vous pouvez nous écrire directement
-          à{" "}
-          <a href={`mailto:${contactEmail}`} className="font-semibold underline">
-            {contactEmail}
-          </a>
-          .
-        </p>
-      ) : null}
 
       {isSuccess ? (
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
@@ -216,7 +196,7 @@ export default function ContactForm({
         <div className="flex flex-wrap gap-3 sm:col-span-2">
           <button
             type="submit"
-            disabled={isLoading || !mailConfigured}
+            disabled={isLoading}
             className="rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {isLoading ? "Envoi en cours…" : "Envoyer le message"}
