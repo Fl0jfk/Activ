@@ -49,7 +49,6 @@ export async function approveCoachAbsenceRequest(
   request.reviewedAt = new Date().toISOString();
   request.reviewedByUserId = reviewedByUserId;
   await writeClubData(clubData);
-
   const sessionLabel = formatDayLabelFr(request.sessionDate);
   const disciplineName = discipline?.name ?? "votre activité";
   const recipients = clubData.applications.filter(
