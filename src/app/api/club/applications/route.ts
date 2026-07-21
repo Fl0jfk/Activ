@@ -7,6 +7,7 @@ import {
   buildRegistrationApplication,
   upsertMemberForApplication,
 } from "@/lib/registration-application";
+import { notifyBureauNewPreinscription } from "@/lib/preinscription-notify";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
 export async function GET() {
@@ -101,6 +102,11 @@ export async function POST(request: NextRequest) {
     data.applications.unshift(application);
     upsertMemberForApplication(data.members, currentUser, email);
     await writeClubData(data);
+
+    await notifyBureauNewPreinscription({
+      application,
+      trialSlots: data.trialSlots,
+    });
 
     const isBureau = isUserBureau(currentUser);
     await updateUserMetadata(

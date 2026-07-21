@@ -8,6 +8,7 @@ import {
   buildClubMemberRecord,
   buildRegistrationApplication,
 } from "@/lib/registration-application";
+import { notifyBureauNewPreinscription } from "@/lib/preinscription-notify";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
 export async function POST(request: NextRequest) {
@@ -83,22 +84,22 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      data.applications.unshift(
-        buildRegistrationApplication({
-          disciplineId: payload.disciplineId,
-          trialSlotId: withTrial ? payload.trialSlotId : null,
-          firstName: payload.firstName,
-          lastName: payload.lastName,
-          phone: payload.phone,
-          address: payload.address,
-          postalCode: payload.postalCode,
-          city: payload.city,
-          email,
-          motivation: payload.motivation,
-          documents: payload.documents,
-          clerkUserId: createdUser.id,
-        }),
-      );
+      const application = buildRegistrationApplication({
+        disciplineId: payload.disciplineId,
+        trialSlotId: withTrial ? payload.trialSlotId : null,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        phone: payload.phone,
+        address: payload.address,
+        postalCode: payload.postalCode,
+        city: payload.city,
+        email,
+        motivation: payload.motivation,
+        documents: payload.documents,
+        clerkUserId: createdUser.id,
+      });
+
+      data.applications.unshift(application);
 
       data.members.push(
         buildClubMemberRecord({
@@ -109,6 +110,10 @@ export async function POST(request: NextRequest) {
       );
 
       await writeClubData(data);
+      await notifyBureauNewPreinscription({
+        application,
+        trialSlots: data.trialSlots,
+      });
       return jsonOk(
         {
           message:
