@@ -83,6 +83,16 @@ export default async function Home({
                   "block rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md";
                 const cardContent = (
                   <>
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt=""
+                        width={640}
+                        height={280}
+                        unoptimized
+                        className="mb-3 h-36 w-full rounded-xl object-cover"
+                      />
+                    ) : null}
                     <p className="text-xs font-semibold uppercase text-orange-700">
                       {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
                     </p>
@@ -221,6 +231,7 @@ export default async function Home({
                   alt={discipline.name}
                   width={700}
                   height={380}
+                  unoptimized={discipline.imageUrl.startsWith("/api/")}
                   className="h-44 w-full rounded-xl object-cover"
                 />
                 <h3 className="mt-4 text-xl font-semibold text-slate-900 group-hover:text-cyan-700">{discipline.name}</h3>

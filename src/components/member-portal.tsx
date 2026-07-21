@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import type { RegistrationApplication } from "@/lib/club-data";
@@ -263,6 +264,16 @@ export default function MemberPortal({
               <ul className="mt-4 space-y-4">
                 {upcomingEvents.map((event) => (
                   <li key={event.id} className="rounded-xl border border-slate-200 p-4">
+                    {event.imageUrl ? (
+                      <Image
+                        src={event.imageUrl}
+                        alt=""
+                        width={640}
+                        height={280}
+                        unoptimized
+                        className="mb-3 h-36 w-full rounded-xl object-cover"
+                      />
+                    ) : null}
                     <p className="text-xs font-semibold uppercase text-cyan-700">
                       {newsKindLabel(event.kind)} · {event.disciplineName}
                     </p>

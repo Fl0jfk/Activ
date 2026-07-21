@@ -8,6 +8,7 @@ export type UpcomingEvent = {
   location: string;
   startTime: string;
   endTime: string;
+  imageUrl: string;
 };
 
 export type PendingDocument = {

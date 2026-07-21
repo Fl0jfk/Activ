@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/public-preinscriptions",
   "/api/public-temp-documents",
   "/api/public-document-upload",
+  "/api/site-media(.*)",
   "/sign-in(.*)",
 ]);
 

@@ -48,6 +48,7 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
           alt={discipline.name}
           width={1000}
           height={500}
+          unoptimized={discipline.imageUrl.startsWith("/api/")}
           className="h-60 w-full rounded-2xl object-cover shadow-2xl"
         />
         <h1 className="mt-6 text-3xl font-bold text-white">{discipline.name}</h1>
@@ -62,6 +63,7 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
               alt={`Photo de ${teacherList[0]}`}
               width={56}
               height={56}
+              unoptimized={(discipline.coachPhotoUrl ?? discipline.imageUrl).startsWith("/api/")}
               className="h-14 w-14 rounded-full border border-slate-200 object-cover"
             />
             <div>
@@ -82,9 +84,10 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
               <span className="font-semibold">Licence a l&apos;annee:</span> {discipline.annualFee}
             </p>
           ) : null}
-          <p className="mt-2 text-slate-700">
+          {/* Contact masqué tant que les adresses ne sont pas validées */}
+          <p className="mt-2 hidden text-slate-700" aria-hidden>
             Contact discipline:{" "}
-            <a href={`mailto:${discipline.contactEmail}`} className="font-semibold text-cyan-700 hover:underline">
+            <a href={`mailto:${discipline.contactEmail}`} className="font-semibold text-cyan-700 hover:underline" tabIndex={-1}>
               {discipline.contactEmail}
             </a>
           </p>
@@ -190,6 +193,16 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
           <div className="mt-4 space-y-3">
             {disciplineNews.map((event) => (
               <article key={event.id} className="rounded-xl border border-orange-200 bg-orange-50/65 p-4">
+                {event.imageUrl ? (
+                  <Image
+                    src={event.imageUrl}
+                    alt=""
+                    width={800}
+                    height={360}
+                    unoptimized
+                    className="mb-3 h-40 w-full rounded-xl object-cover"
+                  />
+                ) : null}
                 <p className="text-xs font-semibold uppercase text-orange-700">
                   {newsKindLabel(event.kind)}
                 </p>

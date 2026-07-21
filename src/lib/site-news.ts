@@ -61,6 +61,7 @@ export function emptySiteNewsItem(): SiteNewsItem {
     startTime: "",
     endTime: "",
     disciplineId: null,
+    imageUrl: "",
   };
 }
 

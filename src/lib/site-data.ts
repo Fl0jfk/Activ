@@ -46,6 +46,7 @@ function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
     startTime: item.startTime ?? "",
     endTime: item.endTime ?? "",
     disciplineId: normalizeNewsDisciplineId(item.disciplineId),
+    imageUrl: item.imageUrl ?? "",
   };
 }
 
@@ -64,6 +65,7 @@ function migrateLegacyDisciplineEvents(disciplines: LegacyDiscipline[]): SiteNew
           startTime: event.startTime ?? "",
           endTime: event.endTime ?? "",
           disciplineId: discipline.id,
+          imageUrl: "",
         })
       );
     }

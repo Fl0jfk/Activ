@@ -5,6 +5,7 @@ import type { AssociationData, Discipline, ScheduleSlot } from "@/lib/site-data-
 import { DAY_LABELS, type DayOfWeek } from "@/lib/schedule-constants";
 import { randomId } from "@/lib/ids";
 import { slugify } from "@/lib/slug";
+import SiteImageField from "@/components/site-image-field";
 
 const DAY_OPTIONS = (Object.entries(DAY_LABELS) as [string, string][]).map(([value, label]) => ({
   value: Number(value) as DayOfWeek,
@@ -426,24 +427,20 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
                       placeholder="Email de contact discipline"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-                    Image principale discipline (URL)
-                    <input
-                      value={discipline.imageUrl}
-                      onChange={(event) => updateDiscipline(index, { imageUrl: event.target.value })}
-                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                      placeholder="Image URL"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-                    Photo du coach (URL)
-                    <input
-                      value={discipline.coachPhotoUrl ?? ""}
-                      onChange={(event) => updateDiscipline(index, { coachPhotoUrl: event.target.value })}
-                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                      placeholder="Photo coach URL"
-                    />
-                  </label>
+                  <SiteImageField
+                    label="Image principale de la discipline"
+                    helpText="Visible sur l'accueil et la page de la discipline. JPEG, PNG, WebP ou GIF (max 5 Mo)."
+                    value={discipline.imageUrl}
+                    onChange={(imageUrl) => updateDiscipline(index, { imageUrl })}
+                    disabled={isLoading}
+                  />
+                  <SiteImageField
+                    label="Photo du coach"
+                    helpText="Affichée dans la fiche discipline."
+                    value={discipline.coachPhotoUrl ?? ""}
+                    onChange={(coachPhotoUrl) => updateDiscipline(index, { coachPhotoUrl })}
+                    disabled={isLoading}
+                  />
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
                     Description
                     <textarea

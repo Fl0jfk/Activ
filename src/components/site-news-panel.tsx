@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AssociationData, SiteNewsItem } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
+import SiteImageField from "@/components/site-image-field";
 import {
   ASSOCIATION_GENERAL_NEWS,
   NEWS_KIND_OPTIONS,
@@ -103,6 +105,7 @@ export default function SiteNewsPanel() {
       description: draft.description.trim(),
       location: draft.location.trim(),
       disciplineId: draft.disciplineId || null,
+      imageUrl: draft.imageUrl?.trim() ?? "",
     };
 
     const withoutDuplicate = data.news.filter((item) => item.id !== normalized.id);
@@ -266,6 +269,14 @@ export default function SiteNewsPanel() {
                 placeholder="Détails pratiques, inscription, public visé…"
               />
             </label>
+            <SiteImageField
+              label="Image de l'actualité"
+              helpText="Optionnel. Affichée sur l'accueil et les pages concernées."
+              value={draft.imageUrl}
+              onChange={(imageUrl) => updateDraft({ imageUrl })}
+              disabled={busy}
+              emptyValue=""
+            />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
@@ -293,7 +304,18 @@ export default function SiteNewsPanel() {
           sortedNews.map((item) => (
             <li key={item.id} className="rounded-xl border border-orange-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
+                <div className="flex min-w-0 flex-1 gap-3">
+                  {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
+                      alt=""
+                      width={96}
+                      height={72}
+                      unoptimized
+                      className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : null}
+                  <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase text-orange-700">
                     {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
                   </p>
@@ -305,6 +327,7 @@ export default function SiteNewsPanel() {
                   {item.description ? (
                     <p className="mt-2 text-sm text-slate-600">{item.description}</p>
                   ) : null}
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button

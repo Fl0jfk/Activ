@@ -10,6 +10,7 @@ export type SiteNewsItem = {
   startTime: string;
   endTime: string;
   disciplineId: string | null;
+  imageUrl: string;
 };
 
 export type Discipline = {

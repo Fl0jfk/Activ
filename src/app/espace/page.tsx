@@ -88,6 +88,7 @@ export default async function EspacePage() {
       location: item.location,
       startTime: item.startTime,
       endTime: item.endTime,
+      imageUrl: item.imageUrl ?? "",
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
