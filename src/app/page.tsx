@@ -1,7 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { readSiteData } from "@/lib/site-data";
-import { buildWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
+import {
+  buildWeekSchedule,
+  formatDayLabelFr,
+  formatWeekRangeLabel,
+  getPublicScheduleReference,
+} from "@/lib/schedule-week";
 import {
   formatEventSchedule,
   newsKindLabel,
@@ -21,8 +26,9 @@ export default async function Home({
   const preregistrationReceived = params.preregistration === "received";
   const data = await readSiteData();
   const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
-  const weekSchedule = buildWeekSchedule(data);
-  const weekLabel = formatWeekRangeLabel();
+  const { referenceDate, isSummerBreak, resumeIso } = getPublicScheduleReference();
+  const weekSchedule = buildWeekSchedule(data, referenceDate);
+  const weekLabel = formatWeekRangeLabel(referenceDate);
   const latestNews = sortNewsByDateDesc(data.news).slice(0, 4);
 
   return (
@@ -108,11 +114,22 @@ export default async function Home({
         <section id="programme" className="anchor-section panel mt-8 p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="panel-title">Planning de la semaine</h2>
+              <h2 className="panel-title">
+                {isSummerBreak ? "Planning de rentrée" : "Planning de la semaine"}
+              </h2>
               <p className="mt-1 text-sm text-slate-600">{weekLabel}</p>
             </div>
-            <span className="gradient-chip">Mise à jour dynamique</span>
+            <span className="gradient-chip">
+              {isSummerBreak ? "Reprise le 7 septembre" : "Mise à jour dynamique"}
+            </span>
           </div>
+          {isSummerBreak ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Fermeture estivale : l&apos;association ne propose pas de cours jusqu&apos;au{" "}
+              <strong>{formatDayLabelFr(resumeIso)}</strong>. Voici les horaires de la semaine de
+              reprise.
+            </p>
+          ) : null}
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>

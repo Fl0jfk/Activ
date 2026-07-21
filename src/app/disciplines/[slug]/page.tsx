@@ -2,7 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSiteData } from "@/lib/site-data";
-import { buildDisciplineWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
+import {
+  buildDisciplineWeekSchedule,
+  formatDayLabelFr,
+  formatWeekRangeLabel,
+  getPublicScheduleReference,
+} from "@/lib/schedule-week";
 import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
 
 type PageProps = {
@@ -23,8 +28,9 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
   }
   const teacherList =
     discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
-  const weekSchedule = buildDisciplineWeekSchedule(data, discipline.id);
-  const weekLabel = formatWeekRangeLabel();
+  const { referenceDate, isSummerBreak, resumeIso } = getPublicScheduleReference();
+  const weekSchedule = buildDisciplineWeekSchedule(data, discipline.id, referenceDate);
+  const weekLabel = formatWeekRangeLabel(referenceDate);
   const disciplineNews = data.news
     .filter((item) => item.disciplineId === discipline.id)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -134,11 +140,21 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
       <section className="panel mt-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Horaires cette semaine</h2>
+            <h2 className="text-xl font-bold text-slate-900">
+              {isSummerBreak ? "Horaires de rentrée" : "Horaires cette semaine"}
+            </h2>
             <p className="mt-1 text-sm text-slate-600">{weekLabel}</p>
           </div>
-          <span className="gradient-chip">Toujours a jour</span>
+          <span className="gradient-chip">
+            {isSummerBreak ? "Reprise le 7 septembre" : "Toujours a jour"}
+          </span>
         </div>
+        {isSummerBreak ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            Fermeture estivale jusqu&apos;au {formatDayLabelFr(resumeIso)}. Voici les horaires de la
+            semaine de reprise.
+          </p>
+        ) : null}
         <div className="mt-3 space-y-3">
           {weekSchedule.length > 0 ? (
             weekSchedule.map((entry) => (

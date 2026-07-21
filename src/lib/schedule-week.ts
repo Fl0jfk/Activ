@@ -19,8 +19,53 @@ export type WeekScheduleEntry = {
 
 const PARIS_TZ = "Europe/Paris";
 
+/** Dernier jour de saison (inclus). Après cette date : fermeture estivale. */
+export const SEASON_END_MONTH_DAY = "06-30";
+/** Reprise des cours (inclus). Semaine affichée pendant l'été. */
+export const SEASON_RESUME_MONTH_DAY = "09-07";
+
 export function todayParisIso(reference = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: PARIS_TZ }).format(reference);
+}
+
+function parisYear(reference = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-CA", { timeZone: PARIS_TZ, year: "numeric" }).format(reference),
+  );
+}
+
+function dateFromParisIso(isoDate: string): Date {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+/**
+ * Pendant la fermeture estivale (1er juillet → 6 septembre),
+ * le planning public pointe sur la semaine de reprise (7 septembre).
+ */
+export function getPublicScheduleReference(reference = new Date()): {
+  referenceDate: Date;
+  isSummerBreak: boolean;
+  resumeIso: string;
+} {
+  const today = todayParisIso(reference);
+  const year = parisYear(reference);
+  const seasonEndIso = `${year}-${SEASON_END_MONTH_DAY}`;
+  const resumeIso = `${year}-${SEASON_RESUME_MONTH_DAY}`;
+
+  if (today > seasonEndIso && today < resumeIso) {
+    return {
+      referenceDate: dateFromParisIso(resumeIso),
+      isSummerBreak: true,
+      resumeIso,
+    };
+  }
+
+  return {
+    referenceDate: reference,
+    isSummerBreak: false,
+    resumeIso,
+  };
 }
 
 export function weekdayParis(reference = new Date()): DayOfWeek {
