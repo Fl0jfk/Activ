@@ -64,9 +64,6 @@ export default async function Home({
               >
                 Faire une pré-inscription
               </Link>
-              <span className="rounded-full border border-white/40 bg-white/15 px-3 py-2 text-xs font-semibold text-white">
-                Activer, bouger, renforcer, partager
-              </span>
             </div>
           </div>
         </header>
