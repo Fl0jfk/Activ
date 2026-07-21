@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import AdminDashboardPage from "@/app/admin/dashboard/page";
+import BureauBroadcastPanel from "@/components/bureau-broadcast-panel";
 import CoachAbsencePanel from "@/components/coach-absence-panel";
 import RegistrationQueue from "@/components/registration-queue";
 import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dossier-workflow";
@@ -119,6 +120,8 @@ export default function BureauCockpit({
       </section>
 
       {canManageSite ? <SiteNewsPanel /> : null}
+
+      <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">{queueSectionTitle}</h2>

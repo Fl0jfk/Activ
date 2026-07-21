@@ -28,6 +28,10 @@ function createTransporter() {
   });
 }
 
+function defaultReplyTo(): string | undefined {
+  return process.env.SMTP_USER?.trim() || undefined;
+}
+
 export async function sendEmail(params: {
   to: string;
   subject: string;
@@ -45,7 +49,7 @@ export async function sendEmail(params: {
     await transporter.sendMail({
       from,
       to: params.to,
-      replyTo: params.replyTo,
+      replyTo: params.replyTo ?? defaultReplyTo(),
       subject: params.subject,
       html: params.html,
       text: params.text,
@@ -55,4 +59,27 @@ export async function sendEmail(params: {
     console.error("sendEmail failed", error);
     return { sent: false as const, reason: "send_failed" as const };
   }
+}
+
+/** Envoi individuel à chaque destinataire (équivalent CCI : pas de liste visible). */
+export async function sendEmailToMany(
+  recipients: string[],
+  params: {
+    subject: string;
+    html: string;
+    text: string;
+    replyTo?: string;
+  },
+): Promise<{ sent: number; failed: number }> {
+  let sent = 0;
+  let failed = 0;
+  for (const to of recipients) {
+    const result = await sendEmail({ ...params, to });
+    if (result.sent) {
+      sent += 1;
+    } else {
+      failed += 1;
+    }
+  }
+  return { sent, failed };
 }

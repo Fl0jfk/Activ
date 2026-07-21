@@ -1,7 +1,6 @@
 import type { CoachAbsenceRequest } from "@/lib/club-data";
 import { readClubData, writeClubData } from "@/lib/club-data";
-import { sendEmail } from "@/lib/mailer";
-import { formatDayLabelFr } from "@/lib/schedule-week";
+import { notifyDisciplineSessionCancelled } from "@/lib/session-cancel-notify";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
 import type { ScheduleException } from "@/lib/site-data-types";
 
@@ -21,7 +20,6 @@ export async function approveCoachAbsenceRequest(
     return { ok: false, message: "Cette demande a déjà été traitée." };
   }
 
-  const discipline = siteData.disciplines.find((d) => d.id === request.disciplineId);
   const reason = `Absence coach : ${request.reason}`;
 
   const exceptions = siteData.scheduleExceptions ?? [];
@@ -49,21 +47,12 @@ export async function approveCoachAbsenceRequest(
   request.reviewedAt = new Date().toISOString();
   request.reviewedByUserId = reviewedByUserId;
   await writeClubData(clubData);
-  const sessionLabel = formatDayLabelFr(request.sessionDate);
-  const disciplineName = discipline?.name ?? "votre activité";
-  const recipients = clubData.applications.filter(
-    (app) => app.status === "approved" && app.disciplineId === request.disciplineId
-  );
 
-  const uniqueEmails = [...new Set(recipients.map((app) => app.email).filter(Boolean))];
-  for (const email of uniqueEmails) {
-    await sendEmail({
-      to: email,
-      subject: `Séance annulée — ${disciplineName}`,
-      text: `Bonjour,\n\nLa séance du ${sessionLabel} (${disciplineName}) est annulée.\nMotif : ${request.reason}\n\nSportivement,\nL'équipe`,
-      html: `<p>Bonjour,</p><p>La séance du <strong>${sessionLabel}</strong> (<strong>${disciplineName}</strong>) est annulée.</p><p>Motif : ${request.reason}</p><p>Sportivement,<br/>L'équipe</p>`,
-    });
-  }
+  await notifyDisciplineSessionCancelled({
+    disciplineId: request.disciplineId,
+    sessionDate: request.sessionDate,
+    reason: request.reason,
+  });
 
   return { ok: true };
 }

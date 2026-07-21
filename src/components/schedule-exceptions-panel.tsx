@@ -5,9 +5,18 @@ import type { AssociationData } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
 import { buildWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
 
+type PendingNotify = {
+  scheduleSlotId: string;
+  date: string;
+  reason: string;
+  disciplineId: string;
+};
+
 export default function ScheduleExceptionsPanel() {
   const [data, setData] = useState<AssociationData | null>(null);
   const [cancelReasonByEntry, setCancelReasonByEntry] = useState<Record<string, string>>({});
+  const [notifyByEntry, setNotifyByEntry] = useState<Record<string, boolean>>({});
+  const [pendingNotifications, setPendingNotifications] = useState<PendingNotify[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,6 +33,7 @@ export default function ScheduleExceptionsPanel() {
     }
     const payload = (await response.json()) as AssociationData;
     setData({ ...payload, scheduleExceptions: payload.scheduleExceptions ?? [] });
+    setPendingNotifications([]);
     setIsLoading(false);
   }, []);
 
@@ -31,18 +41,27 @@ export default function ScheduleExceptionsPanel() {
     void loadData();
   }, [loadData]);
 
-  function addScheduleException(scheduleSlotId: string, date: string, reason: string) {
+  function addScheduleException(
+    entryId: string,
+    scheduleSlotId: string,
+    date: string,
+    reason: string,
+    disciplineId: string,
+  ) {
     if (!data || !reason.trim()) return;
+    const trimmedReason = reason.trim();
+    const shouldNotify = notifyByEntry[entryId] !== false;
+
     setData((previous) => {
       if (!previous) return previous;
       const existing = previous.scheduleExceptions.find(
-        (ex) => ex.scheduleSlotId === scheduleSlotId && ex.date === date
+        (ex) => ex.scheduleSlotId === scheduleSlotId && ex.date === date,
       );
       if (existing) {
         return {
           ...previous,
           scheduleExceptions: previous.scheduleExceptions.map((ex) =>
-            ex.id === existing.id ? { ...ex, reason: reason.trim() } : ex
+            ex.id === existing.id ? { ...ex, reason: trimmedReason } : ex,
           ),
         };
       }
@@ -55,14 +74,28 @@ export default function ScheduleExceptionsPanel() {
             scheduleSlotId,
             date,
             status: "cancelled" as const,
-            reason: reason.trim(),
+            reason: trimmedReason,
           },
         ],
       };
     });
+
+    if (shouldNotify) {
+      setPendingNotifications((previous) => {
+        const withoutDuplicate = previous.filter(
+          (item) => !(item.scheduleSlotId === scheduleSlotId && item.date === date),
+        );
+        return [
+          ...withoutDuplicate,
+          { scheduleSlotId, date, reason: trimmedReason, disciplineId },
+        ];
+      });
+    }
+
+    setCancelReasonByEntry((prev) => ({ ...prev, [entryId]: "" }));
   }
 
-  function removeScheduleException(exceptionId: string) {
+  function removeScheduleException(exceptionId: string, scheduleSlotId: string, date: string) {
     setData((previous) => {
       if (!previous) return previous;
       return {
@@ -70,6 +103,9 @@ export default function ScheduleExceptionsPanel() {
         scheduleExceptions: previous.scheduleExceptions.filter((ex) => ex.id !== exceptionId),
       };
     });
+    setPendingNotifications((previous) =>
+      previous.filter((item) => !(item.scheduleSlotId === scheduleSlotId && item.date === date)),
+    );
   }
 
   async function saveExceptions() {
@@ -81,7 +117,31 @@ export default function ScheduleExceptionsPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scheduleExceptions: data.scheduleExceptions }),
     });
-    setStatusMessage(response.ok ? "Exceptions enregistrées." : "Enregistrement impossible.");
+
+    if (!response.ok) {
+      setStatusMessage("Enregistrement impossible.");
+      setIsLoading(false);
+      return;
+    }
+
+    let message = "Exceptions enregistrées.";
+
+    if (pendingNotifications.length > 0) {
+      const notifyResponse = await fetch("/api/club/notify-cancellations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancellations: pendingNotifications }),
+      });
+      const notifyPayload = (await notifyResponse.json()) as { message?: string };
+      if (notifyResponse.ok) {
+        message = `${message} ${notifyPayload.message ?? ""}`.trim();
+        setPendingNotifications([]);
+      } else {
+        message = `${message} Notification e-mail impossible.`;
+      }
+    }
+
+    setStatusMessage(message);
     setIsLoading(false);
   }
 
@@ -98,14 +158,16 @@ export default function ScheduleExceptionsPanel() {
       <h2 className="text-xl font-bold text-slate-900">Semaine et exceptions</h2>
       <p className="mt-1 text-sm text-slate-600">{weekLabel}</p>
       <p className="mt-2 text-sm text-slate-600">
-        Annule un cours ponctuellement (ex. professeur malade). Les créneaux viennent du planning par discipline.
+        Annule un cours ponctuellement (ex. professeur malade). Les créneaux viennent du planning par
+        discipline.
       </p>
       <div className="mt-4 space-y-3">
         {weekSchedule.length > 0 ? (
           weekSchedule.map((entry) => {
             const existingException = data.scheduleExceptions.find(
-              (ex) => ex.scheduleSlotId === entry.scheduleSlotId && ex.date === entry.date
+              (ex) => ex.scheduleSlotId === entry.scheduleSlotId && ex.date === entry.date,
             );
+            const notifyChecked = notifyByEntry[entry.id] !== false;
             return (
               <article
                 key={entry.id}
@@ -126,33 +188,63 @@ export default function ScheduleExceptionsPanel() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => removeScheduleException(existingException.id)}
+                      onClick={() =>
+                        removeScheduleException(
+                          existingException.id,
+                          entry.scheduleSlotId,
+                          entry.date,
+                        )
+                      }
                       className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
                     >
                       Rétablir
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <input
-                      value={cancelReasonByEntry[entry.id] ?? ""}
-                      onChange={(event) =>
-                        setCancelReasonByEntry((prev) => ({ ...prev, [entry.id]: event.target.value }))
-                      }
-                      className="min-w-[200px] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-                      placeholder="Motif"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const reason = cancelReasonByEntry[entry.id] ?? "";
-                        addScheduleException(entry.scheduleSlotId, entry.date, reason);
-                        setCancelReasonByEntry((prev) => ({ ...prev, [entry.id]: "" }));
-                      }}
-                      className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      Annuler ce cours
-                    </button>
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        value={cancelReasonByEntry[entry.id] ?? ""}
+                        onChange={(event) =>
+                          setCancelReasonByEntry((prev) => ({
+                            ...prev,
+                            [entry.id]: event.target.value,
+                          }))
+                        }
+                        className="min-w-[200px] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                        placeholder="Motif"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const reason = cancelReasonByEntry[entry.id] ?? "";
+                          addScheduleException(
+                            entry.id,
+                            entry.scheduleSlotId,
+                            entry.date,
+                            reason,
+                            entry.disciplineId,
+                          );
+                        }}
+                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
+                      >
+                        Annuler ce cours
+                      </button>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={notifyChecked}
+                        onChange={(event) =>
+                          setNotifyByEntry((prev) => ({
+                            ...prev,
+                            [entry.id]: event.target.checked,
+                          }))
+                        }
+                        className="rounded border-slate-300"
+                      />
+                      Prévenir les adhérents de la discipline par e-mail
+                    </label>
                   </div>
                 )}
               </article>
@@ -170,6 +262,12 @@ export default function ScheduleExceptionsPanel() {
       >
         Enregistrer les exceptions
       </button>
+      {pendingNotifications.length > 0 ? (
+        <p className="mt-2 text-xs text-slate-500">
+          {pendingNotifications.length} notification
+          {pendingNotifications.length > 1 ? "s" : ""} e-mail en attente d&apos;enregistrement.
+        </p>
+      ) : null}
       {statusMessage ? <p className="mt-2 text-sm text-slate-600">{statusMessage}</p> : null}
     </section>
   );
