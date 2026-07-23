@@ -1,6 +1,7 @@
 import type { ClubMember, RegistrationApplication } from "@/lib/club-data";
 import { randomId } from "@/lib/ids";
 import type { CurrentUserContext } from "@/lib/clerk";
+import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 
 export type RegistrationApplicantInput = {
   disciplineId: string;
@@ -15,6 +16,7 @@ export type RegistrationApplicantInput = {
   motivation?: string;
   documents?: { name: string; url: string; uploadedAt: string }[];
   clerkUserId: string | null;
+  membershipBulletin?: MembershipBulletinData | null;
 };
 
 export function buildRegistrationApplication(
@@ -48,6 +50,7 @@ export function buildRegistrationApplication(
     paymentMethod: "",
     licenseEndDate: null,
     notes: "",
+    membershipBulletin: input.membershipBulletin ?? null,
   };
 }
 

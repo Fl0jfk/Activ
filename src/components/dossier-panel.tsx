@@ -64,6 +64,7 @@ function PhaseStepper({ current }: { current: DossierProcessingPhase }) {
 }
 
 function ApplicantBlock({ application }: { application: RegistrationApplication }) {
+  const bulletin = application.membershipBulletin;
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
@@ -92,6 +93,30 @@ function ApplicantBlock({ application }: { application: RegistrationApplication 
           <dt className="text-slate-500">Ville</dt>
           <dd className="font-medium text-slate-900">{application.city?.trim() || "—"}</dd>
         </div>
+        {bulletin ? (
+          <>
+            <div>
+              <dt className="text-slate-500">Date de naissance</dt>
+              <dd className="font-medium text-slate-900">{bulletin.birthDate}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Contact urgence</dt>
+              <dd className="font-medium text-slate-900">
+                {bulletin.emergencyContactName} — {bulletin.emergencyContactPhone}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Total bulletin</dt>
+              <dd className="font-medium text-slate-900">{bulletin.grandTotal} €</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Droit à l&apos;image</dt>
+              <dd className="font-medium text-slate-900">
+                {bulletin.imageRights === "authorize" ? "Autorisé" : "Refusé"}
+              </dd>
+            </div>
+          </>
+        ) : null}
       </dl>
       {application.motivation ? (
         <p className="mt-3 text-sm text-slate-700">
@@ -153,22 +178,36 @@ function DocumentsBlock({
         <p className="mt-2 text-sm text-slate-600">Aucune pièce jointe déposée pour le moment.</p>
       ) : (
         <ul className="mt-2 space-y-2">
-          {documents.map((doc) => (
-            <li
-              key={`${doc.url}-${doc.uploadedAt}`}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
-            >
-              <span className="font-medium text-slate-900">{doc.name}</span>
-              <a
-                href={doc.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-semibold text-cyan-700 underline"
+          {documents.map((doc) => {
+            const isS3 = doc.url.startsWith("s3://");
+            const href = isS3
+              ? `/api/club/documents/file?url=${encodeURIComponent(doc.url)}`
+              : doc.url;
+            const isBulletin = doc.name.toLowerCase().includes("bulletin");
+            return (
+              <li
+                key={`${doc.url}-${doc.uploadedAt}`}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
               >
-                Ouvrir
-              </a>
-            </li>
-          ))}
+                <span className="font-medium text-slate-900">
+                  {doc.name}
+                  {isBulletin ? (
+                    <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                      Bulletin signé
+                    </span>
+                  ) : null}
+                </span>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-cyan-700 underline"
+                >
+                  Ouvrir
+                </a>
+              </li>
+            );
+          })}
         </ul>
       )}
 

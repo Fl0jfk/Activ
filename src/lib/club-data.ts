@@ -1,4 +1,5 @@
 import { getApplicationDossierPhase } from "@/lib/dossier-workflow";
+import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 import type { AppRole } from "@/lib/roles";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 
@@ -73,6 +74,7 @@ export type RegistrationApplication = {
   paymentMethod: PaymentMethod;
   licenseEndDate: string | null;
   notes: string;
+  membershipBulletin?: MembershipBulletinData | null;
 };
 
 export type DocumentRequestToken = {
@@ -115,6 +117,7 @@ function normalizeClubData(data: ClubData): ClubData {
       paymentMethod: application.paymentMethod ?? "",
       licenseEndDate: application.licenseEndDate ?? null,
       dossierPhase: getApplicationDossierPhase(application),
+      membershipBulletin: application.membershipBulletin ?? null,
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
     coachAbsenceRequests: data.coachAbsenceRequests ?? [],

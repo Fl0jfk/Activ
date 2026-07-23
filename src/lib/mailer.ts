@@ -38,6 +38,11 @@ export async function sendEmail(params: {
   html: string;
   text: string;
   replyTo?: string;
+  attachments?: {
+    filename: string;
+    content: Buffer | Uint8Array;
+    contentType?: string;
+  }[];
 }) {
   const transporter = createTransporter();
   const from = process.env.MAIL_FROM;
@@ -53,6 +58,11 @@ export async function sendEmail(params: {
       subject: params.subject,
       html: params.html,
       text: params.text,
+      attachments: params.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: Buffer.from(attachment.content),
+        contentType: attachment.contentType,
+      })),
     });
     return { sent: true as const };
   } catch (error) {

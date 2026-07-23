@@ -1,4 +1,4 @@
-import PublicPreregistrationForm from "@/components/public-preregistration-form";
+import MembershipBulletinForm from "@/components/membership-bulletin-form";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { readSiteData } from "@/lib/site-data";
 
@@ -18,7 +18,7 @@ export default async function PreinscriptionPage({ searchParams }: PageProps) {
     : undefined;
 
   return (
-    <PublicPreregistrationForm
+    <MembershipBulletinForm
       disciplines={disciplines}
       initialDisciplineId={matchedDiscipline?.id}
     />
