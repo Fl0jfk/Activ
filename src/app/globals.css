@@ -12,6 +12,31 @@
   --font-mono: var(--font-geist-mono);
 }
 
+@layer base {
+  a[href],
+  button:not(:disabled),
+  summary,
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  select:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled,
+  input:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
+}
+
 body {
   background:
     radial-gradient(circle at 10% 10%, #c4f1ff 0%, transparent 30%),
