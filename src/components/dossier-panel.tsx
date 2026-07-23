@@ -529,22 +529,59 @@ export default function DossierPanel({
       ) : null}
 
       {phase === 5 ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <p className="font-semibold">Dossier finalisé</p>
-          <p className="mt-1">
-            Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Adhésion active sur Clerk.
-          </p>
-          {application.licenseEndDate ? (
+        <div className="space-y-3 border-t border-emerald-200 pt-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <p className="font-semibold">Dossier finalisé</p>
             <p className="mt-1">
-              Licence valable jusqu&apos;au{" "}
-              {new Date(`${application.licenseEndDate}T12:00:00`).toLocaleDateString("fr-FR", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-              .
+              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Adhésion active sur
+              Clerk.
             </p>
-          ) : null}
+            {application.licenseEndDate ? (
+              <p className="mt-1">
+                Licence valable jusqu&apos;au{" "}
+                {new Date(`${application.licenseEndDate}T12:00:00`).toLocaleDateString("fr-FR", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+                .
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  onUpdate(application.id, {
+                    dossierPhase: "payment",
+                    status: "approved",
+                    paymentStatus: "unpaid",
+                  })
+                )
+              }
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Revenir au paiement
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Refuser ce dossier ? Le compte Clerk sera supprimé si possible.",
+                  )
+                ) {
+                  void run(() => onReject(application.id));
+                }
+              }}
+              className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 disabled:opacity-50"
+            >
+              Refuser / supprimer
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

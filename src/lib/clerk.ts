@@ -193,3 +193,27 @@ export async function deleteClerkUser(userId: string): Promise<void> {
   const client = await clerkClient();
   await client.users.deleteUser(userId);
 }
+
+/**
+ * Tente de supprimer un utilisateur Clerk.
+ * `missing` = déjà absent (404) → traité comme succès.
+ */
+export async function tryDeleteClerkUser(
+  userId: string,
+): Promise<{ ok: true; missing?: boolean } | { ok: false; message: string }> {
+  try {
+    await deleteClerkUser(userId);
+    return { ok: true };
+  } catch (error) {
+    const status =
+      error && typeof error === "object" && "status" in error
+        ? Number((error as { status: unknown }).status)
+        : NaN;
+    const message = error instanceof Error ? error.message : String(error);
+    if (status === 404 || /not found|n'existe pas|does not exist/i.test(message)) {
+      return { ok: true, missing: true };
+    }
+    console.error("tryDeleteClerkUser failed", { userId, status, error });
+    return { ok: false, message: message || "Suppression Clerk impossible." };
+  }
+}

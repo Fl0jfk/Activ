@@ -76,15 +76,31 @@ export async function PATCH(
       application.dossierPhase = payload.dossierPhase;
     }
 
+    const phaseExplicitlySet = typeof payload.dossierPhase === "string";
+
     if (application.status === "cancelled") {
       application.licenseEndDate = null;
-    } else if (application.status === "approved" && application.paymentStatus === "paid") {
+    } else if (
+      !phaseExplicitlySet &&
+      application.status === "approved" &&
+      application.paymentStatus === "paid"
+    ) {
       application.dossierPhase = "finalized";
       if (!application.licenseEndDate) {
         application.licenseEndDate = addOneYearLicenseDate();
       }
-    } else if (application.status === "approved" && application.paymentStatus !== "paid") {
+    } else if (
+      !phaseExplicitlySet &&
+      application.status === "approved" &&
+      application.paymentStatus !== "paid"
+    ) {
       application.dossierPhase = "payment";
+    } else if (
+      application.status === "approved" &&
+      application.paymentStatus === "paid" &&
+      !application.licenseEndDate
+    ) {
+      application.licenseEndDate = addOneYearLicenseDate();
     }
 
     const computedMembershipStatus = computeMembershipStatus(application);
@@ -103,10 +119,18 @@ export async function PATCH(
     const nextRole = payload.role ?? member?.role ?? "member";
 
     if (application.clerkUserId) {
-      await syncClerkAfterAdminPatch({
-        application,
-        displayRole: nextRole,
-      });
+      try {
+        await syncClerkAfterAdminPatch({
+          application,
+          displayRole: nextRole,
+        });
+      } catch (syncError) {
+        console.error("Clerk sync failed after application patch (local update kept)", syncError);
+        return jsonOk({
+          message:
+            "Mise a jour enregistree, mais la synchronisation Clerk a echoue. Verifiez le compte dans le dashboard Clerk si besoin.",
+        });
+      }
     }
 
     return jsonOk({ message: "Mise a jour effectuee." });
