@@ -1,29 +1,11 @@
 import type { AppRole } from "@/lib/roles";
-import { isBureauOfficerRole, isPresidentRole } from "@/lib/roles";
+import { isBureauOfficerRole, isPresidentRole, normalizeAppRole } from "@/lib/roles";
 
 /** Utilisateur Clerk (forme minimale pour la lecture du rôle). */
 export type ClerkUserLike = {
   privateMetadata?: Record<string, unknown> | null;
   publicMetadata?: Record<string, unknown> | null;
   unsafeMetadata?: Record<string, unknown> | null;
-};
-
-const ROLE_ALIASES: Record<string, AppRole> = {
-  member: "member",
-  coach: "coach",
-  staff: "staff",
-  direction: "direction",
-  president: "president",
-  vice_president: "vice_president",
-  "vice-president": "vice_president",
-  vicepresident: "vice_president",
-  treasurer: "treasurer",
-  tresorier: "treasurer",
-  trésorier: "treasurer",
-  secretary: "secretary",
-  secretaire: "secretary",
-  secrétaire: "secretary",
-  président: "president",
 };
 
 export type RoleResolution = {
@@ -36,11 +18,7 @@ export type RoleResolution = {
 };
 
 function parseRoleValue(value: unknown): AppRole | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toLowerCase();
-  return ROLE_ALIASES[normalized] ?? null;
+  return normalizeAppRole(value);
 }
 
 function readRoleFromFunctionsArray(value: unknown): AppRole | null {

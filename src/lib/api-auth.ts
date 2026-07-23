@@ -44,7 +44,7 @@ export async function requireCoach(): Promise<AuthResult<CurrentUserContext>> {
   return result;
 }
 
-/** Accès réservé au président (alias Clerk `direction` inclus). */
+/** Accès réservé au président. */
 export async function requirePresident(): Promise<AuthResult<CurrentUserContext>> {
   const result = await requireUser();
   if (!result.ok) {
@@ -54,11 +54,6 @@ export async function requirePresident(): Promise<AuthResult<CurrentUserContext>
     return { ok: false, response: toErrorResponse() };
   }
   return result;
-}
-
-/** @deprecated Utiliser `requirePresident`. */
-export async function requireDirection(): Promise<AuthResult<CurrentUserContext>> {
-  return requirePresident();
 }
 
 export function isUserBureau(user: CurrentUserContext): boolean {

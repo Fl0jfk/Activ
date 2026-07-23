@@ -1,6 +1,7 @@
 import { getApplicationDossierPhase } from "@/lib/dossier-workflow";
 import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 import type { AppRole } from "@/lib/roles";
+import { normalizeAppRole } from "@/lib/roles";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 
 export type PaymentStatus = "unpaid" | "partial" | "paid";
@@ -101,7 +102,10 @@ const defaultClubDataKey = "data/club-data.json";
 
 function normalizeClubData(data: ClubData): ClubData {
   return {
-    members: data.members ?? [],
+    members: (data.members ?? []).map((member) => ({
+      ...member,
+      role: normalizeAppRole(member.role) ?? "member",
+    })),
     trialSlots: data.trialSlots ?? [],
     applications: (data.applications ?? []).map((application) => ({
       ...application,

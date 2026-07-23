@@ -106,16 +106,8 @@ export function buildMemberClerkMetadata(input: BuildMemberClerkMetadataInput): 
   };
 }
 
-export function isDirection(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return isPresidentRole(ctx.role);
-}
-
 export function isPresident(ctx: Pick<CurrentUserContext, "role">): boolean {
   return isPresidentRole(ctx.role);
-}
-
-export function isStaff(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return isBureauOfficerRole(ctx.role) && !isPresidentRole(ctx.role);
 }
 
 export function isCoach(ctx: Pick<CurrentUserContext, "role">): boolean {
