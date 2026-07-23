@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
 import type { AppRole } from "@/lib/roles";
+import { isBureauOfficerRole, isBureauRole, isPresidentRole } from "@/lib/roles";
 
 export type { AppRole } from "@/lib/roles";
 export type MembershipStatus = "pending" | "approved" | "rejected";
@@ -58,16 +59,16 @@ function normalizeDisciplineIds(privateMeta: AppPrivateMetadata, publicMeta: App
   return [];
 }
 
-/** Staff, coach et direction : jamais bloqués par une adhésion « en attente ». */
+/** Bureau et coach : jamais bloqués par une adhésion « en attente ». */
 function resolveMembershipStatus(role: AppRole, rawStatus: unknown): MembershipStatus {
-  if (role === "direction" || role === "staff" || role === "coach") {
+  if (isBureauRole(role)) {
     return "approved";
   }
   return normalizeMembershipStatus(rawStatus);
 }
 
 function resolveEspaceValidated(role: AppRole, rawValue: unknown): boolean {
-  if (role === "direction" || role === "staff" || role === "coach") {
+  if (isBureauRole(role)) {
     return true;
   }
   return normalizeEspaceValidated(rawValue);
@@ -106,11 +107,15 @@ export function buildMemberClerkMetadata(input: BuildMemberClerkMetadataInput): 
 }
 
 export function isDirection(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return ctx.role === "direction";
+  return isPresidentRole(ctx.role);
+}
+
+export function isPresident(ctx: Pick<CurrentUserContext, "role">): boolean {
+  return isPresidentRole(ctx.role);
 }
 
 export function isStaff(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return ctx.role === "staff";
+  return isBureauOfficerRole(ctx.role) && !isPresidentRole(ctx.role);
 }
 
 export function isCoach(ctx: Pick<CurrentUserContext, "role">): boolean {
@@ -120,29 +125,29 @@ export function isCoach(ctx: Pick<CurrentUserContext, "role">): boolean {
 export function canAccessMemberSpace(
   ctx: Pick<CurrentUserContext, "role" | "membershipStatus" | "espaceValidated">
 ): boolean {
-  if (ctx.role === "coach" || ctx.role === "staff" || ctx.role === "direction") {
+  if (isBureauRole(ctx.role)) {
     return true;
   }
   return ctx.espaceValidated === true;
 }
 
 export function hasFullMembership(ctx: Pick<CurrentUserContext, "role" | "membershipStatus">): boolean {
-  if (ctx.role === "coach" || ctx.role === "staff" || ctx.role === "direction") {
+  if (isBureauRole(ctx.role)) {
     return true;
   }
   return ctx.membershipStatus === "approved";
 }
 
 export function canAccessClubOperations(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return ctx.role === "staff" || ctx.role === "direction";
+  return isBureauOfficerRole(ctx.role);
 }
 
 export function canManageSiteData(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return ctx.role === "direction";
+  return isPresidentRole(ctx.role);
 }
 
 export function canApproveCoachAbsences(ctx: Pick<CurrentUserContext, "role">): boolean {
-  return ctx.role === "direction";
+  return isPresidentRole(ctx.role);
 }
 
 export async function getCurrentUserContext(): Promise<CurrentUserContext | null> {

@@ -11,6 +11,7 @@ export type SiteNewsItem = {
   endTime: string;
   disciplineId: string | null;
   imageUrl: string;
+  galleryImages: string[];
 };
 
 export type Discipline = {

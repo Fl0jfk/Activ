@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/api-auth";
 import { canAccessClubOperations } from "@/lib/clerk";
 import { loadClubData, requireApplication, saveClubData } from "@/lib/club-repository";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import { addOneYearLicenseDate } from "@/lib/license-renewal";
 import { computeMembershipStatus, syncClerkAfterAdminPatch } from "@/lib/registration-clerk-sync";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
@@ -75,8 +76,13 @@ export async function PATCH(
       application.dossierPhase = payload.dossierPhase;
     }
 
-    if (application.status === "approved" && application.paymentStatus === "paid") {
+    if (application.status === "cancelled") {
+      application.licenseEndDate = null;
+    } else if (application.status === "approved" && application.paymentStatus === "paid") {
       application.dossierPhase = "finalized";
+      if (!application.licenseEndDate) {
+        application.licenseEndDate = addOneYearLicenseDate();
+      }
     } else if (application.status === "approved" && application.paymentStatus !== "paid") {
       application.dossierPhase = "payment";
     }

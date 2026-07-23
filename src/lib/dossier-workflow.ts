@@ -7,7 +7,8 @@ export type DossierStep =
   | "missing_document"
   | "awaiting_payment"
   | "finalized"
-  | "rejected";
+  | "rejected"
+  | "cancelled";
 
 /** Étapes du traitement à l’intérieur d’un dossier ouvert (1 → 5). */
 export type DossierProcessingPhase = 1 | 2 | 3 | 4 | 5;
@@ -27,6 +28,7 @@ export const DOSSIER_STEP_LABELS: Record<DossierStep, string> = {
   awaiting_payment: "Paiement en attente",
   finalized: "Inscription finalisée",
   rejected: "Dossier refusé",
+  cancelled: "Désinscrit",
 };
 
 /** Libellés affichés dans l'espace membre. */
@@ -37,6 +39,7 @@ export const MEMBER_INSCRIPTION_LABELS: Record<DossierStep, string> = {
   awaiting_payment: "Paiement en attente",
   finalized: "Inscription finalisée",
   rejected: "Inscription refusée",
+  cancelled: "Désinscrit",
 };
 
 export function getMemberInscriptionStep(application: RegistrationApplication): DossierStep {
@@ -61,6 +64,9 @@ export function getMemberInscriptionLabel(application: RegistrationApplication):
   }
   if (step === "rejected") {
     return MEMBER_INSCRIPTION_LABELS.rejected;
+  }
+  if (step === "cancelled") {
+    return MEMBER_INSCRIPTION_LABELS.cancelled;
   }
   return MEMBER_INSCRIPTION_LABELS.new_request;
 }
@@ -119,6 +125,10 @@ export function getDossierStep(application: RegistrationApplication): DossierSte
     return "rejected";
   }
 
+  if (application.status === "cancelled") {
+    return "cancelled";
+  }
+
   if (application.status === "approved" && application.paymentStatus === "paid") {
     return "finalized";
   }
@@ -141,7 +151,7 @@ export function getDossierStep(application: RegistrationApplication): DossierSte
 
 export function isDossierEnCours(application: RegistrationApplication): boolean {
   const step = getDossierStep(application);
-  return step !== "finalized" && step !== "rejected";
+  return step !== "finalized" && step !== "rejected" && step !== "cancelled";
 }
 
 export function isDossierFinalise(application: RegistrationApplication): boolean {
@@ -179,6 +189,8 @@ export function stepBadgeClass(step: DossierStep): string {
       return "bg-emerald-100 text-emerald-800";
     case "rejected":
       return "bg-slate-200 text-slate-700";
+    case "cancelled":
+      return "bg-rose-100 text-rose-800";
     default:
       return "bg-slate-100 text-slate-700";
   }

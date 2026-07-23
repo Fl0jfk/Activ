@@ -300,6 +300,14 @@ export default function DossierPanel({
     );
   }
 
+  if (application.status === "cancelled") {
+    return (
+      <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-900">
+        Adhérent désinscrit — plus dans les listes de diffusion ni les alertes de renouvellement.
+      </p>
+    );
+  }
+
   const canUploadDocuments = phase >= 3 && phase < 5;
 
   return (
@@ -526,6 +534,17 @@ export default function DossierPanel({
           <p className="mt-1">
             Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Adhésion active sur Clerk.
           </p>
+          {application.licenseEndDate ? (
+            <p className="mt-1">
+              Licence valable jusqu&apos;au{" "}
+              {new Date(`${application.licenseEndDate}T12:00:00`).toLocaleDateString("fr-FR", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+              .
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -12,6 +12,10 @@ function bureauNotifyEmail(): string | null {
 export async function notifyBureauNewPreinscription(params: {
   application: RegistrationApplication;
   trialSlots?: TrialSlot[];
+  pdfAttachment?: {
+    filename: string;
+    content: Buffer | Uint8Array;
+  };
 }): Promise<void> {
   try {
     const to = bureauNotifyEmail();
@@ -20,7 +24,7 @@ export async function notifyBureauNewPreinscription(params: {
       return;
     }
 
-    const { application, trialSlots = [] } = params;
+    const { application, trialSlots = [], pdfAttachment } = params;
     let disciplineName = application.disciplineId;
     try {
       const siteData = await readSiteData();
@@ -38,7 +42,9 @@ export async function notifyBureauNewPreinscription(params: {
       ? `${trialSlot.title} — ${formatTrialSlotDate(trialSlot.startsAt)}`
       : application.trialSlotId
         ? "Créneau demandé"
-        : "Aucun (pré-inscription seule)";
+        : application.membershipBulletin
+          ? "Bulletin d'adhésion signé"
+          : "Aucun (pré-inscription seule)";
 
     const subject = `[Activ'] Nouvelle pré-inscription — ${application.fullName}`;
     const text = [
@@ -52,6 +58,7 @@ export async function notifyBureauNewPreinscription(params: {
       `Créneau d'essai : ${trialLabel}`,
       application.motivation ? `Motivation : ${application.motivation}` : null,
       `Documents joints : ${application.documents.length}`,
+      pdfAttachment ? "Bulletin d'adhésion PDF : voir pièce jointe." : null,
       "",
       "Connectez-vous à l'espace bureau pour traiter la demande.",
     ]
@@ -73,6 +80,11 @@ export async function notifyBureauNewPreinscription(params: {
           : ""
       }
       <li><strong>Documents joints :</strong> ${application.documents.length}</li>
+      ${
+        pdfAttachment
+          ? "<li><strong>Bulletin d'adhésion :</strong> PDF en pièce jointe</li>"
+          : ""
+      }
     </ul>
     <p>Connectez-vous à l'espace bureau pour traiter la demande.</p>
   `;
@@ -83,6 +95,15 @@ export async function notifyBureauNewPreinscription(params: {
       text,
       html,
       replyTo: application.email,
+      attachments: pdfAttachment
+        ? [
+            {
+              filename: pdfAttachment.filename,
+              content: pdfAttachment.content,
+              contentType: "application/pdf",
+            },
+          ]
+        : undefined,
     });
 
     if (!result.sent) {

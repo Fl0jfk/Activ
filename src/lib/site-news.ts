@@ -62,6 +62,7 @@ export function emptySiteNewsItem(): SiteNewsItem {
     endTime: "",
     disciplineId: null,
     imageUrl: "",
+    galleryImages: [],
   };
 }
 
@@ -72,4 +73,13 @@ export function sortNewsByDateDesc(items: SiteNewsItem[]): SiteNewsItem[] {
 export function normalizeNewsDisciplineId(disciplineId: string | null | undefined): string | null {
   if (!disciplineId || disciplineId === ASSOCIATION_GENERAL_NEWS) return null;
   return disciplineId;
+}
+
+export function truncateNewsDescription(text: string, maxLength = 140): string {
+  const cleaned = text.trim().replace(/\s+/g, " ");
+  if (cleaned.length <= maxLength) return cleaned;
+  const sliced = cleaned.slice(0, maxLength);
+  const lastSpace = sliced.lastIndexOf(" ");
+  const base = lastSpace > 80 ? sliced.slice(0, lastSpace) : sliced;
+  return `${base.trim()}…`;
 }

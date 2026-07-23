@@ -43,10 +43,13 @@ export default function EspaceAccessBlocked({ roleResolution }: EspaceAccessBloc
               </li>
             </ul>
             <p className="mt-3 text-slate-700">
-              Pour un accès <strong>direction</strong>, mettez exactement{" "}
-              <code className="rounded bg-slate-100 px-1">{`"role": "direction"`}</code> dans les metadata{" "}
+              Pour un accès <strong>président</strong>, mettez exactement{" "}
+              <code className="rounded bg-slate-100 px-1">{`"role": "president"`}</code> dans les metadata{" "}
               <strong>privées</strong> Clerk (Dashboard → Utilisateurs → votre compte → Private metadata), puis
-              déconnectez-vous et reconnectez-vous.
+              déconnectez-vous et reconnectez-vous. Autres rôles bureau :{" "}
+              <code className="rounded bg-slate-100 px-1">vice_president</code>,{" "}
+              <code className="rounded bg-slate-100 px-1">treasurer</code>,{" "}
+              <code className="rounded bg-slate-100 px-1">secretary</code>.
             </p>
             <p className="mt-2">
               <Link href="/api/me/access" className="font-semibold text-cyan-800 underline">

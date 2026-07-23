@@ -8,7 +8,7 @@ import {
   formatWeekRangeLabel,
   getPublicScheduleReference,
 } from "@/lib/schedule-week";
-import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
+import { formatEventSchedule, newsKindLabel, truncateNewsDescription } from "@/lib/site-news";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -192,14 +192,18 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
           <h2 className="text-xl font-bold text-slate-900">Actualités de la discipline</h2>
           <div className="mt-4 space-y-3">
             {disciplineNews.map((event) => (
-              <article key={event.id} className="rounded-xl border border-orange-200 bg-orange-50/65 p-4">
+              <Link
+                key={event.id}
+                href={`/actualites/${event.id}`}
+                className="block rounded-xl border border-orange-200 bg-orange-50/65 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+              >
                 {event.imageUrl ? (
                   <Image
                     src={event.imageUrl}
                     alt=""
                     width={800}
                     height={360}
-                    unoptimized
+                    unoptimized={event.imageUrl.startsWith("/api/")}
                     className="mb-3 h-40 w-full rounded-xl object-cover"
                   />
                 ) : null}
@@ -212,9 +216,12 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
                   <p className="mt-1 text-sm text-slate-600">Lieu : {event.location}</p>
                 ) : null}
                 {event.description ? (
-                  <p className="mt-2 text-slate-700">{event.description}</p>
+                  <p className="mt-2 text-slate-700">{truncateNewsDescription(event.description)}</p>
                 ) : null}
-              </article>
+                <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
+                  Lire la suite →
+                </span>
+              </Link>
             ))}
           </div>
         </section>

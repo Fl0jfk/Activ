@@ -132,6 +132,10 @@ async function handleBulletinSubmission(payload: MembershipBulletinFormPayload &
     await notifyBureauNewPreinscription({
       application,
       trialSlots: data.trialSlots,
+      pdfAttachment: {
+        filename: uploadedPdf.name,
+        content: pdfBytes,
+      },
     });
 
     await sendEmail({

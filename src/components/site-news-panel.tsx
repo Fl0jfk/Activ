@@ -92,6 +92,43 @@ export default function SiteNewsPanel() {
     setDraft((previous) => (previous ? { ...previous, ...patch } : previous));
   }
 
+  async function uploadGalleryFiles(files: FileList | null) {
+    if (!draft || !files || files.length === 0) return;
+    setIsSaving(true);
+    setStatusMessage("");
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/admin/site-image", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json()) as { url?: string; message?: string };
+        if (!response.ok || !payload.url) {
+          throw new Error(payload.message ?? "Envoi impossible.");
+        }
+        uploadedUrls.push(payload.url);
+      }
+      updateDraft({
+        galleryImages: [...(draft.galleryImages ?? []), ...uploadedUrls],
+      });
+      setStatusMessage(`${uploadedUrls.length} photo(s) ajoutée(s) à la galerie.`);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Envoi impossible.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function removeGalleryImage(url: string) {
+    if (!draft) return;
+    updateDraft({
+      galleryImages: (draft.galleryImages ?? []).filter((entry) => entry !== url),
+    });
+  }
+
   function buildNextDataWithDraft(): AssociationData | null {
     if (!data || !draft) return null;
     if (!draft.title.trim() || !draft.date) {
@@ -106,6 +143,7 @@ export default function SiteNewsPanel() {
       location: draft.location.trim(),
       disciplineId: draft.disciplineId || null,
       imageUrl: draft.imageUrl?.trim() ?? "",
+      galleryImages: Array.isArray(draft.galleryImages) ? draft.galleryImages : [],
     };
 
     const withoutDuplicate = data.news.filter((item) => item.id !== normalized.id);
@@ -270,13 +308,56 @@ export default function SiteNewsPanel() {
               />
             </label>
             <SiteImageField
-              label="Image de l'actualité"
-              helpText="Optionnel. Affichée sur l'accueil et les pages concernées."
+              label="Photo principale"
+              helpText="Affichée sur l'accueil et en tête de l'article."
               value={draft.imageUrl}
               onChange={(imageUrl) => updateDraft({ imageUrl })}
               disabled={busy}
               emptyValue=""
             />
+            <div className="flex flex-col gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
+              <span>Galerie (photos supplémentaires)</span>
+              <p className="text-xs font-normal text-slate-500">
+                Visibles uniquement sur la page de l&apos;actualité, pas sur l&apos;accueil.
+              </p>
+              {(draft.galleryImages ?? []).length > 0 ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {(draft.galleryImages ?? []).map((url) => (
+                    <div key={url} className="relative overflow-hidden rounded-xl border border-slate-200">
+                      <Image
+                        src={url}
+                        alt=""
+                        width={240}
+                        height={160}
+                        unoptimized
+                        className="h-28 w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeGalleryImage(url)}
+                        disabled={busy}
+                        className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-rose-700 disabled:opacity-50"
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs font-normal text-slate-500">Aucune photo de galerie pour le moment.</p>
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                disabled={busy}
+                onChange={(event) => {
+                  void uploadGalleryFiles(event.target.files);
+                  event.target.value = "";
+                }}
+                className="block w-full max-w-md text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-600 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white disabled:opacity-50"
+              />
+            </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button

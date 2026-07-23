@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import AdminDashboardPage from "@/app/admin/dashboard/page";
 import BureauBroadcastPanel from "@/components/bureau-broadcast-panel";
 import CoachAbsencePanel from "@/components/coach-absence-panel";
+import LicenseRenewalPanel from "@/components/license-renewal-panel";
 import RegistrationQueue from "@/components/registration-queue";
 import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dossier-workflow";
 import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
@@ -97,8 +98,8 @@ export default function BureauCockpit({
         <h1 className="text-2xl font-bold text-slate-900">Cockpit bureau</h1>
         <p className="mt-1 text-slate-600">
           {canManageSite
-            ? "Direction : inscriptions, planning, absences coach et contenu du site."
-            : "Administratif : traiter les pré-inscriptions, essais et planning."}
+            ? "Président : inscriptions, planning, mails, absences coach et contenu du site."
+            : "Bureau : pré-inscriptions, essais, planning et communication par e-mail."}
         </p>
       </header>
 
@@ -122,6 +123,8 @@ export default function BureauCockpit({
       {canManageSite ? <SiteNewsPanel /> : null}
 
       <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
+
+      <LicenseRenewalPanel disciplines={disciplines} applications={applications} />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">{queueSectionTitle}</h2>
@@ -215,7 +218,7 @@ export default function BureauCockpit({
             ) : null}
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Réservé à la direction. Une fois validée, l&apos;absence apparaît sur le site et les
+            Réservé au président. Une fois validée, l&apos;absence apparaît sur le site et les
             adhérents de la discipline sont prévenus par email.
           </p>
           <div className="mt-4">

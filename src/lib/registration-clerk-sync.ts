@@ -11,7 +11,7 @@ export function resolveRegistrationState(
   application: Pick<RegistrationApplication, "status" | "paymentStatus">,
   espaceValidated: boolean,
 ): RegistrationState {
-  if (application.status === "rejected") {
+  if (application.status === "rejected" || application.status === "cancelled") {
     return "rejected";
   }
   if (application.status === "approved" && application.paymentStatus === "paid") {
@@ -35,7 +35,7 @@ export function computeMembershipStatus(
   if (finalRegistrationDone) {
     return "approved";
   }
-  if (application.status === "rejected") {
+  if (application.status === "rejected" || application.status === "cancelled") {
     return "rejected";
   }
   return "pending";

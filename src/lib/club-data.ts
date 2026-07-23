@@ -4,7 +4,7 @@ import type { AppRole } from "@/lib/roles";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 
 export type PaymentStatus = "unpaid" | "partial" | "paid";
-export type ApplicationStatus = "pending" | "awaiting_document" | "approved" | "rejected";
+export type ApplicationStatus = "pending" | "awaiting_document" | "approved" | "rejected" | "cancelled";
 export type ApplicationDossierPhase =
   | "reception"
   | "espace_validation"

@@ -181,7 +181,7 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
             {isLoading
               ? "Verification des droits..."
               : isForbidden
-                ? "Accès réservé au rôle direction."
+                ? "Accès réservé au rôle président."
                 : "Verification..."}
           </p>
         </div>

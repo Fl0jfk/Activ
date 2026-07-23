@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   canAccessClubOperations,
   getCurrentUserContext,
+  isPresident,
   type CurrentUserContext,
 } from "@/lib/clerk";
 import { isBureauRole } from "@/lib/roles";
@@ -43,15 +44,21 @@ export async function requireCoach(): Promise<AuthResult<CurrentUserContext>> {
   return result;
 }
 
-export async function requireDirection(): Promise<AuthResult<CurrentUserContext>> {
+/** Accès réservé au président (alias Clerk `direction` inclus). */
+export async function requirePresident(): Promise<AuthResult<CurrentUserContext>> {
   const result = await requireUser();
   if (!result.ok) {
     return result;
   }
-  if (result.value.role !== "direction") {
+  if (!isPresident(result.value)) {
     return { ok: false, response: toErrorResponse() };
   }
   return result;
+}
+
+/** @deprecated Utiliser `requirePresident`. */
+export async function requireDirection(): Promise<AuthResult<CurrentUserContext>> {
+  return requirePresident();
 }
 
 export function isUserBureau(user: CurrentUserContext): boolean {

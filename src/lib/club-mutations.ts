@@ -1,12 +1,13 @@
-import type { ApplicationDossierPhase, PaymentMethod } from "@/lib/club-data";
+import type { ApplicationDossierPhase, ApplicationStatus, PaymentMethod } from "@/lib/club-data";
+import type { AppRole } from "@/lib/roles";
 
 export type ApplicationUpdatePayload = {
-  status?: "pending" | "awaiting_document" | "approved" | "rejected";
+  status?: ApplicationStatus;
   trialAttended?: boolean;
   paymentStatus?: "unpaid" | "partial" | "paid";
   paymentMethod?: PaymentMethod;
   notes?: string;
-  role?: "member" | "staff" | "coach" | "direction";
+  role?: AppRole;
   licenseEndDate?: string | null;
   trialSlotId?: string;
   dossierPhase?: ApplicationDossierPhase;

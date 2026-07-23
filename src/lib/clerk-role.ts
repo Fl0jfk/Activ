@@ -1,4 +1,5 @@
 import type { AppRole } from "@/lib/roles";
+import { isBureauOfficerRole, isPresidentRole } from "@/lib/roles";
 
 /** Utilisateur Clerk (forme minimale pour la lecture du rôle). */
 export type ClerkUserLike = {
@@ -7,7 +8,23 @@ export type ClerkUserLike = {
   unsafeMetadata?: Record<string, unknown> | null;
 };
 
-const BUREAU_ROLES: AppRole[] = ["direction", "staff", "coach"];
+const ROLE_ALIASES: Record<string, AppRole> = {
+  member: "member",
+  coach: "coach",
+  staff: "staff",
+  direction: "direction",
+  president: "president",
+  vice_president: "vice_president",
+  "vice-president": "vice_president",
+  vicepresident: "vice_president",
+  treasurer: "treasurer",
+  tresorier: "treasurer",
+  trésorier: "treasurer",
+  secretary: "secretary",
+  secretaire: "secretary",
+  secrétaire: "secretary",
+  président: "president",
+};
 
 export type RoleResolution = {
   role: AppRole;
@@ -23,10 +40,7 @@ function parseRoleValue(value: unknown): AppRole | null {
     return null;
   }
   const normalized = value.trim().toLowerCase();
-  if (normalized === "member" || normalized === "staff" || normalized === "coach" || normalized === "direction") {
-    return normalized;
-  }
-  return null;
+  return ROLE_ALIASES[normalized] ?? null;
 }
 
 function readRoleFromFunctionsArray(value: unknown): AppRole | null {
@@ -54,7 +68,7 @@ function readRoleFromBag(bag: Record<string, unknown> | null | undefined): AppRo
     }
   }
 
-  // Compat : certains comptes ont mis staff/coach/direction dans functions[] au lieu de role
+  // Compat : certains comptes ont mis le rôle dans functions[] au lieu de role
   const fromFunctions = readRoleFromFunctionsArray(bag.functions);
   if (fromFunctions) {
     return fromFunctions;
@@ -72,23 +86,24 @@ function readRoleFromBag(bag: Record<string, unknown> | null | undefined): AppRo
   return null;
 }
 
+function roleRank(role: AppRole): number {
+  if (isPresidentRole(role)) return 4;
+  if (isBureauOfficerRole(role)) return 3;
+  if (role === "coach") return 2;
+  return 1;
+}
+
 function pickStrongestRole(roles: Array<{ role: AppRole; source: RoleResolution["source"] }>): {
   role: AppRole;
   source: RoleResolution["source"];
 } {
-  if (roles.some((entry) => entry.role === "direction")) {
-    return { role: "direction", source: roles.find((e) => e.role === "direction")!.source };
+  let best = roles[0]!;
+  for (const entry of roles.slice(1)) {
+    if (roleRank(entry.role) > roleRank(best.role)) {
+      best = entry;
+    }
   }
-  if (roles.some((entry) => entry.role === "staff")) {
-    return { role: "staff", source: roles.find((e) => e.role === "staff")!.source };
-  }
-  if (roles.some((entry) => entry.role === "coach")) {
-    return { role: "coach", source: roles.find((e) => e.role === "coach")!.source };
-  }
-  if (roles.some((entry) => entry.role === "member")) {
-    return { role: "member", source: roles.find((e) => e.role === "member")!.source };
-  }
-  return { role: "member", source: "default" };
+  return best;
 }
 
 /** Lit le rôle tel que stocké dans Clerk (toutes sources metadata). */
@@ -119,7 +134,10 @@ export function readRoleFromClerkUser(user: ClerkUserLike): RoleResolution {
     candidates.push({ role: fromUnsafe, source: "unsafeMetadata" });
   }
 
-  const picked = candidates.length > 0 ? pickStrongestRole(candidates) : { role: "member" as AppRole, source: "default" as const };
+  const picked =
+    candidates.length > 0
+      ? pickStrongestRole(candidates)
+      : { role: "member" as AppRole, source: "default" as const };
 
   return {
     role: picked.role,
@@ -131,6 +149,4 @@ export function readRoleFromClerkUser(user: ClerkUserLike): RoleResolution {
   };
 }
 
-export function isBureauRole(role: AppRole): boolean {
-  return BUREAU_ROLES.includes(role);
-}
+export { isBureauRole } from "@/lib/roles";

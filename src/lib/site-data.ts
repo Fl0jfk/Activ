@@ -47,6 +47,9 @@ function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
     endTime: item.endTime ?? "",
     disciplineId: normalizeNewsDisciplineId(item.disciplineId),
     imageUrl: item.imageUrl ?? "",
+    galleryImages: Array.isArray(item.galleryImages)
+      ? item.galleryImages.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+      : [],
   };
 }
 
@@ -66,6 +69,7 @@ function migrateLegacyDisciplineEvents(disciplines: LegacyDiscipline[]): SiteNew
           endTime: event.endTime ?? "",
           disciplineId: discipline.id,
           imageUrl: "",
+          galleryImages: [],
         })
       );
     }

@@ -12,6 +12,7 @@ import {
   newsKindLabel,
   resolveNewsDisciplineLabel,
   sortNewsByDateDesc,
+  truncateNewsDescription,
 } from "@/lib/site-news";
 import ActivityOrientation from "@/components/activity-orientation";
 
@@ -73,25 +74,23 @@ export default async function Home({
             <h2 className="panel-title">Actualités de l&apos;association</h2>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {latestNews.map((item) => {
-                const discipline = item.disciplineId
-                  ? data.disciplines.find((entry) => entry.id === item.disciplineId)
-                  : null;
                 const cardClassName =
                   "block rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md";
-                const cardContent = (
-                  <>
+                return (
+                  <Link key={item.id} href={`/actualites/${item.id}`} className={cardClassName}>
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
                         alt=""
                         width={640}
                         height={280}
-                        unoptimized
+                        unoptimized={item.imageUrl.startsWith("/api/")}
                         className="mb-3 h-36 w-full rounded-xl object-cover"
                       />
                     ) : null}
                     <p className="text-xs font-semibold uppercase text-orange-700">
-                      {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
+                      {newsKindLabel(item.kind)} ·{" "}
+                      {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
                     </p>
                     <h3 className="mt-1 text-lg font-bold text-slate-900">{item.title}</h3>
                     <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
@@ -99,19 +98,14 @@ export default async function Home({
                       <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
                     ) : null}
                     {item.description ? (
-                      <p className="mt-2 text-sm text-slate-700">{item.description}</p>
+                      <p className="mt-2 text-sm text-slate-700">
+                        {truncateNewsDescription(item.description)}
+                      </p>
                     ) : null}
-                  </>
-                );
-
-                return discipline ? (
-                  <Link key={item.id} href={`/disciplines/${discipline.slug}`} className={cardClassName}>
-                    {cardContent}
+                    <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
+                      Lire la suite →
+                    </span>
                   </Link>
-                ) : (
-                  <article key={item.id} className={cardClassName}>
-                    {cardContent}
-                  </article>
                 );
               })}
             </div>
