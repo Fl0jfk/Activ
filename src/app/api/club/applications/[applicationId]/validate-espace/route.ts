@@ -2,6 +2,7 @@ import { jsonError, jsonOk } from "@/lib/api-response";
 import { requireClubOps } from "@/lib/api-auth";
 import { loadClubData, requireApplication, saveClubData } from "@/lib/club-repository";
 import { syncClerkAfterEspaceValidation } from "@/lib/registration-clerk-sync";
+import { isBureauRole } from "@/lib/roles";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -30,11 +31,13 @@ export async function POST(
 
   const member = data.members.find((entry) => entry.clerkUserId === application.clerkUserId);
   if (member) {
-    member.membershipStatus = "pending";
+    // Les rôles bureau/coach restent « approved » : pas d’attente d’espace membre.
+    member.membershipStatus = isBureauRole(member.role) ? "approved" : "pending";
     member.updatedAt = new Date().toISOString();
   }
 
-  await syncClerkAfterEspaceValidation(application);
+  // Préserve un rôle bureau/coach déjà attribué (ne force pas « member »).
+  await syncClerkAfterEspaceValidation(application, member?.role ?? "member");
   await saveClubData(data);
 
   return jsonOk({

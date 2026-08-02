@@ -76,6 +76,8 @@ function resolveEspaceValidated(role: AppRole, rawValue: unknown): boolean {
 
 export type BuildMemberClerkMetadataInput = {
   disciplineIds: string[];
+  /** Rôle Clerk réel (pas seulement un libellé d’affichage). */
+  role?: AppRole;
   espaceValidated?: boolean;
   membershipStatus?: MembershipStatus;
   registrationState?: RegistrationState;
@@ -85,22 +87,30 @@ export function buildMemberClerkMetadata(input: BuildMemberClerkMetadataInput): 
   privateMetadata: AppPrivateMetadata;
   publicMetadata: AppPublicMetadata;
 } {
-  const espaceValidated = input.espaceValidated ?? false;
-  const membershipStatus = input.membershipStatus ?? "pending";
-  const registrationState = input.registrationState ?? (espaceValidated ? "espace_active" : "pending");
+  const role = input.role ?? "member";
+  const bureauBypass = isBureauRole(role);
+  // Bureau / coach : pas besoin d’acceptation « espace membre ».
+  const espaceValidated = bureauBypass ? true : (input.espaceValidated ?? false);
+  const membershipStatus = bureauBypass
+    ? "approved"
+    : (input.membershipStatus ?? "pending");
+  const registrationState =
+    input.registrationState ??
+    (bureauBypass ? "registered" : espaceValidated ? "espace_active" : "pending");
 
   return {
     privateMetadata: {
-      role: "member",
+      role,
       membershipStatus,
       espaceValidated,
       disciplineIds: input.disciplineIds,
     },
     publicMetadata: {
-      role: "member",
+      role,
       membershipStatus,
       espaceValidated,
       disciplineIds: input.disciplineIds,
+      displayRole: role,
       registrationState,
     },
   };

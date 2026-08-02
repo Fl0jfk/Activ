@@ -5,7 +5,10 @@ import {
   type RegistrationState,
   updateUserMetadata,
 } from "@/lib/clerk";
+import { readRoleFromClerkUser } from "@/lib/clerk-role";
 import type { AppRole } from "@/lib/roles";
+import { isBureauRole } from "@/lib/roles";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export function resolveRegistrationState(
   application: Pick<RegistrationApplication, "status" | "paymentStatus">,
@@ -41,55 +44,91 @@ export function computeMembershipStatus(
   return "pending";
 }
 
+/** Ne pas écraser un rôle bureau/coach déjà présent côté Clerk. */
+async function resolveEffectiveSyncRole(
+  clerkUserId: string,
+  preferredRole: AppRole,
+): Promise<AppRole> {
+  if (isBureauRole(preferredRole)) {
+    return preferredRole;
+  }
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(clerkUserId);
+    const existing = readRoleFromClerkUser(user).role;
+    if (isBureauRole(existing)) {
+      return existing;
+    }
+  } catch (error) {
+    console.error("resolveEffectiveSyncRole: unable to read Clerk role", { clerkUserId, error });
+  }
+  return preferredRole;
+}
+
 export async function syncApplicationClerkMetadata(params: {
   application: RegistrationApplication;
   espaceValidated: boolean;
   membershipStatus: MembershipStatus;
-  displayRole?: AppRole;
+  /** Rôle métier à écrire dans Clerk (`role` private + public). */
+  role?: AppRole;
   hasPendingRegistrationRequest?: boolean;
 }): Promise<void> {
   if (!params.application.clerkUserId) {
     return;
   }
 
+  const role = await resolveEffectiveSyncRole(
+    params.application.clerkUserId,
+    params.role ?? "member",
+  );
+  const bureauBypass = isBureauRole(role);
   const disciplineIds = params.application.disciplineId ? [params.application.disciplineId] : [];
+  const espaceValidated = bureauBypass ? true : params.espaceValidated;
+  const membershipStatus = bureauBypass ? "approved" : params.membershipStatus;
   const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
     disciplineIds,
-    espaceValidated: params.espaceValidated,
-    membershipStatus: params.membershipStatus,
-    registrationState: resolveRegistrationState(params.application, params.espaceValidated),
+    role,
+    espaceValidated,
+    membershipStatus,
+    registrationState: resolveRegistrationState(params.application, espaceValidated),
   });
 
   await updateUserMetadata(params.application.clerkUserId, privateMetadata, {
     ...publicMetadata,
-    displayRole: params.displayRole ?? "member",
-    hasPendingRegistrationRequest: params.hasPendingRegistrationRequest,
+    hasPendingRegistrationRequest: bureauBypass
+      ? false
+      : params.hasPendingRegistrationRequest,
   });
 }
 
-export async function syncClerkAfterEspaceValidation(application: RegistrationApplication): Promise<void> {
+export async function syncClerkAfterEspaceValidation(
+  application: RegistrationApplication,
+  role: AppRole = "member",
+): Promise<void> {
   await syncApplicationClerkMetadata({
     application,
     espaceValidated: true,
     membershipStatus: "pending",
+    role,
     hasPendingRegistrationRequest: true,
   });
 }
 
 export async function syncClerkAfterAdminPatch(params: {
   application: RegistrationApplication;
-  displayRole: AppRole;
+  role: AppRole;
 }): Promise<void> {
   const membershipStatus = computeMembershipStatus(params.application);
   const espaceValidated = isEspaceValidatedPhase(params.application.dossierPhase);
   const finalRegistrationDone =
     params.application.status === "approved" && params.application.paymentStatus === "paid";
+  const bureauBypass = isBureauRole(params.role);
 
   await syncApplicationClerkMetadata({
     application: params.application,
     espaceValidated,
     membershipStatus,
-    displayRole: params.displayRole,
-    hasPendingRegistrationRequest: !finalRegistrationDone,
+    role: params.role,
+    hasPendingRegistrationRequest: bureauBypass ? false : !finalRegistrationDone,
   });
 }

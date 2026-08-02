@@ -122,7 +122,7 @@ export async function PATCH(
       try {
         await syncClerkAfterAdminPatch({
           application,
-          displayRole: nextRole,
+          role: nextRole,
         });
       } catch (syncError) {
         console.error("Clerk sync failed after application patch (local update kept)", syncError);

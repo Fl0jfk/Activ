@@ -39,29 +39,45 @@ function readRoleFromBag(bag: Record<string, unknown> | null | undefined): AppRo
     return null;
   }
 
+  const found: AppRole[] = [];
+
   if ("role" in bag) {
     const direct = parseRoleValue(bag.role);
     if (direct) {
-      return direct;
+      found.push(direct);
+    }
+  }
+
+  // Compat : anciennes syncs n’écrivaient le vrai rôle que dans displayRole
+  if ("displayRole" in bag) {
+    const fromDisplay = parseRoleValue(bag.displayRole);
+    if (fromDisplay) {
+      found.push(fromDisplay);
     }
   }
 
   // Compat : certains comptes ont mis le rôle dans functions[] au lieu de role
   const fromFunctions = readRoleFromFunctionsArray(bag.functions);
   if (fromFunctions) {
-    return fromFunctions;
+    found.push(fromFunctions);
   }
 
-  for (const [key, value] of Object.entries(bag)) {
-    if (key.toLowerCase() === "role") {
-      const parsed = parseRoleValue(value);
-      if (parsed) {
-        return parsed;
+  if (found.length === 0) {
+    for (const [key, value] of Object.entries(bag)) {
+      if (key.toLowerCase() === "role") {
+        const parsed = parseRoleValue(value);
+        if (parsed) {
+          found.push(parsed);
+        }
       }
     }
   }
 
-  return null;
+  if (found.length === 0) {
+    return null;
+  }
+
+  return found.reduce((best, role) => (roleRank(role) > roleRank(best) ? role : best));
 }
 
 function roleRank(role: AppRole): number {
