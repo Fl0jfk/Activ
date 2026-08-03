@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import type { HomeGallery } from "@/lib/site-data-types";
 
+const AUTO_MS = 4500;
+
 type HomeGallerySliderProps = {
   gallery: HomeGallery;
 };
@@ -12,11 +14,13 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
   const slides = gallery.slides;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [progressKey, setProgressKey] = useState(0);
 
   const goTo = useCallback(
     (next: number) => {
       if (slides.length === 0) return;
       setIndex(((next % slides.length) + slides.length) % slides.length);
+      setProgressKey((key) => key + 1);
     },
     [slides.length],
   );
@@ -28,15 +32,17 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
     if (slides.length <= 1 || paused) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % slides.length);
-    }, 5500);
+      setProgressKey((key) => key + 1);
+    }, AUTO_MS);
     return () => window.clearInterval(timer);
-  }, [slides.length, paused]);
+  }, [slides.length, paused, index]);
 
   if (slides.length === 0) {
     return null;
   }
 
   const current = slides[index]!;
+  const autoplay = slides.length > 1;
 
   return (
     <section id="galerie" className="anchor-section panel mt-8 overflow-hidden p-0 sm:p-0">
@@ -49,8 +55,6 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
         className="relative aspect-[16/9] w-full bg-slate-900 sm:aspect-[21/9]"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
-        onFocus={() => setPaused(true)}
-        onBlur={() => setPaused(false)}
       >
         {slides.map((slide, slideIndex) => {
           const active = slideIndex === index;
@@ -68,7 +72,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
                 fill
                 priority={slideIndex === 0}
                 unoptimized={slide.imageUrl.startsWith("/api/")}
-                className={`object-cover transition-transform duration-[6500ms] ease-out ${
+                className={`object-cover transition-transform duration-[4500ms] ease-out ${
                   active ? "scale-105" : "scale-100"
                 }`}
                 sizes="(max-width: 1152px) 100vw, 1152px"
@@ -86,7 +90,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
           </div>
         ) : null}
 
-        {slides.length > 1 ? (
+        {autoplay ? (
           <>
             <button
               type="button"
@@ -106,18 +110,31 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
             </button>
 
             <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center gap-2">
-              {slides.map((slide, slideIndex) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  onClick={() => goTo(slideIndex)}
-                  className={`h-2.5 rounded-full transition-all ${
-                    slideIndex === index ? "w-7 bg-white" : "w-2.5 bg-white/50 hover:bg-white/80"
-                  }`}
-                  aria-label={`Aller à la photo ${slideIndex + 1}`}
-                  aria-current={slideIndex === index}
-                />
-              ))}
+              {slides.map((slide, slideIndex) => {
+                const active = slideIndex === index;
+                return (
+                  <button
+                    key={slide.id}
+                    type="button"
+                    onClick={() => goTo(slideIndex)}
+                    className={`relative h-2.5 overflow-hidden rounded-full transition-all ${
+                      active ? "w-8 bg-white/35" : "w-2.5 bg-white/50 hover:bg-white/80"
+                    }`}
+                    aria-label={`Aller à la photo ${slideIndex + 1}`}
+                    aria-current={active}
+                  >
+                    {active && !paused ? (
+                      <span
+                        key={progressKey}
+                        className="absolute inset-y-0 left-0 rounded-full bg-white"
+                        style={{ animation: `home-gallery-progress ${AUTO_MS}ms linear forwards` }}
+                      />
+                    ) : active ? (
+                      <span className="absolute inset-0 rounded-full bg-white" />
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}

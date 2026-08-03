@@ -84,3 +84,12 @@ body::-webkit-scrollbar {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes home-gallery-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
