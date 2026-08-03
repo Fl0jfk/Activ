@@ -121,6 +121,10 @@ export default async function EspacePage() {
     (r) => r.status === "pending"
   ).length;
 
+  const memberRequestPendingCount = (clubData.memberRequests ?? []).filter(
+    (r) => r.status === "received" || r.status === "in_progress"
+  ).length;
+
   const defaultTab = clubOps ? "cockpit" : coachPortal ? "coach" : "member";
 
   return (
@@ -130,6 +134,7 @@ export default async function EspacePage() {
       canAccessCoachPortal={coachPortal}
       canApproveCoachAbsences={approveAbsences}
       coachAbsencePendingCount={coachAbsencePendingCount}
+      memberRequestPendingCount={memberRequestPendingCount}
       membershipStatus={currentUser.membershipStatus}
       hasFullMembership={currentUser.membershipStatus === "approved" || clubOps || coachPortal}
       disciplines={disciplines}

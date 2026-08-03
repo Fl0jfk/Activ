@@ -10,6 +10,7 @@ import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dos
 import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
 import SiteNewsPanel from "@/components/site-news-panel";
 import HomeGalleryPanel from "@/components/home-gallery-panel";
+import MemberRequestsPanel from "@/components/member-requests-panel";
 import TrialSlotsPanel from "@/components/trial-slots-panel";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
@@ -132,6 +133,17 @@ export default function BureauCockpit({
       {canManageSite ? <HomeGalleryPanel /> : null}
 
       <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-bold text-slate-900">Demandes des membres</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Demandes envoyées depuis l&apos;espace personnel. Passage en « En cours » puis « Traitée »
+          avec message et pièce jointe optionnelle.
+        </p>
+        <div className="mt-4">
+          <MemberRequestsPanel />
+        </div>
+      </section>
 
       <LicenseRenewalPanel disciplines={disciplines} applications={applications} />
 

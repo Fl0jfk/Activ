@@ -42,6 +42,33 @@ export type CoachAbsenceRequest = {
   reviewedByUserId?: string;
 };
 
+export type MemberRequestStatus = "received" | "in_progress" | "treated";
+
+export type MemberRequestDocument = {
+  name: string;
+  url: string;
+  uploadedAt: string;
+};
+
+/** Demande générique d’un adhérent au bureau. */
+export type MemberRequest = {
+  id: string;
+  clerkUserId: string;
+  memberName: string;
+  memberEmail: string;
+  subject: string;
+  message: string;
+  attachment: MemberRequestDocument | null;
+  status: MemberRequestStatus;
+  createdAt: string;
+  startedAt?: string;
+  startedByUserId?: string;
+  treatedAt?: string;
+  treatedByUserId?: string;
+  bureauReply?: string;
+  bureauAttachment?: MemberRequestDocument | null;
+};
+
 export type TrialSlot = {
   id: string;
   disciplineId: string;
@@ -94,6 +121,7 @@ export type ClubData = {
   applications: RegistrationApplication[];
   documentRequestTokens: DocumentRequestToken[];
   coachAbsenceRequests: CoachAbsenceRequest[];
+  memberRequests: MemberRequest[];
   updatedAt: string;
 };
 
@@ -125,6 +153,12 @@ function normalizeClubData(data: ClubData): ClubData {
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
     coachAbsenceRequests: data.coachAbsenceRequests ?? [],
+    memberRequests: (data.memberRequests ?? []).map((request) => ({
+      ...request,
+      attachment: request.attachment ?? null,
+      bureauAttachment: request.bureauAttachment ?? null,
+      bureauReply: request.bureauReply ?? "",
+    })),
     updatedAt: data.updatedAt ?? new Date().toISOString(),
   };
 }

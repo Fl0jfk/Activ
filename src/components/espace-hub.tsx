@@ -19,6 +19,7 @@ type EspaceHubProps = {
   canAccessCoachPortal: boolean;
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
+  memberRequestPendingCount: number;
   membershipStatus: "pending" | "approved" | "rejected";
   hasFullMembership: boolean;
   disciplines: DisciplineOption[];
@@ -37,6 +38,7 @@ export default function EspaceHub({
   canAccessCoachPortal,
   canApproveCoachAbsences,
   coachAbsencePendingCount,
+  memberRequestPendingCount,
   membershipStatus,
   hasFullMembership,
   disciplines,
@@ -55,8 +57,8 @@ export default function EspaceHub({
   const [activeTab, setActiveTab] = useState<EspaceTab>(resolvedDefault);
 
   const pendingCount = useMemo(
-    () => allApplications.filter(isDossierEnCours).length,
-    [allApplications]
+    () => allApplications.filter(isDossierEnCours).length + memberRequestPendingCount,
+    [allApplications, memberRequestPendingCount]
   );
 
   return (

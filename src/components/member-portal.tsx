@@ -15,6 +15,7 @@ import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
 import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
 import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
+import MemberRequestsSection from "@/components/member-requests-section";
 
 type MemberPortalProps = {
   disciplines: DisciplineOption[];
@@ -347,10 +348,10 @@ export default function MemberPortal({
       ) : null}
 
       <section className="panel p-6">
-        <h2 className="text-xl font-bold text-slate-900">Mes demandes</h2>
+        <h2 className="text-xl font-bold text-slate-900">Mes pré-inscriptions</h2>
         <div className="mt-4 space-y-3">
           {applications.length === 0 ? (
-            <p className="text-sm text-slate-600">Aucune demande pour le moment.</p>
+            <p className="text-sm text-slate-600">Aucune pré-inscription pour le moment.</p>
           ) : (
             applications.map((application) => {
               const step = getMemberInscriptionStep(application);
@@ -378,6 +379,8 @@ export default function MemberPortal({
           )}
         </div>
       </section>
+
+      <MemberRequestsSection />
 
       <details className="panel p-6">
         <summary className="cursor-pointer text-xl font-bold text-slate-900">

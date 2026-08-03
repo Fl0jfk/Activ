@@ -144,6 +144,40 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
     }));
   }
 
+  function removeDiscipline(disciplineId: string) {
+    const discipline = data.disciplines.find((entry) => entry.id === disciplineId);
+    const label = discipline?.name?.trim() || "cette discipline";
+    if (
+      !window.confirm(
+        `Supprimer ${label} ? Les horaires associés seront aussi retirés. Pensez à enregistrer ensuite.`,
+      )
+    ) {
+      return;
+    }
+
+    setData((previous) => {
+      const removedSlotIds = new Set(
+        previous.schedule.filter((slot) => slot.disciplineId === disciplineId).map((slot) => slot.id),
+      );
+      return {
+        ...previous,
+        disciplines: previous.disciplines.filter((entry) => entry.id !== disciplineId),
+        schedule: previous.schedule.filter((slot) => slot.disciplineId !== disciplineId),
+        scheduleExceptions: previous.scheduleExceptions.filter(
+          (exception) => !removedSlotIds.has(exception.scheduleSlotId),
+        ),
+        news: previous.news.map((item) =>
+          item.disciplineId === disciplineId ? { ...item, disciplineId: null } : item,
+        ),
+      };
+    });
+
+    if (openDisciplineId === disciplineId) {
+      setOpenDisciplineId(null);
+    }
+    setStatusMessage("Discipline retirée localement. Cliquez sur Enregistrer pour confirmer.");
+  }
+
   function updateBoardMember(index: number, next: { fullName?: string; role?: string; email?: string }) {
     setData((previous) => {
       const boardMembers = [...previous.association.organisation.boardMembers];
@@ -371,16 +405,27 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
               const disciplineSchedule = data.schedule.filter((slot) => slot.disciplineId === discipline.id);
               return (
               <article key={discipline.id} className="rounded-xl border border-slate-200 p-4">
-                <button
-                  type="button"
-                  onClick={() => setOpenDisciplineId(isOpen ? null : discipline.id)}
-                  className="flex w-full items-center justify-between gap-4 text-left"
-                >
-                  <h3 className="text-base font-semibold text-slate-900">
-                    {discipline.name || `Discipline ${index + 1}`}
-                  </h3>
-                  <span className="text-sm font-medium text-cyan-700">{isOpen ? "Replier" : "Ouvrir"}</span>
-                </button>
+                <div className="flex w-full items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenDisciplineId(isOpen ? null : discipline.id)}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left"
+                  >
+                    <h3 className="truncate text-base font-semibold text-slate-900">
+                      {discipline.name || `Discipline ${index + 1}`}
+                    </h3>
+                    <span className="shrink-0 text-sm font-medium text-cyan-700">
+                      {isOpen ? "Replier" : "Ouvrir"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeDiscipline(discipline.id)}
+                    className="shrink-0 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700"
+                  >
+                    Supprimer
+                  </button>
+                </div>
                 {isOpen ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                     Nom de la discipline
