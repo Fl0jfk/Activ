@@ -9,6 +9,7 @@ import RegistrationQueue from "@/components/registration-queue";
 import { isDossierEnCours, isDossierFinalise, type QueueFilter } from "@/lib/dossier-workflow";
 import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
 import SiteNewsPanel from "@/components/site-news-panel";
+import HomeGalleryPanel from "@/components/home-gallery-panel";
 import TrialSlotsPanel from "@/components/trial-slots-panel";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
@@ -121,6 +122,7 @@ export default function BureauCockpit({
       </section>
 
       {canManageSite ? <SiteNewsPanel /> : null}
+      {canManageSite ? <HomeGalleryPanel /> : null}
 
       <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
 

@@ -56,6 +56,18 @@ export type ScheduleException = {
   reason: string;
 };
 
+/** Slide de la galerie d’accueil (ordre = index dans le tableau). */
+export type HomeGallerySlide = {
+  id: string;
+  imageUrl: string;
+  caption: string;
+};
+
+export type HomeGallery = {
+  title: string;
+  slides: HomeGallerySlide[];
+};
+
 export type AssociationData = {
   association: {
     name: string;
@@ -75,6 +87,7 @@ export type AssociationData = {
     };
   };
   news: SiteNewsItem[];
+  homeGallery: HomeGallery;
   disciplines: Discipline[];
   schedule: ScheduleSlot[];
   scheduleExceptions: ScheduleException[];

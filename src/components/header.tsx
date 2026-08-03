@@ -8,9 +8,10 @@ import { useUser } from "@clerk/nextjs";
 import ClerkUserButton from "@/components/clerk-user-button";
 
 const HEADER_PX = 64;
-type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean };
+type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean; showGalleryNav?: boolean };
 
 const NAV_ITEMS = [
+  { href: "/#galerie", label: "Galerie", isAppRoute: false },
   { href: "/#actualites", label: "Actualités", isAppRoute: false, mobileOnly: true },
   { href: "/#programme", label: "Programme", isAppRoute: false },
   { href: "/#orientation", label: "Orientation", isAppRoute: false, mobileOnly: true },
@@ -22,19 +23,23 @@ const NAV_ITEMS = [
 const MOBILE_LIST_ROW =
   "flex min-h-[60px] items-center border-b border-slate-200/90 py-[18px] text-[21px] font-semibold tracking-tight";
 
-function navItems(showNewsNav: boolean) {
-  return NAV_ITEMS.filter(
-    (item) => showNewsNav || item.href !== "/#actualites"
-  );
+function navItems(showNewsNav: boolean, showGalleryNav: boolean) {
+  return NAV_ITEMS.filter((item) => {
+    if (!showNewsNav && item.href === "/#actualites") return false;
+    if (!showGalleryNav && item.href === "/#galerie") return false;
+    return true;
+  });
 }
 
 function MobileMenu({
   facebookUrl,
   showNewsNav,
+  showGalleryNav,
   onClose,
 }: {
   facebookUrl: string;
   showNewsNav: boolean;
+  showGalleryNav: boolean;
   onClose: () => void;
 }) {
   const { isSignedIn } = useUser();
@@ -44,7 +49,7 @@ function MobileMenu({
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-10 pt-6">
         <nav className="flex flex-col" aria-label="Menu principal">
-          {navItems(showNewsNav).map((item) =>
+          {navItems(showNewsNav, showGalleryNav).map((item) =>
             item.isAppRoute ? (
               <Link
                 key={item.href}
@@ -102,7 +107,11 @@ function MobileMenu({
   );
 }
 
-export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderProps) {
+export default function Header({
+  facebookUrl,
+  showNewsNav = false,
+  showGalleryNav = false,
+}: SiteHeaderProps) {
   const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -145,7 +154,12 @@ export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderP
         aria-modal="true"
         aria-label="Menu"
       >
-        <MobileMenu facebookUrl={facebookUrl} showNewsNav={showNewsNav} onClose={close} />
+        <MobileMenu
+          facebookUrl={facebookUrl}
+          showNewsNav={showNewsNav}
+          showGalleryNav={showGalleryNav}
+          onClose={close}
+        />
       </div>,
       document.body
     );
@@ -164,7 +178,7 @@ export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderP
             />
           </Link>
           <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
-            {navItems(showNewsNav)
+            {navItems(showNewsNav, showGalleryNav)
               .filter((item) => !("mobileOnly" in item && item.mobileOnly))
               .map((item) =>
               item.isAppRoute ? (

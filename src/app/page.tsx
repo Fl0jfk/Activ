@@ -15,6 +15,7 @@ import {
   truncateNewsDescription,
 } from "@/lib/site-news";
 import ActivityOrientation from "@/components/activity-orientation";
+import HomeGallerySlider from "@/components/home-gallery-slider";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,8 @@ export default async function Home({
             </div>
           </div>
         </header>
+
+        <HomeGallerySlider gallery={data.homeGallery} />
 
         {latestNews.length > 0 ? (
           <section id="actualites" className="anchor-section panel mt-8 p-6 sm:p-8">
@@ -191,7 +194,7 @@ export default async function Home({
                 ) : (
                   <tr>
                     <td colSpan={5} className="py-6 text-slate-600">
-                      Aucun cours programmé cette semaine. Ajoutez des horaires depuis l&apos;admin.
+                      Aucun cours programmé cette semaine.
                     </td>
                   </tr>
                 )}

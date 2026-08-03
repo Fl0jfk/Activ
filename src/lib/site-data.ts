@@ -2,17 +2,58 @@ import { dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 import { slugify } from "@/lib/slug";
 import { normalizeNewsDisciplineId } from "@/lib/site-news";
-import type { AssociationData, ScheduleSlot, SiteNewsItem } from "@/lib/site-data-types";
+import type {
+  AssociationData,
+  HomeGallery,
+  HomeGallerySlide,
+  ScheduleSlot,
+  SiteNewsItem,
+} from "@/lib/site-data-types";
 
 export type { DayOfWeek } from "@/lib/schedule-constants";
 export { DAY_LABELS, dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
 export type {
   AssociationData,
   Discipline,
+  HomeGallery,
+  HomeGallerySlide,
   ScheduleException,
   ScheduleSlot,
   SiteNewsItem,
 } from "@/lib/site-data-types";
+
+export const DEFAULT_HOME_GALLERY: HomeGallery = {
+  title: "La vie de l'association",
+  slides: [],
+};
+
+function normalizeHomeGallerySlide(slide: Partial<HomeGallerySlide> | null | undefined): HomeGallerySlide | null {
+  if (!slide || typeof slide !== "object") return null;
+  const imageUrl = typeof slide.imageUrl === "string" ? slide.imageUrl.trim() : "";
+  if (!imageUrl) return null;
+  return {
+    id: typeof slide.id === "string" && slide.id.trim() ? slide.id : `slide-${Math.random().toString(36).slice(2, 10)}`,
+    imageUrl,
+    caption: typeof slide.caption === "string" ? slide.caption : "",
+  };
+}
+
+function normalizeHomeGallery(raw: unknown): HomeGallery {
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_HOME_GALLERY, slides: [] };
+  }
+  const gallery = raw as Partial<HomeGallery>;
+  const slides = Array.isArray(gallery.slides)
+    ? gallery.slides
+        .map((slide) => normalizeHomeGallerySlide(slide))
+        .filter((slide): slide is HomeGallerySlide => slide !== null)
+    : [];
+  const title =
+    typeof gallery.title === "string" && gallery.title.trim()
+      ? gallery.title.trim()
+      : DEFAULT_HOME_GALLERY.title;
+  return { title, slides };
+}
 
 type LegacyDisciplineEvent = {
   id: string;
@@ -30,9 +71,11 @@ type LegacyDiscipline = AssociationData["disciplines"][number] & {
   events?: LegacyDisciplineEvent[];
 };
 
-type RawAssociationData = Omit<AssociationData, "news" | "disciplines"> & {
+type RawAssociationData = Omit<AssociationData, "news" | "disciplines" | "homeGallery"> & {
   news?: SiteNewsItem[];
+  homeGallery?: HomeGallery | unknown;
   disciplines: LegacyDiscipline[];
+  schedule?: ScheduleSlot[];
 };
 
 function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
@@ -108,6 +151,7 @@ async function readDefaultLocalData(): Promise<AssociationData> {
         },
       },
       news: [],
+      homeGallery: { ...DEFAULT_HOME_GALLERY, slides: [] },
       disciplines: [],
       schedule: [],
       scheduleExceptions: [],
@@ -173,7 +217,8 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
       active: discipline.active ?? true,
     })),
     news: resolveNews(raw),
-    schedule: raw.schedule.map((slot) => normalizeScheduleSlot(slot)),
+    homeGallery: normalizeHomeGallery(raw.homeGallery),
+    schedule: (raw.schedule ?? []).map((slot) => normalizeScheduleSlot(slot)),
     scheduleExceptions: (data.scheduleExceptions ?? []).map((exception) => ({
       id: exception.id,
       scheduleSlotId: exception.scheduleSlotId,

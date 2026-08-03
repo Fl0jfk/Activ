@@ -26,6 +26,7 @@ const emptyData: AssociationData = {
     },
   },
   news: [],
+  homeGallery: { title: "La vie de l'association", slides: [] },
   disciplines: [],
   schedule: [],
   scheduleExceptions: [],
