@@ -93,6 +93,13 @@ export default function BureauCockpit({
     },
   ];
 
+  function selectQueueFilter(filter: QueueFilter) {
+    setQueueFilter(filter);
+    window.requestAnimationFrame(() => {
+      document.getElementById("dossiers")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   return (
     <div className="mx-auto mt-6 w-full max-w-6xl space-y-6 px-4 sm:px-8">
       <header>
@@ -109,7 +116,7 @@ export default function BureauCockpit({
           <button
             key={kpi.id}
             type="button"
-            onClick={() => setQueueFilter(kpi.id)}
+            onClick={() => selectQueueFilter(kpi.id)}
             className={`rounded-2xl p-4 text-left transition ring-2 ${
               queueFilter === kpi.id ? `${kpi.color} ring-offset-1` : `${kpi.color} ring-transparent opacity-85 hover:opacity-100`
             }`}
@@ -128,7 +135,10 @@ export default function BureauCockpit({
 
       <LicenseRenewalPanel disciplines={disciplines} applications={applications} />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section
+        id="dossiers"
+        className="anchor-section rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
         <h2 className="text-lg font-bold text-slate-900">{queueSectionTitle}</h2>
         <p className="mt-1 text-sm text-slate-600">
           Chaque carte indique l&apos;étape actuelle (pièce manquante, paiement, etc.). Cliquez n&apos;importe
