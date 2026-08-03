@@ -45,12 +45,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
   const autoplay = slides.length > 1;
 
   return (
-    <section id="galerie" className="anchor-section panel mt-8 overflow-hidden p-0 sm:p-0">
-      <div className="border-b border-slate-200/80 px-6 py-5 sm:px-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Galerie</p>
-        <h2 className="panel-title mt-1">{gallery.title}</h2>
-      </div>
-
+    <section id="galerie" className="anchor-section panel mt-8 overflow-hidden p-0">
       <div
         className="relative aspect-[16/9] w-full bg-slate-900 sm:aspect-[21/9]"
         onMouseEnter={() => setPaused(true)}
