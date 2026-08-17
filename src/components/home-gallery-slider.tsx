@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { HomeGallery } from "@/lib/site-data-types";
 
 const AUTO_MS = 4500;
@@ -15,6 +16,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const goTo = useCallback(
     (next: number) => {
@@ -29,13 +31,29 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
   const goNext = useCallback(() => goTo(index + 1), [goTo, index]);
 
   useEffect(() => {
-    if (slides.length <= 1 || paused) return;
+    if (slides.length <= 1 || paused || lightboxOpen) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % slides.length);
       setProgressKey((key) => key + 1);
     }, AUTO_MS);
     return () => window.clearInterval(timer);
-  }, [slides.length, paused, index]);
+  }, [slides.length, paused, index, lightboxOpen]);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLightboxOpen(false);
+      if (event.key === "ArrowLeft") goPrev();
+      if (event.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [lightboxOpen, goPrev, goNext]);
 
   if (slides.length === 0) {
     return null;
@@ -43,6 +61,73 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
 
   const current = slides[index]!;
   const autoplay = slides.length > 1;
+
+  const lightbox =
+    typeof document !== "undefined" &&
+    lightboxOpen &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/92 p-3 sm:p-8"
+        role="dialog"
+        aria-modal="true"
+        aria-label={current.caption || gallery.title || "Photo en grand"}
+        onClick={() => setLightboxOpen(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(false)}
+          className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-xl font-bold text-slate-800 shadow"
+          aria-label="Fermer"
+        >
+          ×
+        </button>
+        {autoplay ? (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goPrev();
+              }}
+              className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-xl font-bold text-slate-800 shadow sm:left-6"
+              aria-label="Photo précédente"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goNext();
+              }}
+              className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-xl font-bold text-slate-800 shadow sm:right-6"
+              aria-label="Photo suivante"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
+        <figure
+          className="relative flex max-h-full max-w-full flex-col items-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Image
+            src={current.imageUrl}
+            alt={current.caption || gallery.title}
+            width={1600}
+            height={1200}
+            unoptimized={current.imageUrl.startsWith("/api/")}
+            className="max-h-[min(88vh,900px)] w-auto max-w-[min(96vw,1200px)] rounded-xl object-contain shadow-2xl"
+          />
+          {current.caption ? (
+            <figcaption className="mt-3 max-w-3xl text-center text-sm font-medium text-white sm:text-base">
+              {current.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      </div>,
+      document.body,
+    );
 
   return (
     <section id="galerie" className="anchor-section panel mt-8 overflow-hidden p-0">
@@ -77,8 +162,15 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
           );
         })}
 
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(true)}
+          className="absolute inset-0 z-10 cursor-zoom-in"
+          aria-label="Afficher la photo en grand"
+        />
+
         {current.caption ? (
-          <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-14 sm:px-8 sm:pb-16">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-5 pb-14 sm:px-8 sm:pb-16">
             <p className="max-w-2xl text-base font-medium text-white drop-shadow sm:text-xl">
               {current.caption}
             </p>
@@ -118,7 +210,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
                     aria-label={`Aller à la photo ${slideIndex + 1}`}
                     aria-current={active}
                   >
-                    {active && !paused ? (
+                    {active && !paused && !lightboxOpen ? (
                       <span
                         key={progressKey}
                         className="absolute inset-y-0 left-0 rounded-full bg-white"
@@ -134,6 +226,7 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
           </>
         ) : null}
       </div>
+      {lightbox}
     </section>
   );
 }
