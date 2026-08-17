@@ -35,17 +35,63 @@ export function validateDocumentFile(file: File | null): { ok: true; file: File 
   return { ok: true, file };
 }
 
-export function validateSiteImageFile(file: File | null): { ok: true; file: File } | { ok: false; message: string } {
+function extensionForImageType(contentType: string): string {
+  if (contentType === "image/jpeg") return "jpg";
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  if (contentType === "image/gif") return "gif";
+  return "bin";
+}
+
+async function sniffImageContentType(file: File): Promise<string | null> {
+  const declared = file.type.toLowerCase();
+  if (declared === "image/jpg") return "image/jpeg";
+  if (ALLOWED_IMAGE_TYPES.has(declared)) return declared;
+
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "image/jpeg";
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) return "image/png";
+  if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) return "image/gif";
+  if (
+    header[0] === 0x52 &&
+    header[1] === 0x49 &&
+    header[2] === 0x46 &&
+    header[3] === 0x46 &&
+    new TextDecoder().decode(header.slice(8, 12)) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".webp")) return "image/webp";
+  if (name.endsWith(".gif")) return "image/gif";
+  return null;
+}
+
+export async function validateSiteImageFile(
+  file: File | null,
+): Promise<{ ok: true; file: File } | { ok: false; message: string }> {
   if (!(file instanceof File)) {
     return { ok: false, message: "Fichier manquant." };
-  }
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    return { ok: false, message: "Format non supporté (JPEG, PNG, WebP ou GIF)." };
   }
   if (file.size > MAX_SITE_IMAGE_FILE_SIZE) {
     return { ok: false, message: "Image trop volumineuse (max 5 Mo)." };
   }
-  return { ok: true, file };
+  const contentType = await sniffImageContentType(file);
+  if (!contentType) {
+    return {
+      ok: false,
+      message:
+        "Format non supporté (JPEG, PNG, WebP ou GIF). Sur iPhone, choisissez « Image la plus compatible ».",
+    };
+  }
+  if (file.type === contentType) {
+    return { ok: true, file };
+  }
+  const fileName = file.name?.trim() || `photo.${extensionForImageType(contentType)}`;
+  return { ok: true, file: new File([file], fileName, { type: contentType }) };
 }
 
 export function siteMediaPublicUrl(objectKey: string): string {

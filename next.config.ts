@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  images: {
+    localPatterns: [
+      { pathname: "/logo.png" },
+      { pathname: "/favicon.ico" },
+      { pathname: "/api/site-media/**" },
+    ],
+  },
 };
 
 export default nextConfig;

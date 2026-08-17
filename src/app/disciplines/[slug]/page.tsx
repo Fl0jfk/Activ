@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CallButton from "@/components/call-button";
+import SiteImage from "@/components/site-image";
 import { readSiteData } from "@/lib/site-data";
 import {
   buildDisciplineWeekSchedule,
@@ -44,12 +44,11 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
         </div>
       ) : null}
       <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-8">
-        <Image
+        <SiteImage
           src={discipline.imageUrl}
           alt={discipline.name}
           width={1000}
           height={500}
-          unoptimized={discipline.imageUrl.startsWith("/api/")}
           className="h-60 w-full rounded-2xl object-cover shadow-2xl"
         />
         <h1 className="mt-6 text-3xl font-bold text-white">{discipline.name}</h1>
@@ -59,12 +58,11 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
         <article className="panel p-6">
           <h2 className="text-xl font-bold text-slate-900">Enseignants</h2>
           <div className="mt-3 flex items-center gap-3">
-            <Image
+            <SiteImage
               src={discipline.coachPhotoUrl ?? discipline.imageUrl}
               alt={`Photo de ${teacherList[0]}`}
               width={56}
               height={56}
-              unoptimized={(discipline.coachPhotoUrl ?? discipline.imageUrl).startsWith("/api/")}
               className="h-14 w-14 rounded-full border border-slate-200 object-cover"
             />
             <div>
@@ -203,12 +201,11 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
                 className="block rounded-xl border border-orange-200 bg-orange-50/65 p-4 transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 {event.imageUrl ? (
-                  <Image
+                  <SiteImage
                     src={event.imageUrl}
                     alt=""
                     width={800}
                     height={360}
-                    unoptimized={event.imageUrl.startsWith("/api/")}
                     className="mb-3 h-40 w-full rounded-xl object-cover"
                   />
                 ) : null}

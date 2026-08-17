@@ -2,6 +2,7 @@ import { dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
 import { slugify } from "@/lib/slug";
 import { normalizeNewsDisciplineId } from "@/lib/site-news";
+import { FALLBACK_SITE_IMAGE, resolveSiteImageSrc } from "@/lib/site-image";
 import type {
   AssociationData,
   HomeGallery,
@@ -33,7 +34,7 @@ export const DEFAULT_HOME_GALLERY: HomeGallery = {
 
 function normalizeHomeGallerySlide(slide: Partial<HomeGallerySlide> | null | undefined): HomeGallerySlide | null {
   if (!slide || typeof slide !== "object") return null;
-  const imageUrl = typeof slide.imageUrl === "string" ? slide.imageUrl.trim() : "";
+  const imageUrl = resolveSiteImageSrc(typeof slide.imageUrl === "string" ? slide.imageUrl : "", "");
   if (!imageUrl) return null;
   return {
     id: typeof slide.id === "string" && slide.id.trim() ? slide.id : `slide-${Math.random().toString(36).slice(2, 10)}`,
@@ -128,9 +129,11 @@ function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
     startTime: item.startTime ?? "",
     endTime: item.endTime ?? "",
     disciplineId: normalizeNewsDisciplineId(item.disciplineId),
-    imageUrl: item.imageUrl ?? "",
+    imageUrl: resolveSiteImageSrc(item.imageUrl, ""),
     galleryImages: Array.isArray(item.galleryImages)
-      ? item.galleryImages.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+      ? item.galleryImages
+          .map((url) => resolveSiteImageSrc(url, ""))
+          .filter((url): url is string => url.length > 0)
       : [],
   };
 }
@@ -218,8 +221,7 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
   return {
     association: {
       ...data.association,
-      stampImageUrl:
-        typeof data.association.stampImageUrl === "string" ? data.association.stampImageUrl.trim() : "",
+      stampImageUrl: resolveSiteImageSrc(data.association.stampImageUrl, ""),
       organisation: {
         boardMembers: data.association.organisation?.boardMembers ?? [
           {
@@ -246,9 +248,18 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
             ? [discipline.teacher]
             : [],
       coachBio: discipline.coachBio ?? "",
-      coachPhotoUrl: discipline.coachPhotoUrl ?? discipline.imageUrl ?? "/logo.png",
-      imageUrl: discipline.imageUrl ?? "/logo.png",
-      galleryImages: discipline.galleryImages ?? [],
+      coachPhotoUrl: resolveSiteImageSrc(
+        typeof discipline.coachPhotoUrl === "string" && discipline.coachPhotoUrl.trim()
+          ? discipline.coachPhotoUrl
+          : discipline.imageUrl,
+        FALLBACK_SITE_IMAGE,
+      ),
+      imageUrl: resolveSiteImageSrc(discipline.imageUrl, FALLBACK_SITE_IMAGE),
+      galleryImages: Array.isArray(discipline.galleryImages)
+        ? discipline.galleryImages
+            .map((url) => resolveSiteImageSrc(url, ""))
+            .filter((url) => url.length > 0)
+        : [],
       whatToBring: discipline.whatToBring ?? [],
       providedItems: discipline.providedItems ?? [],
       priceInfo: discipline.priceInfo ?? "Tarif sur demande.",

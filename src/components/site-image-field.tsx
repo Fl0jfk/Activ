@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import SiteImage from "@/components/site-image";
 import { useRef, useState } from "react";
 
 type SiteImageFieldProps = {
@@ -58,12 +58,11 @@ export default function SiteImageField({
       {helpText ? <p className="text-xs font-normal text-slate-500">{helpText}</p> : null}
       {value ? (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-          <Image
+          <SiteImage
             src={value}
             alt={label}
             width={640}
             height={320}
-            unoptimized
             className="h-40 w-full object-cover"
           />
         </div>

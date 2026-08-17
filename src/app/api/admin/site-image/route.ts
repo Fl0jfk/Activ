@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const validated = validateSiteImageFile(formData.get("file") as File | null);
+    const validated = await validateSiteImageFile(formData.get("file") as File | null);
     if (!validated.ok) {
       return NextResponse.json({ message: validated.message }, { status: 400 });
     }
