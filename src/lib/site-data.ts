@@ -8,6 +8,8 @@ import type {
   HomeGallerySlide,
   ScheduleSlot,
   SiteNewsItem,
+  SitePoll,
+  SitePollOption,
 } from "@/lib/site-data-types";
 
 export type { DayOfWeek } from "@/lib/schedule-constants";
@@ -20,6 +22,8 @@ export type {
   ScheduleException,
   ScheduleSlot,
   SiteNewsItem,
+  SitePoll,
+  SitePollOption,
 } from "@/lib/site-data-types";
 
 export const DEFAULT_HOME_GALLERY: HomeGallery = {
@@ -55,6 +59,40 @@ function normalizeHomeGallery(raw: unknown): HomeGallery {
   return { title, slides };
 }
 
+function normalizePollOption(option: Partial<SitePollOption> | null | undefined): SitePollOption | null {
+  if (!option || typeof option !== "object") return null;
+  const label = typeof option.label === "string" ? option.label.trim() : "";
+  if (!label) return null;
+  const votes = typeof option.votes === "number" && Number.isFinite(option.votes) ? Math.max(0, Math.round(option.votes)) : 0;
+  return {
+    id: typeof option.id === "string" && option.id.trim() ? option.id : `opt-${Math.random().toString(36).slice(2, 10)}`,
+    label,
+    votes,
+  };
+}
+
+function normalizePoll(poll: Partial<SitePoll> | null | undefined): SitePoll | null {
+  if (!poll || typeof poll !== "object") return null;
+  const question = typeof poll.question === "string" ? poll.question.trim() : "";
+  const options = Array.isArray(poll.options)
+    ? poll.options.map((option) => normalizePollOption(option)).filter((option): option is SitePollOption => option !== null)
+    : [];
+  if (!question || options.length < 2) return null;
+  return {
+    id: typeof poll.id === "string" && poll.id.trim() ? poll.id : `poll-${Math.random().toString(36).slice(2, 10)}`,
+    question,
+    options,
+    status: poll.status === "closed" ? "closed" : "open",
+    createdAt: typeof poll.createdAt === "string" && poll.createdAt ? poll.createdAt : new Date().toISOString(),
+    closedAt: typeof poll.closedAt === "string" && poll.closedAt ? poll.closedAt : null,
+  };
+}
+
+function normalizePolls(raw: unknown): SitePoll[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((poll) => normalizePoll(poll as Partial<SitePoll>)).filter((poll): poll is SitePoll => poll !== null);
+}
+
 type LegacyDisciplineEvent = {
   id: string;
   title?: string;
@@ -71,9 +109,10 @@ type LegacyDiscipline = AssociationData["disciplines"][number] & {
   events?: LegacyDisciplineEvent[];
 };
 
-type RawAssociationData = Omit<AssociationData, "news" | "disciplines" | "homeGallery"> & {
+type RawAssociationData = Omit<AssociationData, "news" | "disciplines" | "homeGallery" | "polls"> & {
   news?: SiteNewsItem[];
   homeGallery?: HomeGallery | unknown;
+  polls?: SitePoll[] | unknown;
   disciplines: LegacyDiscipline[];
   schedule?: ScheduleSlot[];
 };
@@ -153,6 +192,7 @@ async function readDefaultLocalData(): Promise<AssociationData> {
       },
       news: [],
       homeGallery: { ...DEFAULT_HOME_GALLERY, slides: [] },
+      polls: [],
       disciplines: [],
       schedule: [],
       scheduleExceptions: [],
@@ -221,6 +261,7 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
     })),
     news: resolveNews(raw),
     homeGallery: normalizeHomeGallery(raw.homeGallery),
+    polls: normalizePolls(raw.polls),
     schedule: (raw.schedule ?? []).map((slot) => normalizeScheduleSlot(slot)),
     scheduleExceptions: (data.scheduleExceptions ?? []).map((exception) => ({
       id: exception.id,

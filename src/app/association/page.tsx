@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CallButton from "@/components/call-button";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,9 @@ export default async function AssociationPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-cyan-700">Association</p>
         <h1 className="mt-1 text-3xl font-bold text-slate-900">Organigramme</h1>
         <p className="mt-3 text-slate-700">{data.association.organisation.notes}</p>
+        <div className="mt-4">
+          <CallButton />
+        </div>
       </header>
 
       <section className="panel mt-6 p-6 sm:p-8">

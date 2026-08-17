@@ -1,3 +1,4 @@
+import CallButton from "@/components/call-button";
 import ContactForm from "@/components/contact-form";
 import { readSiteData } from "@/lib/site-data";
 
@@ -23,6 +24,9 @@ export default async function ContactPage() {
             {association.city ? ` — ${association.city}` : ""}
           </p>
         ) : null}
+        <div className="mt-4">
+          <CallButton />
+        </div>
       </header>
 
       <ContactForm

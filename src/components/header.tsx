@@ -6,13 +6,15 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import ClerkUserButton from "@/components/clerk-user-button";
+import CallButton from "@/components/call-button";
+import { ASSOCIATION_PHONE_DISPLAY, ASSOCIATION_PHONE_TEL } from "@/lib/association-contact";
 
 const HEADER_PX = 64;
 type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean; showGalleryNav?: boolean };
 
 const NAV_ITEMS = [
   { href: "/#galerie", label: "Galerie", isAppRoute: false },
-  { href: "/#actualites", label: "Actualités", isAppRoute: false, mobileOnly: true },
+  { href: "/#actualites", label: "Actualités", isAppRoute: false },
   { href: "/#programme", label: "Programme", isAppRoute: false },
   { href: "/#orientation", label: "Orientation", isAppRoute: false, mobileOnly: true },
   { href: "/#disciplines", label: "Disciplines", isAppRoute: false },
@@ -92,6 +94,13 @@ function MobileMenu({
               </Link>
             )}
           </div>
+          <a
+            href={ASSOCIATION_PHONE_TEL}
+            onClick={onClose}
+            className={`${MOBILE_LIST_ROW} text-emerald-700 transition-colors hover:text-emerald-800`}
+          >
+            Appeler {ASSOCIATION_PHONE_DISPLAY}
+          </a>
           <a
             href={facebookUrl}
             target="_blank"
@@ -199,6 +208,7 @@ export default function Header({
                 </Link>
               )
             )}
+            <CallButton compact />
             <a
               href={facebookUrl}
               target="_blank"
@@ -218,14 +228,18 @@ export default function Header({
               <ClerkUserButton />
             )}
           </nav>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
-            aria-expanded={open}
-            className="relative h-11 w-11 shrink-0 flex-col items-center justify-center gap-[6px]"
-            style={{ display: isMobile ? "flex" : "none" }}
-          >
+          <div className="items-center gap-2" style={{ display: isMobile ? "flex" : "none" }}>
+            <CallButton
+              compact
+              className="inline-flex h-11 items-center rounded-full bg-emerald-600 px-3 text-sm font-semibold text-white"
+            />
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-expanded={open}
+              className="relative flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-[6px]"
+            >
             <span
               className={`block h-0.5 w-6 rounded-full bg-slate-900 transition-transform duration-300 ease-out ${
                 open ? "translate-y-[8px] rotate-45" : ""
@@ -242,6 +256,7 @@ export default function Header({
               }`}
             />
           </button>
+          </div>
         </div>
       </header>
       <div className="h-16 shrink-0" aria-hidden />

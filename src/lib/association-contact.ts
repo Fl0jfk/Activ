@@ -1,0 +1,2 @@
+export const ASSOCIATION_PHONE_DISPLAY = "06 86 14 06 79";
+export const ASSOCIATION_PHONE_TEL = "tel:+33686140679";

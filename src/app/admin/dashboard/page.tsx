@@ -28,6 +28,7 @@ const emptyData: AssociationData = {
   },
   news: [],
   homeGallery: { title: "La vie de l'association", slides: [] },
+  polls: [],
   disciplines: [],
   schedule: [],
   scheduleExceptions: [],

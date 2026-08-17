@@ -68,6 +68,23 @@ export type HomeGallery = {
   slides: HomeGallerySlide[];
 };
 
+export type SitePollStatus = "open" | "closed";
+
+export type SitePollOption = {
+  id: string;
+  label: string;
+  votes: number;
+};
+
+export type SitePoll = {
+  id: string;
+  question: string;
+  options: SitePollOption[];
+  status: SitePollStatus;
+  createdAt: string;
+  closedAt: string | null;
+};
+
 export type AssociationData = {
   association: {
     name: string;
@@ -90,6 +107,7 @@ export type AssociationData = {
   };
   news: SiteNewsItem[];
   homeGallery: HomeGallery;
+  polls: SitePoll[];
   disciplines: Discipline[];
   schedule: ScheduleSlot[];
   scheduleExceptions: ScheduleException[];

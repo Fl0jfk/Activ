@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/public-temp-documents",
   "/api/public-document-upload",
   "/api/site-media(.*)",
+  "/api/polls(.*)",
   "/sign-in(.*)",
 ]);
 

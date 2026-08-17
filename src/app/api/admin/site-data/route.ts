@@ -35,7 +35,12 @@ export async function PUT(request: NextRequest) {
     const payload = (await request.json()) as Partial<AssociationData>;
 
     if (userCanManageSiteData(user)) {
-      await writeSiteData(payload as AssociationData);
+      const current = await readSiteData();
+      await writeSiteData({
+        ...current,
+        ...(payload as AssociationData),
+        polls: payload.polls ?? current.polls,
+      });
       return NextResponse.json({ message: "Donnees enregistrees." });
     }
 

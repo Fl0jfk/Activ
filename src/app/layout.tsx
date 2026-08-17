@@ -27,7 +27,7 @@ export default async function RootLayout({ children}: Readonly<{ children: React
         <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
           <Header
             facebookUrl={data.association.facebookUrl}
-            showNewsNav={data.news.length > 0}
+            showNewsNav={data.news.length > 0 || data.polls.length > 0}
             showGalleryNav={data.homeGallery.slides.length > 0}
           />
           {children}

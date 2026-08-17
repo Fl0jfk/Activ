@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import CallButton from "@/components/call-button";
 import { readSiteData } from "@/lib/site-data";
 import {
   buildDisciplineWeekSchedule,
@@ -93,6 +94,7 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
           </p>
           {discipline.allowTrialRequest ? (
             <div className="mt-4 flex flex-wrap gap-3">
+              <CallButton />
               <Link
                 href={`/disciplines/${discipline.slug}/essai`}
                 className="inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
@@ -107,12 +109,15 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
               </Link>
             </div>
           ) : (
-            <Link
-              href={`/preinscription?discipline=${discipline.slug}`}
-              className="mt-4 inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              Je me pré-inscris
-            </Link>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <CallButton />
+              <Link
+                href={`/preinscription?discipline=${discipline.slug}`}
+                className="inline-block rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                Je me pré-inscris
+              </Link>
+            </div>
           )}
         </article>
       </section>

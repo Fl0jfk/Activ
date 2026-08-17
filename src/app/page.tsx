@@ -7,15 +7,11 @@ import {
   formatWeekRangeLabel,
   getPublicScheduleReference,
 } from "@/lib/schedule-week";
-import {
-  formatEventSchedule,
-  newsKindLabel,
-  resolveNewsDisciplineLabel,
-  sortNewsByDateDesc,
-  truncateNewsDescription,
-} from "@/lib/site-news";
+import { sortNewsByDateDesc } from "@/lib/site-news";
 import ActivityOrientation from "@/components/activity-orientation";
+import CallButton from "@/components/call-button";
 import HomeGallerySlider from "@/components/home-gallery-slider";
+import HomeFeedSlider from "@/components/home-feed-slider";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +27,7 @@ export default async function Home({
   const { referenceDate, isSummerBreak, resumeIso } = getPublicScheduleReference();
   const weekSchedule = buildWeekSchedule(data, referenceDate);
   const weekLabel = formatWeekRangeLabel(referenceDate);
-  const latestNews = sortNewsByDateDesc(data.news).slice(0, 4);
+  const latestNews = sortNewsByDateDesc(data.news).slice(0, 8);
 
   return (
     <>
@@ -52,6 +48,7 @@ export default async function Home({
               bienveillante, progression adaptée à chacun.
             </p>
             <div className="flex flex-wrap items-center gap-3">
+              <CallButton />
               <a
                 href={data.association.facebookUrl}
                 target="_blank"
@@ -72,48 +69,7 @@ export default async function Home({
 
         <HomeGallerySlider gallery={data.homeGallery} />
 
-        {latestNews.length > 0 ? (
-          <section id="actualites" className="anchor-section panel mt-8 p-6 sm:p-8">
-            <h2 className="panel-title">Actualités de l&apos;association</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {latestNews.map((item) => {
-                const cardClassName =
-                  "block rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:-translate-y-0.5 hover:shadow-md";
-                return (
-                  <Link key={item.id} href={`/actualites/${item.id}`} className={cardClassName}>
-                    {item.imageUrl ? (
-                      <Image
-                        src={item.imageUrl}
-                        alt=""
-                        width={640}
-                        height={280}
-                        unoptimized={item.imageUrl.startsWith("/api/")}
-                        className="mb-3 h-36 w-full rounded-xl object-cover"
-                      />
-                    ) : null}
-                    <p className="text-xs font-semibold uppercase text-orange-700">
-                      {newsKindLabel(item.kind)} ·{" "}
-                      {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
-                    </p>
-                    <h3 className="mt-1 text-lg font-bold text-slate-900">{item.title}</h3>
-                    <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
-                    {item.location ? (
-                      <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
-                    ) : null}
-                    {item.description ? (
-                      <p className="mt-2 text-sm text-slate-700">
-                        {truncateNewsDescription(item.description)}
-                      </p>
-                    ) : null}
-                    <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
-                      Lire la suite →
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
+        <HomeFeedSlider news={latestNews} polls={data.polls} disciplines={data.disciplines} />
 
         <section id="programme" className="anchor-section panel mt-8 p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -241,6 +197,7 @@ export default async function Home({
       <footer className="mt-2 w-full border-t border-white/30 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-3 px-4 py-8 text-sm sm:px-8">
           <p className="text-md text-slate-300">© 2026 Sainte-Croix-sur-Buchy</p>
+          <CallButton />
         </div>
       </footer>
     </>
