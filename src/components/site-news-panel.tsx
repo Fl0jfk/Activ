@@ -359,12 +359,12 @@ export default function SiteNewsPanel() {
               />
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => void applyDraft()}
               disabled={busy}
-              className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-xl bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 sm:py-2"
             >
               {isSaving ? "Enregistrement…" : "Enregistrer l'actualité"}
             </button>
@@ -372,7 +372,7 @@ export default function SiteNewsPanel() {
               type="button"
               onClick={cancelEdit}
               disabled={busy}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 sm:py-2"
             >
               Annuler
             </button>
@@ -384,8 +384,8 @@ export default function SiteNewsPanel() {
         {sortedNews.length > 0 ? (
           sortedNews.map((item) => (
             <li key={item.id} className="rounded-xl border border-orange-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="flex min-w-0 flex-1 gap-3">
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
                   {item.imageUrl ? (
                     <Image
                       src={item.imageUrl}
@@ -396,26 +396,27 @@ export default function SiteNewsPanel() {
                       className="h-16 w-24 shrink-0 rounded-lg object-cover"
                     />
                   ) : null}
-                  <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase text-orange-700">
-                    {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
-                  </p>
-                  <h3 className="mt-0.5 font-semibold text-slate-900">{item.title}</h3>
-                  <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
-                  {item.location ? (
-                    <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
-                  ) : null}
-                  {item.description ? (
-                    <p className="mt-2 text-sm text-slate-600">{item.description}</p>
-                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold uppercase text-orange-700">
+                      {newsKindLabel(item.kind)} ·{" "}
+                      {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
+                    </p>
+                    <h3 className="mt-0.5 font-semibold text-slate-900">{item.title}</h3>
+                    <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
+                    {item.location ? (
+                      <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
+                    ) : null}
+                    {item.description ? (
+                      <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
                   <button
                     type="button"
                     onClick={() => startEdit(item)}
                     disabled={busy}
-                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 sm:py-1 sm:text-xs"
                   >
                     Modifier
                   </button>
@@ -423,7 +424,7 @@ export default function SiteNewsPanel() {
                     type="button"
                     onClick={() => void removeNews(item)}
                     disabled={busy}
-                    className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                    className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50 sm:py-1 sm:text-xs"
                   >
                     Supprimer
                   </button>

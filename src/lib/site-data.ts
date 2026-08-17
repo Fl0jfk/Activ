@@ -145,6 +145,7 @@ async function readDefaultLocalData(): Promise<AssociationData> {
         contactEmail: "contact@activ-saintecroix.fr",
         facebookUrl: "https://facebook.com",
         address: "Mairie de Sainte-Croix",
+        stampImageUrl: "",
         organisation: {
           boardMembers: [],
           notes: "Organigramme a completer.",
@@ -177,6 +178,8 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
   return {
     association: {
       ...data.association,
+      stampImageUrl:
+        typeof data.association.stampImageUrl === "string" ? data.association.stampImageUrl.trim() : "",
       organisation: {
         boardMembers: data.association.organisation?.boardMembers ?? [
           {

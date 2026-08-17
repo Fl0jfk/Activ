@@ -5,6 +5,7 @@ import { canAccessClubOperations } from "@/lib/clerk";
 import { loadClubData, requireApplication, saveClubData } from "@/lib/club-repository";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
 import { addOneYearLicenseDate } from "@/lib/license-renewal";
+import { notifyMemberPaymentReceipt } from "@/lib/payment-receipt-notify";
 import { computeMembershipStatus, syncClerkAfterAdminPatch } from "@/lib/registration-clerk-sync";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
 
@@ -30,6 +31,7 @@ export async function PATCH(
       return applicationResult;
     }
     const application = applicationResult;
+    const previousPaymentStatus = application.paymentStatus;
     const isOwner = application.clerkUserId !== null && application.clerkUserId === currentUser.userId;
 
     if (!isAdmin && !isOwner) {
@@ -131,6 +133,16 @@ export async function PATCH(
             "Mise a jour enregistree, mais la synchronisation Clerk a echoue. Verifiez le compte dans le dashboard Clerk si besoin.",
         });
       }
+    }
+
+    const justPaid = previousPaymentStatus !== "paid" && application.paymentStatus === "paid";
+    if (justPaid) {
+      const receipt = await notifyMemberPaymentReceipt(application);
+      return jsonOk({
+        message: receipt.sent
+          ? "Mise a jour effectuee. Un recu PDF a ete envoye a l'adherent."
+          : "Mise a jour effectuee. Le recu n'a pas pu etre envoye (e-mail manquant ou SMTP).",
+      });
     }
 
     return jsonOk({ message: "Mise a jour effectuee." });

@@ -76,6 +76,8 @@ export type AssociationData = {
     contactEmail: string;
     facebookUrl: string;
     address: string;
+    /** Tampon / cachet officiel, utilisé sur les reçus de paiement. */
+    stampImageUrl: string;
     organisation: {
       boardMembers: {
         id: string;

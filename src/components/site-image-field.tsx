@@ -79,7 +79,7 @@ export default function SiteImageField({
           accept="image/jpeg,image/png,image/webp,image/gif"
           disabled={disabled || isUploading}
           onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
-          className="block w-full max-w-md text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white disabled:opacity-50"
+          className="block w-full text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white disabled:opacity-50"
         />
         {value && value !== emptyValue ? (
           <button

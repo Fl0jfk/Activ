@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import { reloadAtBureauDossiers } from "@/lib/bureau-navigation";
 
 export function useClubApplicationActions() {
   const [message, setMessage] = useState("");
@@ -13,7 +14,7 @@ export function useClubApplicationActions() {
       body: JSON.stringify(payload),
     });
     if (response.ok) {
-      window.location.reload();
+      reloadAtBureauDossiers();
       return;
     }
     const body = (await response.json()) as { message?: string };
@@ -27,7 +28,7 @@ export function useClubApplicationActions() {
     const body = (await response.json()) as { message?: string };
     if (response.ok) {
       setMessage(body.message ?? "Espace membre activé.");
-      window.location.reload();
+      reloadAtBureauDossiers();
     } else {
       setMessage(body.message ?? "Impossible d'activer l'espace.");
     }
@@ -40,7 +41,7 @@ export function useClubApplicationActions() {
     const body = (await response.json()) as { message?: string };
     if (response.ok) {
       setMessage(body.message ?? "Dossier refusé.");
-      window.location.reload();
+      reloadAtBureauDossiers();
     } else {
       setMessage(body.message ?? "Impossible de refuser le dossier.");
     }
@@ -58,7 +59,7 @@ export function useClubApplicationActions() {
       if (body.secureLink) {
         window.prompt("Lien sécurisé (à transmettre si l'e-mail n'est pas parti) :", body.secureLink);
       }
-      window.location.reload();
+      reloadAtBureauDossiers();
     } else {
       setMessage(body.message ?? "Impossible d'envoyer la demande.");
     }

@@ -20,6 +20,7 @@ const emptyData: AssociationData = {
     contactEmail: "",
     facebookUrl: "",
     address: "",
+    stampImageUrl: "",
     organisation: {
       boardMembers: [],
       notes: "",
@@ -303,6 +304,18 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
                 placeholder="Adresse"
               />
             </label>
+            <SiteImageField
+              label="Tampon / cachet de l'association"
+              helpText="Affiché sur les reçus PDF envoyés aux adhérents après validation d'un paiement. PNG ou JPEG recommandé (fond transparent possible)."
+              value={data.association.stampImageUrl}
+              emptyValue=""
+              onChange={(stampImageUrl) =>
+                setData((prev) => ({
+                  ...prev,
+                  association: { ...prev.association, stampImageUrl },
+                }))
+              }
+            />
           </div>
         </section>
 

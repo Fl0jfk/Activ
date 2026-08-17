@@ -254,7 +254,7 @@ export default function BureauCockpit({
         <section>
           <h2 className="mb-3 text-xl font-bold text-slate-900">Contenu du site</h2>
           <p className="mb-4 text-sm text-slate-600">
-            Informations générales, organigramme et disciplines.
+            Informations générales, tampon pour les reçus, organigramme et disciplines.
           </p>
           <AdminDashboardPage embedded />
         </section>

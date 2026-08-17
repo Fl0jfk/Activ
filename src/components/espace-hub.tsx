@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BureauCockpit from "@/components/bureau-cockpit";
 import CoachPortal from "@/components/coach-portal";
 import MemberPortal from "@/components/member-portal";
@@ -32,6 +32,20 @@ type EspaceHubProps = {
   defaultTab?: EspaceTab;
 };
 
+function initialTab(
+  canAccessClubOperations: boolean,
+  canAccessCoachPortal: boolean,
+  defaultTab?: EspaceTab,
+): EspaceTab {
+  if (typeof window !== "undefined" && window.location.hash === "#dossiers" && canAccessClubOperations) {
+    return "cockpit";
+  }
+  return (
+    defaultTab ??
+    (canAccessClubOperations ? "cockpit" : canAccessCoachPortal ? "coach" : "member")
+  );
+}
+
 export default function EspaceHub({
   canAccessClubOperations,
   canManageSite,
@@ -50,16 +64,23 @@ export default function EspaceHub({
   pendingDocument,
   defaultTab,
 }: EspaceHubProps) {
-  const resolvedDefault: EspaceTab =
-    defaultTab ??
-    (canAccessClubOperations ? "cockpit" : canAccessCoachPortal ? "coach" : "member");
-
-  const [activeTab, setActiveTab] = useState<EspaceTab>(resolvedDefault);
+  const [activeTab, setActiveTab] = useState<EspaceTab>(() =>
+    initialTab(canAccessClubOperations, canAccessCoachPortal, defaultTab),
+  );
 
   const pendingCount = useMemo(
     () => allApplications.filter(isDossierEnCours).length + memberRequestPendingCount,
-    [allApplications, memberRequestPendingCount]
+    [allApplications, memberRequestPendingCount],
   );
+
+  useEffect(() => {
+    if (window.location.hash !== "#dossiers" || !canAccessClubOperations) return;
+    setActiveTab("cockpit");
+    const timer = window.setTimeout(() => {
+      document.getElementById("dossiers")?.scrollIntoView({ behavior: "auto", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [canAccessClubOperations]);
 
   return (
     <main className="pb-8">

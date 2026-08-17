@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
 import type { PaymentMethod, RegistrationApplication } from "@/lib/club-data";
+import { reloadAtBureauDossiers } from "@/lib/bureau-navigation";
 import {
   PAYMENT_METHOD_OPTIONS,
   PROCESSING_PHASE_DESCRIPTIONS,
@@ -158,7 +159,7 @@ function DocumentsBlock({
       const body = (await response.json()) as { message?: string };
       if (response.ok) {
         onMessage(body.message ?? "Pièce jointe ajoutée.");
-        window.location.reload();
+        reloadAtBureauDossiers();
       } else {
         onMessage(body.message ?? "Échec de l'envoi.");
       }
@@ -533,8 +534,8 @@ export default function DossierPanel({
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
             <p className="font-semibold">Dossier finalisé</p>
             <p className="mt-1">
-              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Adhésion active sur
-              Clerk.
+              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Un reçu PDF a été
+              envoyé à l&apos;adhérent. Adhésion active sur Clerk.
             </p>
             {application.licenseEndDate ? (
               <p className="mt-1">
