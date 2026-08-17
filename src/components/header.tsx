@@ -7,7 +7,6 @@ import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import ClerkUserButton from "@/components/clerk-user-button";
 import CallButton from "@/components/call-button";
-import { ASSOCIATION_PHONE_DISPLAY, ASSOCIATION_PHONE_TEL } from "@/lib/association-contact";
 
 const HEADER_PX = 64;
 type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean; showGalleryNav?: boolean };
@@ -94,13 +93,9 @@ function MobileMenu({
               </Link>
             )}
           </div>
-          <a
-            href={ASSOCIATION_PHONE_TEL}
-            onClick={onClose}
-            className={`${MOBILE_LIST_ROW} text-emerald-700 transition-colors hover:text-emerald-800`}
-          >
-            Appeler {ASSOCIATION_PHONE_DISPLAY}
-          </a>
+          <div className={`${MOBILE_LIST_ROW}`}>
+            <CallButton />
+          </div>
           <a
             href={facebookUrl}
             target="_blank"
@@ -208,7 +203,7 @@ export default function Header({
                 </Link>
               )
             )}
-            <CallButton compact />
+            <CallButton />
             <a
               href={facebookUrl}
               target="_blank"
@@ -229,10 +224,7 @@ export default function Header({
             )}
           </nav>
           <div className="items-center gap-2" style={{ display: isMobile ? "flex" : "none" }}>
-            <CallButton
-              compact
-              className="inline-flex h-11 items-center rounded-full bg-emerald-600 px-3 text-sm font-semibold text-white"
-            />
+            <CallButton />
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
