@@ -10,6 +10,7 @@ import {
 import { sortNewsByDateDesc } from "@/lib/site-news";
 import ActivityOrientation from "@/components/activity-orientation";
 import CallButton from "@/components/call-button";
+import FacebookButton from "@/components/facebook-button";
 import HomeGallerySlider from "@/components/home-gallery-slider";
 import HomeFeedSlider from "@/components/home-feed-slider";
 
@@ -49,14 +50,7 @@ export default async function Home({
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <CallButton />
-              <a
-                href={data.association.facebookUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:-translate-y-0.5 hover:bg-blue-50"
-              >
-                Voir la page Facebook
-              </a>
+              <FacebookButton href={data.association.facebookUrl} />
               <Link
                 href="/preinscription"
                 className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-400"

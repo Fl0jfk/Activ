@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import ClerkUserButton from "@/components/clerk-user-button";
 import CallButton from "@/components/call-button";
+import FacebookButton from "@/components/facebook-button";
 
 const HEADER_PX = 64;
 type SiteHeaderProps = { facebookUrl: string; showNewsNav?: boolean; showGalleryNav?: boolean };
@@ -95,15 +96,7 @@ function MobileMenu({
           </div>
           <div className={`${MOBILE_LIST_ROW} gap-4`}>
             <CallButton />
-            <a
-              href={facebookUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onClose}
-              className="text-blue-600 transition-colors hover:text-blue-700 active:text-blue-800"
-            >
-              Facebook
-            </a>
+            <FacebookButton href={facebookUrl} onClick={onClose} />
           </div>
         </nav>
       </div>
@@ -204,14 +197,7 @@ export default function Header({
               )
             )}
             <CallButton />
-            <a
-              href={facebookUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              Facebook
-            </a>
+            <FacebookButton href={facebookUrl} />
             {!isSignedIn ? (
               <Link
                 href="/sign-in"
