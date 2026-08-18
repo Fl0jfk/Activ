@@ -209,15 +209,14 @@ export default function Header({
               <ClerkUserButton />
             )}
           </nav>
-          <div className="items-center gap-2" style={{ display: isMobile ? "flex" : "none" }}>
-            <CallButton />
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
-              aria-expanded={open}
-              className="relative flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-[6px]"
-            >
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-expanded={open}
+            className="relative h-11 w-11 shrink-0 flex-col items-center justify-center gap-[6px]"
+            style={{ display: isMobile ? "flex" : "none" }}
+          >
             <span
               className={`block h-0.5 w-6 rounded-full bg-slate-900 transition-transform duration-300 ease-out ${
                 open ? "translate-y-[8px] rotate-45" : ""
@@ -234,7 +233,6 @@ export default function Header({
               }`}
             />
           </button>
-          </div>
         </div>
       </header>
       <div className="h-16 shrink-0" aria-hidden />
