@@ -74,6 +74,16 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
   );
 
   useEffect(() => {
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const clearStickyPause = () => {
+      if (!mq.matches) setPaused(false);
+    };
+    clearStickyPause();
+    mq.addEventListener("change", clearStickyPause);
+    return () => mq.removeEventListener("change", clearStickyPause);
+  }, []);
+
+  useEffect(() => {
     if (index >= slides.length && slides.length > 0) {
       setIndex(0);
     }
@@ -81,12 +91,18 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
 
   useEffect(() => {
     if (slides.length <= 1 || paused || busyPollId) return;
-    const timer = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       setIndex((current) => (current + 1) % slides.length);
       setProgressKey((key) => key + 1);
     }, AUTO_MS);
-    return () => window.clearInterval(timer);
+    return () => window.clearTimeout(timer);
   }, [slides.length, paused, index, busyPollId]);
+
+  function pauseIfDesktopHover() {
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      setPaused(true);
+    }
+  }
 
   if (slides.length === 0) {
     return null;
@@ -101,8 +117,9 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
     <section
       id="actualites"
       className="anchor-section panel mt-8 overflow-hidden p-6 sm:p-8"
-      onMouseEnter={() => setPaused(true)}
+      onMouseEnter={pauseIfDesktopHover}
       onMouseLeave={() => setPaused(false)}
+      onPointerLeave={() => setPaused(false)}
     >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -142,7 +159,7 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
             <div
               key={slide.id}
               className={`transition-opacity duration-500 ${
-                active ? "relative opacity-100" : "pointer-events-none absolute inset-0 opacity-0"
+                active ? "relative z-10 opacity-100" : "pointer-events-none absolute inset-0 z-0 opacity-0"
               }`}
               aria-hidden={!active}
             >
@@ -223,6 +240,7 @@ function NewsSlide({
           alt=""
           width={960}
           height={420}
+          loading="eager"
           unoptimized={item.imageUrl.startsWith("/api/")}
           className="mb-3 h-44 w-full rounded-xl object-cover sm:h-56"
         />

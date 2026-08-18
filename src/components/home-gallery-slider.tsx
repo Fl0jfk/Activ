@@ -150,11 +150,10 @@ export default function HomeGallerySlider({ gallery }: HomeGallerySliderProps) {
                 src={slide.imageUrl}
                 alt={slide.caption || gallery.title}
                 fill
-                priority={slideIndex === 0}
+                priority={slideIndex < 2}
+                loading={slideIndex < 2 ? "eager" : "lazy"}
                 unoptimized={slide.imageUrl.startsWith("/api/")}
-                className={`object-cover transition-transform duration-[4500ms] ease-out ${
-                  active ? "scale-105" : "scale-100"
-                }`}
+                className="object-cover"
                 sizes="(max-width: 1152px) 100vw, 1152px"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/15 to-transparent" />

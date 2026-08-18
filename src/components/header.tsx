@@ -93,18 +93,18 @@ function MobileMenu({
               </Link>
             )}
           </div>
-          <div className={`${MOBILE_LIST_ROW}`}>
+          <div className={`${MOBILE_LIST_ROW} gap-4`}>
             <CallButton />
+            <a
+              href={facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+              className="text-blue-600 transition-colors hover:text-blue-700 active:text-blue-800"
+            >
+              Facebook
+            </a>
           </div>
-          <a
-            href={facebookUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={onClose}
-            className={`${MOBILE_LIST_ROW} text-blue-600 transition-colors hover:text-blue-700 active:text-blue-800`}
-          >
-            Facebook
-          </a>
         </nav>
       </div>
     </>
