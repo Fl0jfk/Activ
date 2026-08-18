@@ -111,14 +111,14 @@ export default function Header({
 }: SiteHeaderProps) {
   const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
+    const mq = window.matchMedia("(max-width: 1279px)");
     const apply = () => {
-      setIsMobile(mq.matches);
+      setIsCompact(mq.matches);
     };
     const onChange = (event: MediaQueryListEvent) => {
-      setIsMobile(event.matches);
+      setIsCompact(event.matches);
       if (!event.matches) setOpen(false);
     };
     apply();
@@ -174,7 +174,7 @@ export default function Header({
               priority
             />
           </Link>
-          <nav className="shrink-0 items-center gap-8" style={{ display: isMobile ? "none" : "flex" }}>
+          <nav className="shrink-0 items-center gap-8" style={{ display: isCompact ? "none" : "flex" }}>
             {navItems(showNewsNav, showGalleryNav)
               .filter((item) => !("mobileOnly" in item && item.mobileOnly))
               .map((item) =>
@@ -215,7 +215,7 @@ export default function Header({
             aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
             aria-expanded={open}
             className="relative h-11 w-11 shrink-0 flex-col items-center justify-center gap-[6px]"
-            style={{ display: isMobile ? "flex" : "none" }}
+            style={{ display: isCompact ? "flex" : "none" }}
           >
             <span
               className={`block h-0.5 w-6 rounded-full bg-slate-900 transition-transform duration-300 ease-out ${
