@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LinkedPollsPanel from "@/components/linked-polls-panel";
 import { readSiteData } from "@/lib/site-data";
 import {
   formatEventSchedule,
@@ -26,6 +27,7 @@ export default async function ActualitePage({ params }: PageProps) {
     ? data.disciplines.find((entry) => entry.id === item.disciplineId)
     : null;
   const gallery = item.galleryImages ?? [];
+  const linkedPolls = data.polls.filter((poll) => poll.newsId === item.id);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
@@ -76,6 +78,8 @@ export default async function ActualitePage({ params }: PageProps) {
             </div>
           </section>
         ) : null}
+
+        {linkedPolls.length > 0 ? <LinkedPollsPanel polls={linkedPolls} /> : null}
 
         {discipline ? (
           <p className="mt-8 text-sm text-slate-600">

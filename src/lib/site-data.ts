@@ -83,9 +83,13 @@ function normalizePoll(poll: Partial<SitePoll> | null | undefined): SitePoll | n
     id: typeof poll.id === "string" && poll.id.trim() ? poll.id : `poll-${Math.random().toString(36).slice(2, 10)}`,
     question,
     options,
+    newsId: typeof poll.newsId === "string" && poll.newsId.trim() ? poll.newsId : null,
     status: poll.status === "closed" ? "closed" : "open",
     createdAt: typeof poll.createdAt === "string" && poll.createdAt ? poll.createdAt : new Date().toISOString(),
     closedAt: typeof poll.closedAt === "string" && poll.closedAt ? poll.closedAt : null,
+    voterHashes: Array.isArray(poll.voterHashes)
+      ? poll.voterHashes.filter((hash): hash is string => typeof hash === "string" && hash.length > 0)
+      : [],
   };
 }
 
@@ -129,6 +133,7 @@ function normalizeSiteNewsItem(item: SiteNewsItem): SiteNewsItem {
     startTime: item.startTime ?? "",
     endTime: item.endTime ?? "",
     disciplineId: normalizeNewsDisciplineId(item.disciplineId),
+    ctaLabel: typeof item.ctaLabel === "string" && item.ctaLabel.trim() ? item.ctaLabel.trim() : "Lire la suite",
     imageUrl: resolveSiteImageSrc(item.imageUrl, ""),
     galleryImages: Array.isArray(item.galleryImages)
       ? item.galleryImages

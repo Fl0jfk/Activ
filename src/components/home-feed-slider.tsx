@@ -21,7 +21,7 @@ type HomeFeedSliderProps = {
 };
 
 type FeedSlide =
-  | { kind: "news"; id: string; item: SiteNewsItem }
+  | { kind: "news"; id: string; item: SiteNewsItem; linkedPollIds: string[] }
   | { kind: "poll"; id: string; item: SitePoll };
 
 function readStoredVotes(): Record<string, string> {
@@ -37,12 +37,28 @@ function readStoredVotes(): Record<string, string> {
 }
 
 function buildSlides(news: SiteNewsItem[], polls: SitePoll[]): FeedSlide[] {
-  const openPolls = polls.filter((poll) => poll.status === "open");
-  const closedPolls = polls.filter((poll) => poll.status !== "open");
+  const pollsByNewsId = new Map<string, SitePoll[]>();
+  const standaloneOpenPolls: SitePoll[] = [];
+  const standaloneClosedPolls: SitePoll[] = [];
+  for (const poll of polls) {
+    if (poll.newsId) {
+      const current = pollsByNewsId.get(poll.newsId) ?? [];
+      current.push(poll);
+      pollsByNewsId.set(poll.newsId, current);
+      continue;
+    }
+    if (poll.status === "open") standaloneOpenPolls.push(poll);
+    else standaloneClosedPolls.push(poll);
+  }
   return [
-    ...openPolls.map((item) => ({ kind: "poll" as const, id: `poll-${item.id}`, item })),
-    ...news.map((item) => ({ kind: "news" as const, id: `news-${item.id}`, item })),
-    ...closedPolls.map((item) => ({ kind: "poll" as const, id: `poll-${item.id}`, item })),
+    ...standaloneOpenPolls.map((item) => ({ kind: "poll" as const, id: `poll-${item.id}`, item })),
+    ...news.map((item) => ({
+      kind: "news" as const,
+      id: `news-${item.id}`,
+      item,
+      linkedPollIds: (pollsByNewsId.get(item.id) ?? []).map((poll) => poll.id),
+    })),
+    ...standaloneClosedPolls.map((item) => ({ kind: "poll" as const, id: `poll-${item.id}`, item })),
   ];
 }
 
@@ -108,6 +124,11 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
     return null;
   }
 
+  const pollById = useMemo(() => {
+    const map = new Map<string, SitePoll>();
+    for (const poll of pollItems) map.set(poll.id, poll);
+    return map;
+  }, [pollItems]);
   const current = slides[index] ?? slides[0]!;
   const autoplay = slides.length > 1;
   const currentPoll =
@@ -164,7 +185,23 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
               aria-hidden={!active}
             >
               {slide.kind === "news" ? (
-                <NewsSlide item={slide.item} disciplines={disciplines} />
+                <NewsSlide
+                  item={slide.item}
+                  disciplines={disciplines}
+                  linkedPolls={slide.linkedPollIds.map((pollId) => pollById.get(pollId)).filter(Boolean) as SitePoll[]}
+                  votes={votes}
+                  busyPollId={busyPollId}
+                  onVoted={(nextPoll, optionId) => {
+                    setPollItems((currentItems) =>
+                      currentItems.map((entry) => (entry.id === nextPoll.id ? nextPoll : entry)),
+                    );
+                    const nextVotes = { ...votes, [nextPoll.id]: optionId };
+                    setVotes(nextVotes);
+                    window.localStorage.setItem(POLL_VOTES_STORAGE_KEY, JSON.stringify(nextVotes));
+                  }}
+                  onBusy={(busy, pollId) => setBusyPollId(busy ? pollId : null)}
+                  onMessage={setMessage}
+                />
               ) : (
                 <PollCard
                   poll={
@@ -225,37 +262,64 @@ export default function HomeFeedSlider({ news, polls, disciplines }: HomeFeedSli
 function NewsSlide({
   item,
   disciplines,
+  linkedPolls,
+  votes,
+  busyPollId,
+  onVoted,
+  onBusy,
+  onMessage,
 }: {
   item: SiteNewsItem;
   disciplines: Pick<Discipline, "id" | "name">[];
+  linkedPolls: SitePoll[];
+  votes: Record<string, string>;
+  busyPollId: string | null;
+  onVoted: (poll: SitePoll, optionId: string) => void;
+  onBusy: (busy: boolean, pollId: string) => void;
+  onMessage: (message: string) => void;
 }) {
   return (
-    <Link
-      href={`/actualites/${item.id}`}
-      className="block overflow-hidden rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:shadow-md sm:p-5"
-    >
-      {item.imageUrl ? (
-        <Image
-          src={item.imageUrl}
-          alt=""
-          width={960}
-          height={420}
-          loading="eager"
-          unoptimized={item.imageUrl.startsWith("/api/")}
-          className="mb-3 h-44 w-full rounded-xl object-cover sm:h-56"
+    <div className="space-y-3">
+      <Link
+        href={`/actualites/${item.id}`}
+        className="block overflow-hidden rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4 transition hover:shadow-md sm:p-5"
+      >
+        {item.imageUrl ? (
+          <Image
+            src={item.imageUrl}
+            alt=""
+            width={960}
+            height={420}
+            loading="eager"
+            unoptimized={item.imageUrl.startsWith("/api/")}
+            className="mb-3 h-44 w-full rounded-xl object-cover sm:h-56"
+          />
+        ) : null}
+        <p className="text-xs font-semibold uppercase text-orange-700">
+          Actualité · {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, disciplines)}
+        </p>
+        <h3 className="mt-1 text-xl font-bold text-slate-900">{item.title}</h3>
+        <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
+        {item.location ? <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p> : null}
+        {item.description ? (
+          <p className="mt-2 text-sm text-slate-700">{truncateNewsDescription(item.description, 220)}</p>
+        ) : null}
+        <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
+          {(item.ctaLabel?.trim() || "Lire la suite")} →
+        </span>
+      </Link>
+      {linkedPolls.map((poll) => (
+        <PollCard
+          key={poll.id}
+          poll={poll}
+          votedOptionId={votes[poll.id]}
+          busy={busyPollId === poll.id}
+          onVoted={onVoted}
+          onBusy={(busy) => onBusy(busy, poll.id)}
+          onMessage={onMessage}
         />
-      ) : null}
-      <p className="text-xs font-semibold uppercase text-orange-700">
-        Actualité · {newsKindLabel(item.kind)} · {resolveNewsDisciplineLabel(item.disciplineId, disciplines)}
-      </p>
-      <h3 className="mt-1 text-xl font-bold text-slate-900">{item.title}</h3>
-      <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
-      {item.location ? <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p> : null}
-      {item.description ? (
-        <p className="mt-2 text-sm text-slate-700">{truncateNewsDescription(item.description, 220)}</p>
-      ) : null}
-      <span className="mt-3 inline-block text-sm font-semibold text-orange-800">Lire la suite →</span>
-    </Link>
+      ))}
+    </div>
   );
 }
 

@@ -10,6 +10,7 @@ export type SiteNewsItem = {
   startTime: string;
   endTime: string;
   disciplineId: string | null;
+  ctaLabel?: string;
   imageUrl: string;
   galleryImages: string[];
 };
@@ -80,9 +81,11 @@ export type SitePoll = {
   id: string;
   question: string;
   options: SitePollOption[];
+  newsId: string | null;
   status: SitePollStatus;
   createdAt: string;
   closedAt: string | null;
+  voterHashes?: string[];
 };
 
 export type AssociationData = {

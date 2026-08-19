@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { createHash } from "node:crypto";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
 import {
@@ -37,6 +38,21 @@ export async function POST(
       return jsonError("Ce sondage est arrêté.", 400);
     }
 
+    const voterSource = [
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+      request.headers.get("x-real-ip") ?? "",
+      request.headers.get("user-agent") ?? "",
+    ]
+      .join("|")
+      .trim();
+    const voterHash = voterSource
+      ? createHash("sha256").update(voterSource).digest("hex")
+      : null;
+    const existingHashes = Array.isArray(poll.voterHashes) ? poll.voterHashes : [];
+    if (voterHash && existingHashes.includes(voterHash)) {
+      return jsonError("Vous avez déjà voté à ce sondage.", 409);
+    }
+
     const option = poll.options.find((entry) => entry.id === optionId);
     if (!option) {
       return jsonError("Réponse introuvable.", 400);
@@ -44,6 +60,9 @@ export async function POST(
 
     option.votes += 1;
     votes[pollId] = optionId;
+    if (voterHash) {
+      poll.voterHashes = [...existingHashes, voterHash];
+    }
     await writeSiteData(data);
 
     cookieStore.set(POLL_VOTES_COOKIE, serializePollVotesCookie(votes), {

@@ -142,6 +142,7 @@ export default function SiteNewsPanel() {
       description: draft.description.trim(),
       location: draft.location.trim(),
       disciplineId: draft.disciplineId || null,
+      ctaLabel: draft.ctaLabel?.trim() || "Lire la suite",
       imageUrl: draft.imageUrl?.trim() ?? "",
       galleryImages: Array.isArray(draft.galleryImages) ? draft.galleryImages : [],
     };
@@ -164,7 +165,11 @@ export default function SiteNewsPanel() {
   async function removeNews(item: SiteNewsItem) {
     if (!data) return;
     if (!window.confirm(`Supprimer l'actualité « ${item.title} » ?`)) return;
-    const nextData = { ...data, news: data.news.filter((entry) => entry.id !== item.id) };
+    const nextData = {
+      ...data,
+      news: data.news.filter((entry) => entry.id !== item.id),
+      polls: data.polls.map((poll) => (poll.newsId === item.id ? { ...poll, newsId: null } : poll)),
+    };
     const saved = await persistSiteData(nextData, "Actualité supprimée du site.");
     if (saved && draft?.id === item.id) cancelEdit();
   }
@@ -305,6 +310,16 @@ export default function SiteNewsPanel() {
                 className={inputClass}
                 rows={3}
                 placeholder="Détails pratiques, inscription, public visé…"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+              Texte du bouton (carte accueil)
+              <input
+                value={draft.ctaLabel ?? "Lire la suite"}
+                onChange={(event) => updateDraft({ ctaLabel: event.target.value })}
+                disabled={busy}
+                className={inputClass}
+                placeholder="Ex. Donner son avis, Cliquer pour voter…"
               />
             </label>
             <SiteImageField

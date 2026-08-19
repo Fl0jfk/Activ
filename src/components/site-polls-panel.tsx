@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import type { SitePoll } from "@/lib/site-data-types";
+import type { SiteNewsItem, SitePoll } from "@/lib/site-data-types";
+import { sortNewsByDateDesc } from "@/lib/site-news";
 import { pollVoteTotal } from "@/lib/site-polls";
 
 const inputClass =
@@ -9,8 +10,10 @@ const inputClass =
 
 export default function SitePollsPanel() {
   const [polls, setPolls] = useState<SitePoll[]>([]);
+  const [newsItems, setNewsItems] = useState<SiteNewsItem[]>([]);
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
+  const [newsId, setNewsId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -23,8 +26,9 @@ export default function SitePollsPanel() {
       setIsLoading(false);
       return;
     }
-    const payload = (await response.json()) as { polls?: SitePoll[] };
+    const payload = (await response.json()) as { polls?: SitePoll[]; news?: SiteNewsItem[] };
     setPolls(payload.polls ?? []);
+    setNewsItems(sortNewsByDateDesc(payload.news ?? []));
     setIsLoading(false);
   }, []);
 
@@ -39,7 +43,7 @@ export default function SitePollsPanel() {
     const response = await fetch("/api/admin/polls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, options }),
+      body: JSON.stringify({ question, options, newsId: newsId || null }),
     });
     const payload = (await response.json()) as { message?: string };
     setStatusMessage(payload.message ?? (response.ok ? "Sondage publié." : "Erreur."));
@@ -47,6 +51,7 @@ export default function SitePollsPanel() {
     if (response.ok) {
       setQuestion("");
       setOptions(["", ""]);
+      setNewsId("");
       await load();
     }
   }
@@ -72,8 +77,8 @@ export default function SitePollsPanel() {
     <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5 shadow-sm">
       <h2 className="text-lg font-bold text-slate-900">Sondages du site</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Publiez un sondage sur la page d&apos;accueil. Vous pouvez l&apos;arrêter à tout moment : les
-        votes restent visibles, sans nouveaux votes.
+        Publiez un sondage indépendant sur l&apos;accueil ou liez-le à une actualité précise. Vous
+        pouvez l&apos;arrêter à tout moment : les votes restent visibles, sans nouveaux votes.
       </p>
 
       <form onSubmit={(event) => void createPoll(event)} className="mt-4 space-y-3">
@@ -87,6 +92,22 @@ export default function SitePollsPanel() {
             disabled={isSaving}
             required
           />
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          Lier à une actualité (optionnel)
+          <select
+            className={`${inputClass} mt-1`}
+            value={newsId}
+            onChange={(event) => setNewsId(event.target.value)}
+            disabled={isSaving}
+          >
+            <option value="">Aucune (sondage indépendant)</option>
+            {newsItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
         </label>
         <div className="space-y-2">
           <p className="text-sm font-medium text-slate-700">Réponses</p>
@@ -153,6 +174,11 @@ export default function SitePollsPanel() {
                     {poll.status === "open" ? "En cours" : "Arrêté"}
                   </p>
                   <h3 className="mt-0.5 font-semibold text-slate-900">{poll.question}</h3>
+                  {poll.newsId ? (
+                    <p className="mt-1 text-xs font-medium text-violet-700">
+                      Lié à : {newsItems.find((item) => item.id === poll.newsId)?.title ?? "actualité supprimée"}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-xs text-slate-500">{total} vote{total > 1 ? "s" : ""}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">

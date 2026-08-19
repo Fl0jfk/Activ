@@ -15,11 +15,13 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as {
       question?: string;
       options?: string[];
+      newsId?: string | null;
     };
     const question = payload.question?.trim() ?? "";
     const options = (payload.options ?? [])
       .map((label) => label.trim())
       .filter(Boolean);
+    const newsId = typeof payload.newsId === "string" && payload.newsId.trim() ? payload.newsId.trim() : null;
 
     if (!question) {
       return jsonError("La question est obligatoire.", 400);
@@ -32,6 +34,9 @@ export async function POST(request: Request) {
     }
 
     const data = await readSiteData();
+    if (newsId && !data.news.some((item) => item.id === newsId)) {
+      return jsonError("Actualité introuvable pour lier ce sondage.", 400);
+    }
     const poll = {
       id: randomId("poll"),
       question,
@@ -40,9 +45,11 @@ export async function POST(request: Request) {
         label,
         votes: 0,
       })),
+      newsId,
       status: "open" as const,
       createdAt: new Date().toISOString(),
       closedAt: null,
+      voterHashes: [],
     };
     data.polls = [poll, ...(data.polls ?? [])];
     await writeSiteData(data);
