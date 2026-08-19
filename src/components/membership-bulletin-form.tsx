@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignaturePad from "@/components/signature-pad";
 import type { DisciplineOption } from "@/lib/discipline-options";
@@ -17,6 +17,7 @@ import {
 type MembershipBulletinFormProps = {
   disciplines: DisciplineOption[];
   initialDisciplineId?: string;
+  revalidateToken?: string;
 };
 
 const STEPS = [
@@ -41,6 +42,7 @@ function formatDateFr(isoDate: string): string {
 export default function MembershipBulletinForm({
   disciplines,
   initialDisciplineId,
+  revalidateToken,
 }: MembershipBulletinFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -78,9 +80,73 @@ export default function MembershipBulletinForm({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingToken, setIsLoadingToken] = useState(Boolean(revalidateToken));
+
+  const isRevalidationMode = Boolean(revalidateToken);
 
   const totals = useMemo(() => computeMembershipTotals(selectedSlots), [selectedSlots]);
   const commitmentsAccepted = acceptRules && acceptHealth && acceptInsurance && acceptRefund;
+
+  useEffect(() => {
+    if (!revalidateToken) {
+      setIsLoadingToken(false);
+      return;
+    }
+    const token = revalidateToken;
+    let cancelled = false;
+    async function loadTokenData() {
+      setIsLoadingToken(true);
+      const response = await fetch(
+        `/api/public-membership-bulletin/revalidate?token=${encodeURIComponent(token)}`,
+      );
+      const payload = (await response.json()) as {
+        message?: string;
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        address?: string;
+        postalCode?: string;
+        city?: string;
+        email?: string;
+        birthDate?: string;
+        emergencyContactName?: string;
+        emergencyContactPhone?: string;
+        selectedSlots?: string[];
+        paymentPlan?: MembershipPaymentPlan;
+        imageRights?: MembershipImageRights;
+        signedPlace?: string;
+      };
+
+      if (cancelled) return;
+
+      if (!response.ok) {
+        setMessage(payload.message ?? "Lien de revalidation invalide.");
+        setIsLoadingToken(false);
+        return;
+      }
+
+      setFirstName(payload.firstName ?? "");
+      setLastName(payload.lastName ?? "");
+      setPhone(payload.phone ?? "");
+      setAddress(payload.address ?? "");
+      setPostalCode(payload.postalCode ?? "");
+      setCity(payload.city ?? "");
+      setEmail(payload.email ?? "");
+      setBirthDate(payload.birthDate ?? "");
+      setEmergencyContactName(payload.emergencyContactName ?? "");
+      setEmergencyContactPhone(payload.emergencyContactPhone ?? "");
+      setSelectedSlots(Array.isArray(payload.selectedSlots) ? payload.selectedSlots : []);
+      setPaymentPlan(payload.paymentPlan === "three_times" ? "three_times" : "once");
+      setImageRights(payload.imageRights === "refuse" ? "refuse" : "authorize");
+      setSignedPlace(payload.signedPlace?.trim() || "Sainte-Croix");
+      setMessage("");
+      setIsLoadingToken(false);
+    }
+    void loadTokenData();
+    return () => {
+      cancelled = true;
+    };
+  }, [revalidateToken]);
 
   function buildPayload(): MembershipBulletinFormPayload {
     return {
@@ -129,10 +195,10 @@ export default function MembershipBulletinForm({
       ) {
         return "Merci de remplir toutes les coordonnées.";
       }
-      if (password.length < 8) {
+      if (!isRevalidationMode && password.length < 8) {
         return "Le mot de passe doit contenir au moins 8 caractères.";
       }
-      if (password !== passwordConfirm) {
+      if (!isRevalidationMode && password !== passwordConfirm) {
         return "Les mots de passe ne correspondent pas.";
       }
     }
@@ -200,19 +266,26 @@ export default function MembershipBulletinForm({
     setIsLoading(true);
     setMessage("");
     try {
-      const response = await fetch("/api/public-preinscriptions", {
+      const endpoint = isRevalidationMode
+        ? "/api/public-membership-bulletin/revalidate"
+        : "/api/public-preinscriptions";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...buildPayload(),
-          bulletinMode: true,
+          ...(isRevalidationMode
+            ? { token: revalidateToken }
+            : {
+                bulletinMode: true,
+              }),
         }),
       });
       const payload = (await response.json()) as { message?: string };
       if (!response.ok) {
         throw new Error(payload.message ?? "Envoi impossible.");
       }
-      router.push("/?preregistration=received");
+      router.push(isRevalidationMode ? "/?bulletin=revalidated" : "/?preregistration=received");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Erreur d'envoi.");
       setIsLoading(false);
@@ -224,9 +297,13 @@ export default function MembershipBulletinForm({
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-bold text-slate-900">Bulletin d&apos;adhésion</h1>
         <p className="mt-2 text-slate-700">
-          Activ&apos; Sainte-Croix Sport et Culture — {MEMBERSHIP_SEASON_LABEL}. Remplissez le
-          formulaire, signez, vérifiez le PDF, puis confirmez l&apos;envoi.
+          {isRevalidationMode
+            ? `Revalidation du bulletin — ${MEMBERSHIP_SEASON_LABEL}. Vérifiez vos informations, signez, puis confirmez l'envoi.`
+            : `Activ' Sainte-Croix Sport et Culture — ${MEMBERSHIP_SEASON_LABEL}. Remplissez le formulaire, signez, vérifiez le PDF, puis confirmez l'envoi.`}
         </p>
+        {isLoadingToken ? (
+          <p className="mt-2 text-sm text-slate-500">Chargement du lien sécurisé…</p>
+        ) : null}
 
         <ol className="mt-5 flex flex-wrap gap-2">
           {STEPS.map((label, index) => (
@@ -322,28 +399,32 @@ export default function MembershipBulletinForm({
                   required
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-                Mot de passe (compte espace) *
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                  minLength={8}
-                  required
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-                Confirmer le mot de passe *
-                <input
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                  minLength={8}
-                  required
-                />
-              </label>
+              {!isRevalidationMode ? (
+                <>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Mot de passe (compte espace) *
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      minLength={8}
+                      required
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    Confirmer le mot de passe *
+                    <input
+                      type="password"
+                      value={passwordConfirm}
+                      onChange={(e) => setPasswordConfirm(e.target.value)}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      minLength={8}
+                      required
+                    />
+                  </label>
+                </>
+              ) : null}
               <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                 Contact urgence — nom *
                 <input
@@ -564,7 +645,7 @@ export default function MembershipBulletinForm({
             <button
               type="button"
               onClick={goBack}
-              disabled={isLoading}
+              disabled={isLoading || isLoadingToken}
               className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
             >
               Retour
@@ -574,7 +655,7 @@ export default function MembershipBulletinForm({
             <button
               type="button"
               onClick={() => void goNext()}
-              disabled={isLoading}
+              disabled={isLoading || isLoadingToken}
               className="rounded-xl bg-cyan-700 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {isLoading && step === 3 ? "Génération du PDF…" : "Continuer"}
@@ -583,7 +664,7 @@ export default function MembershipBulletinForm({
             <button
               type="button"
               onClick={(event) => void handleConfirm(event)}
-              disabled={isLoading}
+              disabled={isLoading || isLoadingToken}
               className="rounded-xl bg-emerald-700 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {isLoading ? "Envoi en cours…" : "Confirmer et envoyer mon bulletin"}

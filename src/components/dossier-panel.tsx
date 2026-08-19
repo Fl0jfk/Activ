@@ -20,6 +20,7 @@ type DossierPanelProps = {
   disciplineName?: string;
   onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
   onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
+  onRequestBulletinRevalidation: (applicationId: string) => Promise<void>;
   onValidateEspace: (applicationId: string) => Promise<void>;
   onReject: (applicationId: string) => Promise<void>;
   onMessage: (text: string) => void;
@@ -98,6 +99,42 @@ function DocumentRequestBlock({
           Annuler
         </button>
       </div>
+    </div>
+  );
+}
+
+function BulletinRevalidationBlock({
+  applicationId,
+  busy,
+  onRequestBulletinRevalidation,
+}: {
+  applicationId: string;
+  busy: boolean;
+  onRequestBulletinRevalidation: (applicationId: string) => Promise<void>;
+}) {
+  const [sending, setSending] = useState(false);
+
+  return (
+    <div className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3">
+      <p className="text-sm font-semibold text-cyan-950">Bulletin d&apos;adhésion</p>
+      <p className="mt-1 text-xs text-cyan-900/80">
+        Renvoyer un lien sécurisé pour que l&apos;adhérent revalide son bulletin en ligne.
+      </p>
+      <button
+        type="button"
+        disabled={busy || sending}
+        onClick={async () => {
+          setSending(true);
+          try {
+            await onRequestBulletinRevalidation(applicationId);
+          } finally {
+            setSending(false);
+          }
+        }}
+        className="mt-2 rounded-lg border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 disabled:opacity-50"
+      >
+        {sending ? "Envoi…" : "Renvoyer le bulletin d'adhésion"}
+      </button>
     </div>
   );
 }
@@ -355,6 +392,7 @@ export default function DossierPanel({
   disciplineName,
   onUpdate,
   onRequestDocument,
+  onRequestBulletinRevalidation,
   onValidateEspace,
   onReject,
   onMessage,
@@ -394,6 +432,11 @@ export default function DossierPanel({
       <p className="text-sm text-slate-600">{PROCESSING_PHASE_DESCRIPTIONS[phase]}</p>
 
       <ApplicantBlock application={application} />
+      <BulletinRevalidationBlock
+        applicationId={application.id}
+        busy={busy}
+        onRequestBulletinRevalidation={onRequestBulletinRevalidation}
+      />
       <DocumentsBlock
         applicationId={application.id}
         documents={application.documents}

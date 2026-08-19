@@ -72,6 +72,25 @@ export function useClubApplicationActions() {
     }
   }
 
+  async function requestBulletinRevalidation(applicationId: string) {
+    const response = await fetch(`/api/club/applications/${applicationId}/request-bulletin-revalidation`, {
+      method: "POST",
+    });
+    const body = (await response.json()) as { message?: string; secureLink?: string; emailSent?: boolean };
+    if (response.ok) {
+      setMessage(body.message ?? "Demande de revalidation envoyée.");
+      if (!body.emailSent && body.secureLink) {
+        window.prompt(
+          "SMTP non configuré : copiez ce lien de revalidation et transmettez-le à l'adhérent :",
+          body.secureLink,
+        );
+      }
+      reloadAtBureauDossiers();
+    } else {
+      setMessage(body.message ?? "Impossible d'envoyer la demande de revalidation.");
+    }
+  }
+
   return {
     message,
     setMessage,
@@ -79,5 +98,6 @@ export function useClubApplicationActions() {
     validateEspace,
     rejectApplication,
     requestDocument,
+    requestBulletinRevalidation,
   };
 }

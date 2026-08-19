@@ -27,8 +27,15 @@ export default function RegistrationQueue({
   queueFilter,
 }: RegistrationQueueProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const { message, setMessage, updateApplication, validateEspace, rejectApplication, requestDocument } =
-    useClubApplicationActions();
+  const {
+    message,
+    setMessage,
+    updateApplication,
+    validateEspace,
+    rejectApplication,
+    requestDocument,
+    requestBulletinRevalidation,
+  } = useClubApplicationActions();
 
   const filtered = useMemo(
     () => filterApplicationsByQueue(applications, queueFilter),
@@ -102,6 +109,7 @@ export default function RegistrationQueue({
                   disciplineName={disciplineName}
                   onUpdate={updateApplication}
                   onRequestDocument={requestMissingDocument}
+                  onRequestBulletinRevalidation={requestBulletinRevalidation}
                   onValidateEspace={validateEspace}
                   onReject={rejectApplication}
                   onMessage={setMessage}

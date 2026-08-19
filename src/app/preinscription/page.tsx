@@ -5,11 +5,11 @@ import { readSiteData } from "@/lib/site-data";
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ discipline?: string }>;
+  searchParams: Promise<{ discipline?: string; revalidateToken?: string }>;
 };
 
 export default async function PreinscriptionPage({ searchParams }: PageProps) {
-  const { discipline: disciplineParam } = await searchParams;
+  const { discipline: disciplineParam, revalidateToken } = await searchParams;
   const siteData = await readSiteData();
   const disciplines = getActiveDisciplineOptions(siteData);
 
@@ -21,6 +21,7 @@ export default async function PreinscriptionPage({ searchParams }: PageProps) {
     <MembershipBulletinForm
       disciplines={disciplines}
       initialDisciplineId={matchedDiscipline?.id}
+      revalidateToken={revalidateToken}
     />
   );
 }

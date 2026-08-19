@@ -120,11 +120,21 @@ export type DocumentRequestToken = {
   };
 };
 
+export type BulletinRevalidationToken = {
+  token: string;
+  applicationId: string;
+  email: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+};
+
 export type ClubData = {
   members: ClubMember[];
   trialSlots: TrialSlot[];
   applications: RegistrationApplication[];
   documentRequestTokens: DocumentRequestToken[];
+  bulletinRevalidationTokens: BulletinRevalidationToken[];
   coachAbsenceRequests: CoachAbsenceRequest[];
   memberRequests: MemberRequest[];
   updatedAt: string;
@@ -157,6 +167,7 @@ function normalizeClubData(data: ClubData): ClubData {
       membershipBulletin: application.membershipBulletin ?? null,
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
+    bulletinRevalidationTokens: data.bulletinRevalidationTokens ?? [],
     coachAbsenceRequests: data.coachAbsenceRequests ?? [],
     memberRequests: (data.memberRequests ?? []).map((request) => ({
       ...request,
