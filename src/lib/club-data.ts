@@ -113,6 +113,11 @@ export type DocumentRequestToken = {
   createdAt: string;
   expiresAt: string;
   usedAt: string | null;
+  resumeAfterUpload?: {
+    status: ApplicationStatus;
+    dossierPhase: ApplicationDossierPhase;
+    paymentStatus: PaymentStatus;
+  };
 };
 
 export type ClubData = {

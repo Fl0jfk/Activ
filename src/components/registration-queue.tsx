@@ -35,12 +35,8 @@ export default function RegistrationQueue({
     [applications, queueFilter],
   );
 
-  async function requestMissingDocument(applicationId: string) {
-    const label = window.prompt("Quelle pièce demander ? (ex: certificat médical)", "certificat médical");
-    if (!label) {
-      return;
-    }
-    await requestDocument(applicationId, label);
+  async function requestMissingDocument(applicationId: string, documentLabel: string) {
+    await requestDocument(applicationId, documentLabel);
   }
 
   function toggleExpanded(applicationId: string) {

@@ -53,11 +53,18 @@ export function useClubApplicationActions() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ documentLabel }),
     });
-    const body = (await response.json()) as { message?: string; secureLink?: string };
+    const body = (await response.json()) as {
+      message?: string;
+      secureLink?: string;
+      emailSent?: boolean;
+    };
     if (response.ok) {
       setMessage(body.message ?? "Demande envoyée.");
-      if (body.secureLink) {
-        window.prompt("Lien sécurisé (à transmettre si l'e-mail n'est pas parti) :", body.secureLink);
+      if (!body.emailSent && body.secureLink) {
+        window.prompt(
+          "SMTP non configuré : copiez ce lien public et transmettez-le à l'adhérent :",
+          body.secureLink,
+        );
       }
       reloadAtBureauDossiers();
     } else {

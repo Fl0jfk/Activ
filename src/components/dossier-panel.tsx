@@ -19,11 +19,88 @@ type DossierPanelProps = {
   application: RegistrationApplication;
   disciplineName?: string;
   onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
-  onRequestDocument: (applicationId: string) => Promise<void>;
+  onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
   onValidateEspace: (applicationId: string) => Promise<void>;
   onReject: (applicationId: string) => Promise<void>;
   onMessage: (text: string) => void;
 };
+
+function DocumentRequestBlock({
+  applicationId,
+  busy,
+  onRequestDocument,
+}: {
+  applicationId: string;
+  busy: boolean;
+  onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("certificat médical");
+  const [sending, setSending] = useState(false);
+
+  async function submit() {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    setSending(true);
+    try {
+      await onRequestDocument(applicationId, trimmed);
+      setOpen(false);
+      setLabel("certificat médical");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 disabled:opacity-50"
+      >
+        Demander une pièce
+      </button>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:col-span-2">
+      <p className="text-sm font-semibold text-amber-950">Demander une pièce à l&apos;adhérent</p>
+      <p className="mt-1 text-xs text-amber-900/80">
+        Un e-mail avec un lien public sécurisé sera envoyé pour que l&apos;adhérent dépose le document.
+      </p>
+      <label className="mt-2 block text-sm font-medium text-slate-700">
+        Pièce demandée
+        <input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          disabled={busy || sending}
+          placeholder="Ex. certificat médical"
+          className="mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+      </label>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy || sending || !label.trim()}
+          onClick={() => void submit()}
+          className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {sending ? "Envoi…" : "Envoyer la demande par e-mail"}
+        </button>
+        <button
+          type="button"
+          disabled={busy || sending}
+          onClick={() => setOpen(false)}
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function PhaseStepper({ current }: { current: DossierProcessingPhase }) {
   const steps: DossierProcessingPhase[] = [1, 2, 3, 4, 5];
@@ -423,7 +500,8 @@ export default function DossierPanel({
           <p className="text-sm font-medium text-slate-800">
             L&apos;espace membre est actif. Contrôlez les pièces jointes.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
             <button
               type="button"
               disabled={busy}
@@ -442,14 +520,6 @@ export default function DossierPanel({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run(() => onRequestDocument(application.id))}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
-            >
-              Demander une pièce
-            </button>
-            <button
-              type="button"
-              disabled={busy}
               onClick={() =>
                 void run(() => onUpdate(application.id, { dossierPhase: "espace_validation", status: "pending" }))
               }
@@ -457,6 +527,12 @@ export default function DossierPanel({
             >
               Revenir à la validation de l&apos;espace
             </button>
+            </div>
+            <DocumentRequestBlock
+              applicationId={application.id}
+              busy={busy}
+              onRequestDocument={onRequestDocument}
+            />
           </div>
         </div>
       ) : null}
@@ -479,7 +555,8 @@ export default function DossierPanel({
               ))}
             </select>
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
             <button
               type="button"
               disabled={busy}
@@ -504,14 +581,6 @@ export default function DossierPanel({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run(() => onRequestDocument(application.id))}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50"
-            >
-              Demander une pièce
-            </button>
-            <button
-              type="button"
-              disabled={busy}
               onClick={() =>
                 void run(() =>
                   onUpdate(application.id, {
@@ -525,6 +594,12 @@ export default function DossierPanel({
             >
               Revenir à la vérification des pièces
             </button>
+            </div>
+            <DocumentRequestBlock
+              applicationId={application.id}
+              busy={busy}
+              onRequestDocument={onRequestDocument}
+            />
           </div>
         </div>
       ) : null}
@@ -549,6 +624,11 @@ export default function DossierPanel({
               </p>
             ) : null}
           </div>
+          <DocumentRequestBlock
+            applicationId={application.id}
+            busy={busy}
+            onRequestDocument={onRequestDocument}
+          />
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessClubOperations, getCurrentUserContext } from "@/lib/clerk";
 import { readClubData, writeClubData } from "@/lib/club-data";
+import { getApplicationDossierPhase } from "@/lib/dossier-workflow";
+import {
+  buildDocumentRequestEmail,
+  buildDocumentUploadUrl,
+} from "@/lib/document-request-email";
 import { sendEmail } from "@/lib/mailer";
 
 function randomToken() {
@@ -26,34 +31,61 @@ export async function POST(
     return NextResponse.json({ message: "Demande introuvable." }, { status: 404 });
   }
 
+  if (!application.email?.trim()) {
+    return NextResponse.json({ message: "Aucune adresse e-mail sur ce dossier." }, { status: 400 });
+  }
+
+  const previousPhase = getApplicationDossierPhase(application);
+  const resumeAfterUpload = {
+    status: application.status,
+    dossierPhase: previousPhase,
+    paymentStatus: application.paymentStatus,
+  };
+
   const token = randomToken();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
+
+  for (const entry of data.documentRequestTokens) {
+    if (entry.applicationId === applicationId && !entry.usedAt) {
+      entry.usedAt = new Date().toISOString();
+    }
+  }
+
   data.documentRequestTokens.push({
     token,
     applicationId,
-    email: application.email,
+    email: application.email.trim(),
     requestedDocumentLabel: documentLabel,
     createdAt: new Date().toISOString(),
     expiresAt,
     usedAt: null,
+    resumeAfterUpload,
   });
+
   application.status = "awaiting_document";
-  application.dossierPhase = "documents";
+  if (previousPhase !== "finalized") {
+    application.dossierPhase = "documents";
+  }
+
   await writeClubData(data);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const secureLink = `${appUrl}/piece-jointe?token=${encodeURIComponent(token)}`;
+  const secureLink = buildDocumentUploadUrl(token);
+  const emailContent = buildDocumentRequestEmail({
+    documentLabel,
+    secureLink,
+    expiresAt,
+    memberName: application.fullName,
+  });
   const sendResult = await sendEmail({
-    to: application.email,
-    subject: "Demande de document - pre-inscription",
-    text: `Bonjour,\n\nMerci de deposer votre ${documentLabel} via ce lien securise: ${secureLink}\nCe lien expire le ${new Date(expiresAt).toLocaleDateString("fr-FR")}.\n`,
-    html: `<p>Bonjour,</p><p>Merci de deposer votre <strong>${documentLabel}</strong> via ce lien securise :</p><p><a href="${secureLink}">${secureLink}</a></p><p>Ce lien expire le ${new Date(expiresAt).toLocaleDateString("fr-FR")}.</p>`,
+    to: application.email.trim(),
+    ...emailContent,
   });
 
   return NextResponse.json({
     message: sendResult.sent
-      ? "Demande de document envoyee par email."
-      : "Lien genere (SMTP non configure). Envoie ce lien manuellement.",
+      ? `E-mail envoyé à ${application.email.trim()} avec le lien de dépôt.`
+      : "Lien généré (SMTP non configuré). Copiez-le et transmettez-le à l'adhérent.",
     secureLink,
+    emailSent: sendResult.sent,
   });
 }
