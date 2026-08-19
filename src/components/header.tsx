@@ -49,8 +49,8 @@ function MobileMenu({
   return (
     <>
       <div className="absolute inset-0 bg-white/94 backdrop-blur-2xl" />
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-10 pt-6">
-        <nav className="flex flex-col" aria-label="Menu principal">
+      <div className="relative flex h-full flex-col overflow-hidden px-6 pb-8 pt-6">
+        <nav className="flex flex-1 flex-col" aria-label="Menu principal">
           {navItems(showNewsNav, showGalleryNav).map((item) =>
             item.isAppRoute ? (
               <Link
