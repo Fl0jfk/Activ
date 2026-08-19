@@ -76,7 +76,7 @@ function ApplicantBlock({ application }: { application: RegistrationApplication 
         </div>
         <div>
           <dt className="text-slate-500">E-mail</dt>
-          <dd className="font-medium text-slate-900">{application.email}</dd>
+          <dd className="text-break font-medium text-slate-900">{application.email}</dd>
         </div>
         <div>
           <dt className="text-slate-500">Téléphone</dt>
@@ -190,7 +190,7 @@ function DocumentsBlock({
                 key={`${doc.url}-${doc.uploadedAt}`}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
               >
-                <span className="font-medium text-slate-900">
+                <span className="text-break font-medium text-slate-900">
                   {doc.name}
                   {isBulletin ? (
                     <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
@@ -202,7 +202,7 @@ function DocumentsBlock({
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-semibold text-cyan-700 underline"
+                  className="text-break shrink-0 text-xs font-semibold text-cyan-700 underline"
                 >
                   Ouvrir
                 </a>

@@ -75,19 +75,19 @@ export default function RegistrationQueue({
                 toggleExpanded(application.id);
               }
             }}
-            className={`w-full cursor-pointer rounded-xl border p-4 text-left transition hover:ring-2 hover:ring-cyan-200 ${
+            className={`w-full min-w-0 cursor-pointer rounded-xl border p-4 text-left transition hover:ring-2 hover:ring-cyan-200 ${
               isExpanded ? "border-cyan-300 bg-cyan-50/40 ring-2 ring-cyan-300" : "border-slate-200 bg-white"
             }`}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase text-cyan-700">{disciplineName}</p>
                 <p className="font-semibold text-slate-900">{application.fullName}</p>
-                <p className="text-sm text-slate-600">{application.email}</p>
+                <p className="text-break text-sm text-slate-600">{application.email}</p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 sm:text-right">
                 <span
-                  className={`inline-block max-w-[11rem] rounded-full px-2 py-1 text-xs font-semibold leading-snug ${stepBadgeClass(step)}`}
+                  className={`inline-block max-w-full rounded-full px-2 py-1 text-xs font-semibold leading-snug sm:max-w-[11rem] ${stepBadgeClass(step)}`}
                 >
                   {DOSSIER_STEP_LABELS[step]}
                 </span>

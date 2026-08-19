@@ -102,7 +102,7 @@ export default function BureauCockpit({
   }
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-6xl space-y-6 px-4 sm:px-8">
+    <div className="mx-auto mt-6 min-w-0 w-full max-w-6xl space-y-6 overflow-x-hidden px-4 sm:px-8">
       <header>
         <h1 className="text-2xl font-bold text-slate-900">Cockpit bureau</h1>
         <p className="mt-1 text-slate-600">
@@ -112,7 +112,7 @@ export default function BureauCockpit({
         </p>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid min-w-0 gap-3 sm:grid-cols-3">
         {kpiButtons.map((kpi) => (
           <button
             key={kpi.id}
@@ -134,7 +134,7 @@ export default function BureauCockpit({
 
       <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-slate-900">Demandes des membres</h2>
         <p className="mt-1 text-sm text-slate-600">
           Demandes envoyées depuis l&apos;espace personnel. Passage en « En cours » puis « Traitée »
@@ -165,7 +165,7 @@ export default function BureauCockpit({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           className="flex w-full items-center justify-between px-5 py-4 text-left"
@@ -202,7 +202,7 @@ export default function BureauCockpit({
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           className="flex w-full items-center justify-between px-5 py-4 text-left"
@@ -232,7 +232,7 @@ export default function BureauCockpit({
       </section>
 
       {canApproveCoachAbsences ? (
-        <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
+        <section className="min-w-0 rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-bold text-slate-900">
             Absences coach
             {coachAbsencePendingCount > 0 ? (
@@ -251,7 +251,7 @@ export default function BureauCockpit({
         </section>
       ) : null}
       {canManageSite ? (
-        <section>
+        <section className="min-w-0 overflow-x-hidden">
           <h2 className="mb-3 text-xl font-bold text-slate-900">Contenu du site</h2>
           <p className="mb-4 text-sm text-slate-600">
             Informations générales, tampon pour les reçus, organigramme et disciplines.

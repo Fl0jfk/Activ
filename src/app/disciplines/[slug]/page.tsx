@@ -218,7 +218,7 @@ export default async function DisciplinePage({ params, searchParams }: PageProps
                   <p className="mt-1 text-sm text-slate-600">Lieu : {event.location}</p>
                 ) : null}
                 {event.description ? (
-                  <p className="mt-2 text-slate-700">{truncateNewsDescription(event.description)}</p>
+                  <p className="text-break mt-2 text-slate-700">{truncateNewsDescription(event.description)}</p>
                 ) : null}
                 <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
                   Lire la suite →

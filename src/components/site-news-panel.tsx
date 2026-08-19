@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AssociationData, SiteNewsItem, SitePoll } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
 import SiteImageField from "@/components/site-image-field";
+import { RichTextContent } from "@/lib/chat-message-links";
 import {
   ASSOCIATION_GENERAL_NEWS,
   NEWS_KIND_OPTIONS,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/site-news";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900";
+  "w-full min-w-0 max-w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900";
 
 type PollDraft = {
   id: string | null;
@@ -374,6 +375,9 @@ export default function SiteNewsPanel() {
               rows={Math.max(6, draft.description.split("\n").length + 2)}
               placeholder="Détails pratiques, inscription, public visé…"
             />
+            <span className="text-xs font-normal text-slate-500">
+              Liens : collez une adresse web (https://…) ou utilisez [texte du lien](https://…).
+            </span>
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
             Texte du bouton (carte accueil)
@@ -517,7 +521,7 @@ export default function SiteNewsPanel() {
   }
 
   return (
-    <section className="rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50 p-5 shadow-sm">
+    <section className="min-w-0 overflow-x-hidden rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50 p-5 shadow-sm">
       <div>
         <h2 className="text-lg font-bold text-slate-900">Actualités du site</h2>
         <p className="mt-1 text-sm text-slate-600">
@@ -589,7 +593,7 @@ export default function SiteNewsPanel() {
                         <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
                       ) : null}
                       {item.description ? (
-                        <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+                        <RichTextContent content={item.description} className="mt-2 text-sm text-slate-600" />
                       ) : null}
                       <p className="mt-2 text-xs font-semibold text-orange-800">
                         Bouton : {item.ctaLabel?.trim() || "Lire la suite"}

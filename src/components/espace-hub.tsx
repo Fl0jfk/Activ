@@ -83,7 +83,7 @@ export default function EspaceHub({
   }, [canAccessClubOperations]);
 
   return (
-    <main className="pb-8">
+    <main className="min-w-0 overflow-x-hidden pb-8">
       <section className="mx-auto mt-4 flex w-full max-w-6xl flex-wrap gap-2 px-4 sm:px-8">
         <button
           type="button"

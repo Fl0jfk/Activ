@@ -60,7 +60,11 @@ body::-webkit-scrollbar {
 
 @layer components {
   .panel {
-    @apply rounded-3xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(8,47,73,0.08)] backdrop-blur-sm;
+    @apply min-w-0 rounded-3xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(8,47,73,0.08)] backdrop-blur-sm;
+  }
+
+  .text-break {
+    @apply min-w-0 break-words [overflow-wrap:anywhere];
   }
 
   .panel-title {

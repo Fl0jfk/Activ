@@ -2,10 +2,10 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
 const MARKDOWN_LINK = /\[([^\]]+)\]\(([^)]+)\)/g;
-const INTERNAL_PATH =
-  /(?<![(\[])(\/(?:contact|preinscription|disciplines\/[a-z0-9-]+(?:\/essai)?))(?![\w/-])/gi;
+const INLINE_LINK =
+  /(?<![(\[])((?:https?:\/\/|mailto:)[^\s<>[\]()]+|\/(?:contact|preinscription|disciplines\/[a-z0-9-]+(?:\/essai)?))(?![\w/-])/gi;
 
-const linkClassName = "font-semibold text-cyan-800 underline hover:text-cyan-950";
+const linkClassName = "font-semibold text-cyan-800 underline hover:text-cyan-950 break-all";
 
 function renderHref(label: string, href: string, key: string): ReactNode {
   const trimmed = href.trim();
@@ -16,7 +16,7 @@ function renderHref(label: string, href: string, key: string): ReactNode {
       </Link>
     );
   }
-  if (/^https?:\/\//i.test(trimmed)) {
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("mailto:")) {
     return (
       <a key={key} href={trimmed} target="_blank" rel="noopener noreferrer" className={linkClassName}>
         {label}
@@ -26,19 +26,25 @@ function renderHref(label: string, href: string, key: string): ReactNode {
   return <Fragment key={key}>{label}</Fragment>;
 }
 
-function linkifyBarePaths(text: string, keyPrefix: string): ReactNode[] {
+function linkLabelForMatch(match: string): string {
+  if (match.startsWith("/")) {
+    return match === "/contact" ? "page contact" : match;
+  }
+  return match;
+}
+
+function linkifyInlineText(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  INTERNAL_PATH.lastIndex = 0;
-  while ((match = INTERNAL_PATH.exec(text)) !== null) {
+  INLINE_LINK.lastIndex = 0;
+  while ((match = INLINE_LINK.exec(text)) !== null) {
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
     }
-    const path = match[1];
-    const label = path === "/contact" ? "page contact" : path;
-    nodes.push(renderHref(label, path, `${keyPrefix}-path-${match.index}`));
-    lastIndex = INTERNAL_PATH.lastIndex;
+    const href = match[1];
+    nodes.push(renderHref(linkLabelForMatch(href), href, `${keyPrefix}-inline-${match.index}`));
+    lastIndex = INLINE_LINK.lastIndex;
   }
   if (lastIndex < text.length) {
     nodes.push(text.slice(lastIndex));
@@ -46,25 +52,38 @@ function linkifyBarePaths(text: string, keyPrefix: string): ReactNode[] {
   return nodes.length > 0 ? nodes : [text];
 }
 
-export function renderChatMessageContent(content: string): ReactNode {
+export function renderRichTextContent(content: string): ReactNode {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   MARKDOWN_LINK.lastIndex = 0;
   while ((match = MARKDOWN_LINK.exec(content)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(
-        ...linkifyBarePaths(content.slice(lastIndex, match.index), `pre-${match.index}`),
-      );
+      nodes.push(...linkifyInlineText(content.slice(lastIndex, match.index), `pre-${match.index}`));
     }
     nodes.push(renderHref(match[1], match[2], `md-${match.index}`));
     lastIndex = MARKDOWN_LINK.lastIndex;
   }
   if (lastIndex < content.length) {
-    nodes.push(...linkifyBarePaths(content.slice(lastIndex), `tail-${lastIndex}`));
+    nodes.push(...linkifyInlineText(content.slice(lastIndex), `tail-${lastIndex}`));
   }
   if (nodes.length === 0) {
-    return linkifyBarePaths(content, "full");
+    return linkifyInlineText(content, "full");
   }
   return <>{nodes}</>;
 }
+
+export function RichTextContent({
+  content,
+  className = "",
+}: {
+  content: string;
+  className?: string;
+}) {
+  return (
+    <div className={`text-break whitespace-pre-wrap ${className}`.trim()}>{renderRichTextContent(content)}</div>
+  );
+}
+
+/** @deprecated Use renderRichTextContent */
+export const renderChatMessageContent = renderRichTextContent;

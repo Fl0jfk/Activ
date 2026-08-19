@@ -302,7 +302,9 @@ function NewsSlide({
         <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
         {item.location ? <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p> : null}
         {item.description ? (
-          <p className="mt-2 text-sm text-slate-700">{truncateNewsDescription(item.description, 220)}</p>
+          <p className="text-break mt-2 text-sm text-slate-700">
+            {truncateNewsDescription(item.description, 220)}
+          </p>
         ) : null}
         <span className="mt-3 inline-block text-sm font-semibold text-orange-800">
           {(item.ctaLabel?.trim() || "Lire la suite")} →

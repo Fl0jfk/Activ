@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LinkedPollsPanel from "@/components/linked-polls-panel";
+import { RichTextContent } from "@/lib/chat-message-links";
 import { readSiteData } from "@/lib/site-data";
 import {
   formatEventSchedule,
@@ -55,9 +56,7 @@ export default async function ActualitePage({ params }: PageProps) {
         ) : null}
 
         {item.description ? (
-          <div className="mt-6 whitespace-pre-wrap text-base leading-relaxed text-slate-800">
-            {item.description}
-          </div>
+          <RichTextContent content={item.description} className="mt-6 text-base leading-relaxed text-slate-800" />
         ) : null}
 
         {gallery.length > 0 ? (

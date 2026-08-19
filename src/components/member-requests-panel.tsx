@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import type { MemberRequest, MemberRequestDocument } from "@/lib/club-data";
+import { RichTextContent } from "@/lib/chat-message-links";
 import {
   MEMBER_REQUEST_STATUS_LABELS,
   memberRequestStatusBadgeClass,
@@ -151,7 +152,7 @@ export default function MemberRequestsPanel() {
             return (
               <article
                 key={request.id}
-                className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-4"
+                className="min-w-0 rounded-xl border border-cyan-200 bg-cyan-50/70 p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-slate-900">{request.subject}</p>
@@ -161,7 +162,7 @@ export default function MemberRequestsPanel() {
                     {MEMBER_REQUEST_STATUS_LABELS[request.status]}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-slate-700">
+                <p className="text-break mt-1 text-sm text-slate-700">
                   {request.memberName} — {request.memberEmail}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -174,13 +175,13 @@ export default function MemberRequestsPanel() {
                     minute: "2-digit",
                   })}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{request.message}</p>
+                <RichTextContent content={request.message} className="mt-2 text-sm text-slate-800" />
                 {request.attachment ? (
                   <a
                     href={`/api/club/member-requests/${request.id}/file?which=member`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-2 inline-block text-sm font-semibold text-cyan-900 underline"
+                    className="text-break mt-2 inline-block max-w-full text-sm font-semibold text-cyan-900 underline"
                   >
                     Pièce jointe membre ({request.attachment.name})
                   </a>
@@ -258,7 +259,7 @@ export default function MemberRequestsPanel() {
                   <span className="font-normal text-slate-500">— {request.memberName}</span>
                 </p>
                 {request.bureauReply ? (
-                  <p className="mt-1 whitespace-pre-wrap text-slate-700">{request.bureauReply}</p>
+                  <RichTextContent content={request.bureauReply} className="mt-1 text-slate-700" />
                 ) : null}
               </li>
             ))}
