@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AssociationData, SiteNewsItem } from "@/lib/site-data-types";
+import type { AssociationData, SiteNewsItem, SitePoll } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
 import SiteImageField from "@/components/site-image-field";
 import {
@@ -18,8 +18,18 @@ import {
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900";
 
+type PollDraft = {
+  id: string | null;
+  question: string;
+  options: string[];
+};
+
 function disciplineSelectValue(disciplineId: string | null): string {
   return disciplineId ?? ASSOCIATION_GENERAL_NEWS;
+}
+
+function emptyPollDraft(): PollDraft {
+  return { id: null, question: "", options: ["", ""] };
 }
 
 export default function SiteNewsPanel() {
@@ -28,6 +38,11 @@ export default function SiteNewsPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraft] = useState<SiteNewsItem | null>(null);
+  const [pollDraft, setPollDraft] = useState<PollDraft>({
+    id: null,
+    question: "",
+    options: ["", ""],
+  });
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -76,20 +91,36 @@ export default function SiteNewsPanel() {
 
   function startCreate() {
     setDraft({ ...emptySiteNewsItem(), id: randomId("news") });
+    setPollDraft(emptyPollDraft());
     setStatusMessage("");
   }
 
   function startEdit(item: SiteNewsItem) {
-    setDraft({ ...item });
+    setDraft({
+      ...item,
+      ctaLabel:
+        item.ctaLabel?.trim() || (item.kind === "sondage" ? "Donner son avis" : "Lire la suite"),
+    });
+    const linked = data?.polls.find((poll) => poll.newsId === item.id) ?? null;
+    setPollDraft(
+      linked
+        ? { id: linked.id, question: linked.question, options: linked.options.map((option) => option.label) }
+        : emptyPollDraft(),
+    );
     setStatusMessage("");
   }
 
   function cancelEdit() {
     setDraft(null);
+    setPollDraft(emptyPollDraft());
   }
 
   function updateDraft(patch: Partial<SiteNewsItem>) {
     setDraft((previous) => (previous ? { ...previous, ...patch } : previous));
+  }
+
+  function updatePollDraft(patch: Partial<PollDraft>) {
+    setPollDraft((previous) => ({ ...previous, ...patch }));
   }
 
   async function uploadGalleryFiles(files: FileList | null) {
@@ -147,8 +178,48 @@ export default function SiteNewsPanel() {
       galleryImages: Array.isArray(draft.galleryImages) ? draft.galleryImages : [],
     };
 
+    const isPollNews = normalized.kind === "sondage";
+    const pollQuestion = pollDraft.question.trim();
+    const pollOptions = pollDraft.options.map((option) => option.trim()).filter(Boolean);
+    if (isPollNews) {
+      if (!pollQuestion) {
+        setStatusMessage("Ajoutez la question du sondage.");
+        return null;
+      }
+      if (pollOptions.length < 2) {
+        setStatusMessage("Ajoutez au moins deux réponses au sondage.");
+        return null;
+      }
+    }
+
     const withoutDuplicate = data.news.filter((item) => item.id !== normalized.id);
-    return { ...data, news: sortNewsByDateDesc([...withoutDuplicate, normalized]) };
+    const nextPolls = data.polls.filter(
+      (poll) => (poll.newsId === normalized.id ? isPollNews : true),
+    );
+    if (isPollNews) {
+      const existingPoll = pollDraft.id ? data.polls.find((poll) => poll.id === pollDraft.id) : undefined;
+      const options = pollOptions.map((label, index) => ({
+        id: existingPoll?.options[index]?.id ?? randomId("opt"),
+        label,
+        votes: existingPoll?.options[index]?.votes ?? 0,
+      }));
+      const nextPoll: SitePoll = {
+        id: existingPoll?.id ?? randomId("poll"),
+        question: pollQuestion,
+        options,
+        newsId: normalized.id,
+        status: existingPoll?.status ?? "open",
+        createdAt: existingPoll?.createdAt ?? new Date().toISOString(),
+        closedAt: existingPoll?.closedAt ?? null,
+        voterHashes: existingPoll?.voterHashes ?? [],
+      };
+      nextPolls.unshift(nextPoll);
+    }
+    return {
+      ...data,
+      news: sortNewsByDateDesc([...withoutDuplicate, normalized]),
+      polls: nextPolls,
+    };
   }
 
   async function applyDraft() {
@@ -183,6 +254,7 @@ export default function SiteNewsPanel() {
   }
 
   const busy = isLoading || isSaving;
+  const editingNewsId = draft && data.news.some((item) => item.id === draft.id) ? draft.id : null;
 
   return (
     <section className="rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50 p-5 shadow-sm">
@@ -207,8 +279,11 @@ export default function SiteNewsPanel() {
       </div>
 
       {draft ? (
-        <article className="mt-4 rounded-xl border border-orange-300 bg-white p-4">
-          <h3 className="text-base font-semibold text-slate-900">
+        <article className="mt-4 rounded-xl border-2 border-cyan-400 bg-cyan-50/40 p-4 shadow-sm">
+          <p className="rounded-lg bg-cyan-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+            Édition en cours
+          </p>
+          <h3 className="mt-3 text-base font-semibold text-slate-900">
             {sortedNews.some((item) => item.id === draft.id) ? "Modifier" : "Nouvelle"} actualité
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -238,7 +313,16 @@ export default function SiteNewsPanel() {
               Type d&apos;événement
               <select
                 value={draft.kind}
-                onChange={(event) => updateDraft({ kind: event.target.value })}
+                onChange={(event) => {
+                  const nextKind = event.target.value;
+                  updateDraft({
+                    kind: nextKind,
+                    ctaLabel: nextKind === "sondage" ? "Donner son avis" : draft.ctaLabel,
+                  });
+                  if (nextKind === "sondage" && !pollDraft.question.trim()) {
+                    setPollDraft(emptyPollDraft());
+                  }
+                }}
                 disabled={busy}
                 className={inputClass}
               >
@@ -308,7 +392,7 @@ export default function SiteNewsPanel() {
                 onChange={(event) => updateDraft({ description: event.target.value })}
                 disabled={busy}
                 className={inputClass}
-                rows={3}
+                rows={Math.max(6, draft.description.split("\n").length + 2)}
                 placeholder="Détails pratiques, inscription, public visé…"
               />
             </label>
@@ -322,6 +406,63 @@ export default function SiteNewsPanel() {
                 placeholder="Ex. Donner son avis, Cliquer pour voter…"
               />
             </label>
+            {draft.kind === "sondage" ? (
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 sm:col-span-2">
+                <p className="text-sm font-semibold text-violet-900">Sondage lié à cette actualité</p>
+                <label className="mt-2 flex flex-col gap-1 text-sm font-medium text-slate-700">
+                  Question du sondage
+                  <input
+                    value={pollDraft.question}
+                    onChange={(event) => updatePollDraft({ question: event.target.value })}
+                    disabled={busy}
+                    className={inputClass}
+                    placeholder="Ex. Cette activité vous intéresse ?"
+                  />
+                </label>
+                <div className="mt-2 space-y-2">
+                  {pollDraft.options.map((option, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        value={option}
+                        onChange={(event) => {
+                          const next = [...pollDraft.options];
+                          next[index] = event.target.value;
+                          updatePollDraft({ options: next });
+                        }}
+                        disabled={busy}
+                        className={inputClass}
+                        placeholder={`Réponse ${index + 1}`}
+                      />
+                      {pollDraft.options.length > 2 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updatePollDraft({
+                              options: pollDraft.options.filter((_, optionIndex) => optionIndex !== index),
+                            })
+                          }
+                          disabled={busy}
+                          className="shrink-0 rounded-lg border border-slate-300 px-2 text-sm font-semibold text-slate-600"
+                          aria-label="Retirer cette réponse"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  {pollDraft.options.length < 8 ? (
+                    <button
+                      type="button"
+                      onClick={() => updatePollDraft({ options: [...pollDraft.options, ""] })}
+                      disabled={busy}
+                      className="text-sm font-semibold text-violet-800 disabled:opacity-50"
+                    >
+                      + Ajouter une réponse
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <SiteImageField
               label="Photo principale"
               helpText="Affichée sur l'accueil et en tête de l'article."
@@ -398,7 +539,14 @@ export default function SiteNewsPanel() {
       <ul className="mt-4 space-y-3">
         {sortedNews.length > 0 ? (
           sortedNews.map((item) => (
-            <li key={item.id} className="rounded-xl border border-orange-200 bg-white p-4">
+            <li
+              key={item.id}
+              className={`rounded-xl border bg-white p-4 transition ${
+                editingNewsId === item.id
+                  ? "scale-[1.01] border-cyan-400 shadow-md ring-2 ring-cyan-200"
+                  : "border-orange-200"
+              }`}
+            >
               <div className="flex flex-col gap-3">
                 <div className="flex gap-3">
                   {item.imageUrl ? (
@@ -412,6 +560,11 @@ export default function SiteNewsPanel() {
                     />
                   ) : null}
                   <div className="min-w-0 flex-1">
+                    {editingNewsId === item.id ? (
+                      <p className="mb-1 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+                        Vous modifiez cette actualité
+                      </p>
+                    ) : null}
                     <p className="text-xs font-semibold uppercase text-orange-700">
                       {newsKindLabel(item.kind)} ·{" "}
                       {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
@@ -424,6 +577,9 @@ export default function SiteNewsPanel() {
                     {item.description ? (
                       <p className="mt-2 text-sm text-slate-600">{item.description}</p>
                     ) : null}
+                    <p className="mt-2 text-xs font-semibold text-orange-800">
+                      Bouton : {item.ctaLabel?.trim() || "Lire la suite"}
+                    </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">

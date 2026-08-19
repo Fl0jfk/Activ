@@ -7,6 +7,7 @@ export const NEWS_KIND_OPTIONS = [
   { value: "presentation", label: "Présentation / nouvelle discipline" },
   { value: "stage", label: "Stage" },
   { value: "portes_ouvertes", label: "Portes ouvertes" },
+  { value: "sondage", label: "Sondage" },
   { value: "evenement", label: "Événement association" },
   { value: "autre", label: "Autre" },
 ] as const;
