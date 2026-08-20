@@ -95,7 +95,22 @@ function normalizePoll(poll: Partial<SitePoll> | null | undefined): SitePoll | n
 
 function normalizePolls(raw: unknown): SitePoll[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((poll) => normalizePoll(poll as Partial<SitePoll>)).filter((poll): poll is SitePoll => poll !== null);
+  const polls = raw
+    .map((poll) => normalizePoll(poll as Partial<SitePoll>))
+    .filter((poll): poll is SitePoll => poll !== null);
+
+  // Une actualité ne peut avoir qu'un seul sondage lié : garder le plus récent.
+  const seenNewsIds = new Set<string>();
+  const deduped: SitePoll[] = [];
+  const sorted = [...polls].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const poll of sorted) {
+    if (poll.newsId) {
+      if (seenNewsIds.has(poll.newsId)) continue;
+      seenNewsIds.add(poll.newsId);
+    }
+    deduped.push(poll);
+  }
+  return deduped;
 }
 
 type LegacyDisciplineEvent = {

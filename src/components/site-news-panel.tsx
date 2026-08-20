@@ -194,11 +194,16 @@ export default function SiteNewsPanel() {
     }
 
     const withoutDuplicate = data.news.filter((item) => item.id !== normalized.id);
+    // Remplacer le sondage lié (ne pas le garder + en ajouter un autre = doublons).
+    const existingPoll =
+      (pollDraft.id ? data.polls.find((poll) => poll.id === pollDraft.id) : undefined) ??
+      data.polls.find((poll) => poll.newsId === normalized.id);
     const nextPolls = data.polls.filter(
-      (poll) => (poll.newsId === normalized.id ? isPollNews : true),
+      (poll) =>
+        poll.newsId !== normalized.id &&
+        !(existingPoll && poll.id === existingPoll.id),
     );
     if (isPollNews) {
-      const existingPoll = pollDraft.id ? data.polls.find((poll) => poll.id === pollDraft.id) : undefined;
       const options = pollOptions.map((label, index) => ({
         id: existingPoll?.options[index]?.id ?? randomId("opt"),
         label,
