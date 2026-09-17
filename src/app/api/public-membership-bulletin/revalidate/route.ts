@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { readClubData, writeClubData } from "@/lib/club-data";
 import {
@@ -10,6 +10,8 @@ import { buildMembershipBulletinPdf } from "@/lib/membership-bulletin-pdf";
 import { isBulletinRevalidationTokenActive } from "@/lib/bulletin-revalidation-email";
 import { sendEmail } from "@/lib/mailer";
 import { uploadBytesToS3 } from "@/lib/s3-upload";
+
+export const maxDuration = 60;
 
 function readToken(request: NextRequest): string {
   return request.nextUrl.searchParams.get("token")?.trim() ?? "";
@@ -85,18 +87,21 @@ export async function POST(request: NextRequest) {
   tokenEntry.usedAt = new Date().toISOString();
   await writeClubData(data);
 
-  await sendEmail({
-    to: application.email,
-    subject: "[Activ'] Votre bulletin d'adhésion revalidé",
-    text: "Bonjour,\n\nVotre bulletin d'adhésion a bien été revalidé.\nVous trouverez votre copie signée en pièce jointe.\n\nSportivement,\nL'équipe Activ'",
-    html: "<p>Bonjour,</p><p>Votre bulletin d'adhésion a bien été revalidé.</p><p>Vous trouverez votre copie signée en pièce jointe.</p><p>Sportivement,<br/>L'équipe Activ'</p>",
-    attachments: [
-      {
-        filename: uploadedPdf.name,
-        content: pdfBytes,
-        contentType: "application/pdf",
-      },
-    ],
+  const recipientEmail = application.email;
+  after(async () => {
+    await sendEmail({
+      to: recipientEmail,
+      subject: "[Activ'] Votre bulletin d'adhésion revalidé",
+      text: "Bonjour,\n\nVotre bulletin d'adhésion a bien été revalidé.\nVous trouverez votre copie signée en pièce jointe.\n\nSportivement,\nL'équipe Activ'",
+      html: "<p>Bonjour,</p><p>Votre bulletin d'adhésion a bien été revalidé.</p><p>Vous trouverez votre copie signée en pièce jointe.</p><p>Sportivement,<br/>L'équipe Activ'</p>",
+      attachments: [
+        {
+          filename: uploadedPdf.name,
+          content: pdfBytes,
+          contentType: "application/pdf",
+        },
+      ],
+    });
   });
 
   return jsonOk({ message: "Bulletin revalidé avec succès." });

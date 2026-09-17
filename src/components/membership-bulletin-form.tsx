@@ -39,6 +39,32 @@ function formatDateFr(isoDate: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Safari renvoie "The string did not match the expected pattern" si on parse du non-JSON. */
+async function readJsonMessage(
+  response: Response,
+): Promise<{ message?: string; ok: boolean }> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return {
+      ok: response.ok,
+      message: response.ok
+        ? undefined
+        : `Envoi impossible (erreur serveur ${response.status}).`,
+    };
+  }
+  try {
+    const payload = JSON.parse(text) as { message?: string };
+    return { ok: response.ok, message: payload.message };
+  } catch {
+    return {
+      ok: false,
+      message: response.ok
+        ? "Réponse serveur invalide. Réessayez dans un instant."
+        : `Envoi impossible (erreur serveur ${response.status}). Réessayez.`,
+    };
+  }
+}
+
 export default function MembershipBulletinForm({
   disciplines,
   initialDisciplineId,
@@ -234,7 +260,7 @@ export default function MembershipBulletinForm({
           body: JSON.stringify(buildPayload()),
         });
         if (!response.ok) {
-          const payload = (await response.json()) as { message?: string };
+          const payload = await readJsonMessage(response);
           throw new Error(payload.message ?? "Impossible de générer l'aperçu PDF.");
         }
         const blob = await response.blob();
@@ -242,7 +268,12 @@ export default function MembershipBulletinForm({
         setPreviewUrl(URL.createObjectURL(blob));
         setStep(4);
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Erreur d'aperçu.");
+        const raw = error instanceof Error ? error.message : "Erreur d'aperçu.";
+        setMessage(
+          /did not match the expected pattern/i.test(raw)
+            ? "Impossible de générer l'aperçu. Réessayez."
+            : raw,
+        );
       } finally {
         setIsLoading(false);
       }
@@ -281,13 +312,22 @@ export default function MembershipBulletinForm({
               }),
         }),
       });
-      const payload = (await response.json()) as { message?: string };
-      if (!response.ok) {
+      const payload = await readJsonMessage(response);
+      if (!payload.ok) {
         throw new Error(payload.message ?? "Envoi impossible.");
       }
       router.push(isRevalidationMode ? "/?bulletin=revalidated" : "/?preregistration=received");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Erreur d'envoi.");
+      const raw = error instanceof Error ? error.message : "Erreur d'envoi.";
+      const isSafariPatternNoise =
+        /did not match the expected pattern/i.test(raw) ||
+        /unexpected end of (json )?input/i.test(raw) ||
+        /unexpected token/i.test(raw);
+      setMessage(
+        isSafariPatternNoise
+          ? "L'envoi a échoué ou a été interrompu. Vérifiez votre connexion et réessayez."
+          : raw,
+      );
       setIsLoading(false);
     }
   }
@@ -409,8 +449,12 @@ export default function MembershipBulletinForm({
                       onChange={(e) => setPassword(e.target.value)}
                       className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
                       minLength={8}
+                      autoComplete="new-password"
                       required
                     />
+                    <span className="text-xs font-normal text-slate-500">
+                      Au moins 8 caractères, évitez les mots de passe trop simples.
+                    </span>
                   </label>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                     Confirmer le mot de passe *

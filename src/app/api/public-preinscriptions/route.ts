@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { buildMemberClerkMetadata } from "@/lib/clerk";
@@ -21,6 +21,9 @@ import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { readSiteData } from "@/lib/site-data";
 import { uploadBytesToS3 } from "@/lib/s3-upload";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
+
+/** PDF + S3 + Clerk : laisser assez de temps, e-mails hors chemin critique. */
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -129,27 +132,30 @@ async function handleBulletinSubmission(payload: MembershipBulletinFormPayload &
     );
     await writeClubData(data);
 
-    await notifyBureauNewPreinscription({
-      application,
-      trialSlots: data.trialSlots,
-      pdfAttachment: {
-        filename: uploadedPdf.name,
-        content: pdfBytes,
-      },
-    });
-
-    await sendEmail({
-      to: email,
-      subject: "[Activ'] Votre bulletin d'adhésion signé",
-      text: "Bonjour,\n\nVeuillez trouver en pièce jointe votre bulletin d'adhésion signé.\nLe bureau traitera votre dossier prochainement.\n\nSportivement,\nL'équipe Activ'",
-      html: "<p>Bonjour,</p><p>Veuillez trouver en pièce jointe votre <strong>bulletin d'adhésion signé</strong>.</p><p>Le bureau traitera votre dossier prochainement.</p><p>Sportivement,<br/>L'équipe Activ'</p>",
-      attachments: [
-        {
+    // E-mails après la réponse JSON pour éviter timeouts / corps vide (Safari).
+    after(async () => {
+      await notifyBureauNewPreinscription({
+        application,
+        trialSlots: data.trialSlots,
+        pdfAttachment: {
           filename: uploadedPdf.name,
           content: pdfBytes,
-          contentType: "application/pdf",
         },
-      ],
+      });
+
+      await sendEmail({
+        to: email,
+        subject: "[Activ'] Votre bulletin d'adhésion signé",
+        text: "Bonjour,\n\nVeuillez trouver en pièce jointe votre bulletin d'adhésion signé.\nLe bureau traitera votre dossier prochainement.\n\nSportivement,\nL'équipe Activ'",
+        html: "<p>Bonjour,</p><p>Veuillez trouver en pièce jointe votre <strong>bulletin d'adhésion signé</strong>.</p><p>Le bureau traitera votre dossier prochainement.</p><p>Sportivement,<br/>L'équipe Activ'</p>",
+        attachments: [
+          {
+            filename: uploadedPdf.name,
+            content: pdfBytes,
+            contentType: "application/pdf",
+          },
+        ],
+      });
     });
 
     return jsonOk(
