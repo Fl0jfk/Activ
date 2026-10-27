@@ -8,6 +8,7 @@ import {
   getPublicScheduleReference,
 } from "@/lib/schedule-week";
 import { sortNewsByDateDesc } from "@/lib/site-news";
+import { limitSentences } from "@/lib/text";
 import ActivityOrientation from "@/components/activity-orientation";
 import CallButton from "@/components/call-button";
 import FacebookButton from "@/components/facebook-button";
@@ -179,7 +180,9 @@ export default async function Home({
                   className="h-44 w-full rounded-xl object-cover"
                 />
                 <h3 className="mt-4 text-xl font-semibold text-slate-900 group-hover:text-cyan-700">{discipline.name}</h3>
-                <p className="mt-2 text-slate-700">{discipline.description}</p>
+                <p className="mt-2 line-clamp-6 text-slate-700">
+                  {limitSentences(discipline.description, 3)}
+                </p>
                 <span className="mt-3 inline-block rounded-lg bg-cyan-700 px-3 py-1 text-xs font-semibold text-white">
                   Je me pré-inscris
                 </span>
