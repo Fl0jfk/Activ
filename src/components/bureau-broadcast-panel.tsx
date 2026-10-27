@@ -11,6 +11,19 @@ type BureauBroadcastPanelProps = {
 
 type AudienceMode = "all" | "discipline" | "person";
 
+type ApprovedMember = {
+  email: string;
+  name: string;
+};
+
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function countPreview(
   applications: RegistrationApplication[],
   disciplineId: string,
@@ -34,27 +47,47 @@ export default function BureauBroadcastPanel({
 }: BureauBroadcastPanelProps) {
   const [audienceMode, setAudienceMode] = useState<AudienceMode>("all");
   const [disciplineId, setDisciplineId] = useState("");
+  const [recipientQuery, setRecipientQuery] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
-  const approvedEmails = useMemo(() => {
-    const emails = new Set(
-      applications
-        .filter((app) => app.status === "approved" && app.email?.trim())
-        .map((app) => app.email.trim().toLowerCase()),
-    );
-    return [...emails].sort();
+  const approvedMembers = useMemo(() => {
+    const byEmail = new Map<string, ApprovedMember>();
+    for (const app of applications) {
+      if (app.status !== "approved" || !app.email?.trim()) continue;
+      const email = app.email.trim().toLowerCase();
+      if (byEmail.has(email)) continue;
+      const name =
+        app.fullName?.trim() ||
+        [app.firstName, app.lastName].filter(Boolean).join(" ").trim() ||
+        email;
+      byEmail.set(email, { email, name });
+    }
+    return [...byEmail.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }, [applications]);
+
+  const memberMatches = useMemo(() => {
+    const query = normalizeSearch(recipientQuery);
+    if (!query) return approvedMembers;
+    return approvedMembers.filter((member) =>
+      normalizeSearch(member.name).includes(query),
+    );
+  }, [approvedMembers, recipientQuery]);
+
+  const selectedMember = useMemo(
+    () => approvedMembers.find((member) => member.email === recipientEmail) ?? null,
+    [approvedMembers, recipientEmail],
+  );
 
   const recipientCount = useMemo(() => {
     if (audienceMode === "person") {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim()) ? 1 : 0;
+      return selectedMember ? 1 : 0;
     }
     return countPreview(applications, audienceMode === "discipline" ? disciplineId : "");
-  }, [applications, audienceMode, disciplineId, recipientEmail]);
+  }, [applications, audienceMode, disciplineId, selectedMember]);
 
   const canSend =
     subject.trim().length > 0 &&
@@ -73,7 +106,7 @@ export default function BureauBroadcastPanel({
       return;
     }
     if (audienceMode === "person" && !recipientCount) {
-      setStatusMessage("Saisissez une adresse e-mail valide.");
+      setStatusMessage("Choisissez une personne dans la liste.");
       return;
     }
     if (recipientCount === 0) {
@@ -83,7 +116,9 @@ export default function BureauBroadcastPanel({
 
     const destination =
       audienceMode === "person"
-        ? recipientEmail.trim()
+        ? selectedMember
+          ? `${selectedMember.name} (${selectedMember.email})`
+          : recipientEmail.trim()
         : `${recipientCount} destinataire${recipientCount > 1 ? "s" : ""}`;
     const confirmed = window.confirm(`Envoyer cet e-mail à ${destination} ?`);
     if (!confirmed) return;
@@ -109,6 +144,8 @@ export default function BureauBroadcastPanel({
       setStatusMessage(payload.message ?? "E-mail envoyé.");
       setSubject("");
       setMessage("");
+      setRecipientEmail("");
+      setRecipientQuery("");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Envoi impossible.");
     } finally {
@@ -160,45 +197,101 @@ export default function BureauBroadcastPanel({
         ) : null}
 
         {audienceMode === "person" ? (
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Adresse e-mail de l&apos;adhérent
+          <div className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label htmlFor="broadcast-recipient-search">Nom de la personne</label>
             <input
-              type="email"
-              value={recipientEmail}
-              onChange={(event) => setRecipientEmail(event.target.value)}
+              id="broadcast-recipient-search"
+              type="search"
+              value={recipientQuery}
+              onChange={(event) => setRecipientQuery(event.target.value)}
               disabled={isSending}
               className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-              placeholder="prenom.nom@exemple.fr"
-              list="approved-member-emails"
-              required
+              placeholder="Rechercher un nom ou un prénom…"
+              autoComplete="off"
             />
-            <datalist id="approved-member-emails">
-              {approvedEmails.map((email) => (
-                <option key={email} value={email} />
-              ))}
-            </datalist>
-            <span className="text-xs font-normal text-slate-500">
-              Seules les adresses d&apos;adhérents approuvés peuvent recevoir ces messages.
-            </span>
-          </label>
+
+            {approvedMembers.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-sm font-normal text-slate-500">
+                Aucun adhérent approuvé pour le moment.
+              </p>
+            ) : (
+              <div
+                role="listbox"
+                aria-label="Adhérents approuvés"
+                className="mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white"
+              >
+                {memberMatches.length > 0 ? (
+                  memberMatches.map((member) => {
+                    const selected = member.email === recipientEmail;
+                    return (
+                      <button
+                        key={member.email}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        onClick={() => setRecipientEmail(member.email)}
+                        disabled={isSending}
+                        className={`flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 text-left text-sm font-normal transition last:border-b-0 ${
+                          selected
+                            ? "bg-emerald-50 text-emerald-900"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="min-w-0 truncate">{member.name}</span>
+                        {selected ? (
+                          <span className="shrink-0 text-xs font-semibold text-emerald-700">
+                            Sélectionné
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-3 py-3 text-sm font-normal text-slate-500">
+                    Aucun adhérent ne correspond à « {recipientQuery.trim()} ».
+                  </p>
+                )}
+              </div>
+            )}
+
+            {selectedMember ? (
+              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 font-normal">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  Destinataire sélectionné
+                </p>
+                <p className="mt-1 text-sm font-semibold text-emerald-950">
+                  {selectedMember.name}
+                </p>
+                <p className="mt-0.5 break-all text-xs text-emerald-800">
+                  {selectedMember.email}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientEmail("");
+                    setRecipientQuery("");
+                  }}
+                  disabled={isSending}
+                  className="mt-2 text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline"
+                >
+                  Changer de personne
+                </button>
+              </div>
+            ) : (
+              <span className="mt-1 text-xs font-normal text-slate-500">
+                Choisissez une personne dans la liste : seuls les adhérents approuvés sont
+                proposés.
+              </span>
+            )}
+          </div>
         ) : null}
 
-        <p className="text-sm text-slate-600">
-          {audienceMode === "person" ? (
-            recipientCount > 0 ? (
-              <>
-                Destinataire : <strong>{recipientEmail.trim()}</strong>
-              </>
-            ) : (
-              "Saisissez une adresse e-mail valide."
-            )
-          ) : (
-            <>
-              Environ <strong>{recipientCount}</strong> destinataire
-              {recipientCount > 1 ? "s" : ""} (aperçu).
-            </>
-          )}
-        </p>
+        {audienceMode !== "person" ? (
+          <p className="text-sm text-slate-600">
+            Environ <strong>{recipientCount}</strong> destinataire
+            {recipientCount > 1 ? "s" : ""} (aperçu).
+          </p>
+        ) : null}
 
         <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
           Objet
