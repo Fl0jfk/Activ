@@ -8,8 +8,8 @@ import {
   HorizontalBars,
   RadialProgress,
   Sparkline,
-  StackedBarChart,
 } from "@/components/bureau-cockpit-charts";
+import WeekCalendar from "@/components/bureau-week-calendar";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
@@ -396,14 +396,6 @@ export default function BureauCockpit({
     color: DISCIPLINE_COLORS[index % DISCIPLINE_COLORS.length],
   }));
 
-  const weekChartData = weekSeries.map((item) => ({
-    label: item.label,
-    segments: [
-      { value: item.normal, color: "#0891b2", label: "Séances" },
-      { value: item.cancelled, color: "#fb7185", label: "Annulées" },
-    ],
-  }));
-
   const priorityItems: {
     label: string;
     value: number;
@@ -763,28 +755,29 @@ export default function BureauCockpit({
                 Charge de la semaine
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Séances actives et annulations par jour.
+                Chaque séance est positionnée selon son horaire réel.
               </p>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-cyan-600" />
-                Séances
-              </span>
-              <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-rose-400" />
-                Annulées
+                Annulée
               </span>
+              <span className="hidden sm:inline">Survolez un bloc pour le détail</span>
             </div>
           </div>
 
-          <div className="mt-5 grid min-w-0 gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,230px)]">
+          <div className="mt-5 min-w-0 space-y-4">
             <div className="min-w-0">
-              <StackedBarChart
-                data={weekChartData}
-                height={210}
-                ariaLabel={`Séances de la semaine : ${weekSeries
-                  .map((item) => `${item.label} ${item.total}`)
+              <WeekCalendar
+                entries={weekSchedule}
+                ariaLabel={`Planning de la semaine : ${weekSchedule
+                  .map(
+                    (entry) =>
+                      `${entry.dayLabel} ${entry.startTime} ${entry.disciplineName}${
+                        entry.cancelled ? " annulée" : ""
+                      }`,
+                  )
                   .join(", ")}`}
               />
               {weekSchedule.length === 0 ? (
@@ -799,7 +792,7 @@ export default function BureauCockpit({
                 Prochaines séances
               </p>
               {nextSessions.length > 0 ? (
-                <ul className="mt-3 space-y-3">
+                <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {nextSessions.map((entry) => (
                     <li key={entry.id} className="flex min-w-0 gap-3">
                       <span className="w-10 shrink-0 text-xs font-semibold text-cyan-700">

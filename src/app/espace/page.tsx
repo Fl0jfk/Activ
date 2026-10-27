@@ -15,7 +15,8 @@ import { readClubData } from "@/lib/club-data";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { listApplicationsNeedingLicenseRenewal } from "@/lib/license-renewal";
 import { readSiteData } from "@/lib/site-data";
-import { buildWeekSchedule } from "@/lib/schedule-week";
+import { buildWeekSchedule, getPublicScheduleReference } from "@/lib/schedule-week";
+import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -68,8 +69,8 @@ export default async function EspacePage() {
 
   const memberDisciplineIds = new Set(currentUser.disciplineIds);
   for (const application of myApplications) {
-    if (application.disciplineId) {
-      memberDisciplineIds.add(application.disciplineId);
+    for (const disciplineId of getApplicationDisciplineIds(application)) {
+      memberDisciplineIds.add(disciplineId);
     }
   }
 
@@ -93,7 +94,9 @@ export default async function EspacePage() {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const weekSchedule = buildWeekSchedule(siteData).filter((entry) =>
+  const { referenceDate: scheduleReferenceDate } = getPublicScheduleReference();
+  const fullWeekSchedule = buildWeekSchedule(siteData, scheduleReferenceDate);
+  const weekSchedule = fullWeekSchedule.filter((entry) =>
     memberDisciplineIds.has(entry.disciplineId)
   );
 
@@ -150,6 +153,7 @@ export default async function EspacePage() {
       myApplications={myApplications}
       allApplications={clubData.applications}
       weekSchedule={weekSchedule}
+      bureauWeekSchedule={fullWeekSchedule}
       upcomingEvents={upcomingEvents}
       pendingDocument={pendingDocument}
       defaultTab={defaultTab}

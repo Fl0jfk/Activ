@@ -31,6 +31,7 @@ type EspaceHubProps = {
   myApplications: RegistrationApplication[];
   allApplications: RegistrationApplication[];
   weekSchedule: WeekScheduleEntry[];
+  bureauWeekSchedule: WeekScheduleEntry[];
   upcomingEvents: UpcomingEvent[];
   pendingDocument: PendingDocument;
   defaultTab?: EspaceTab;
@@ -64,6 +65,7 @@ export default function EspaceHub({
   myApplications,
   allApplications,
   weekSchedule,
+  bureauWeekSchedule,
   upcomingEvents,
   pendingDocument,
   defaultTab,
@@ -153,7 +155,7 @@ export default function EspaceHub({
           disciplines={disciplines}
           slots={slots}
           applications={allApplications}
-          weekSchedule={weekSchedule}
+          weekSchedule={bureauWeekSchedule}
         />
       ) : null}
 

@@ -4,7 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AssociationData } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
 import { DAY_LABELS } from "@/lib/schedule-constants";
-import { buildWeekSchedule, formatWeekRangeLabel } from "@/lib/schedule-week";
+import {
+  buildWeekSchedule,
+  formatWeekRangeLabel,
+  getPublicScheduleReference,
+} from "@/lib/schedule-week";
 
 type PendingNotify = {
   scheduleSlotId: string;
@@ -45,8 +49,14 @@ export default function ScheduleExceptionsPanel({
   const [location, setLocation] = useState("");
   const [teacherName, setTeacherName] = useState("");
 
-  const weekSchedule = useMemo(() => (data ? buildWeekSchedule(data) : []), [data]);
-  const weekLabel = useMemo(() => formatWeekRangeLabel(), []);
+  const weekSchedule = useMemo(() => {
+    if (!data) return [];
+    return buildWeekSchedule(data, getPublicScheduleReference().referenceDate);
+  }, [data]);
+  const weekLabel = useMemo(
+    () => formatWeekRangeLabel(getPublicScheduleReference().referenceDate),
+    [],
+  );
 
   const allSlots = useMemo(() => {
     if (!data) return [];
