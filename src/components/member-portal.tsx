@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import PaymentReceiptLink from "@/components/payment-receipt-link";
 import type { RegistrationApplication } from "@/lib/club-data";
 import {
   getMemberInscriptionLabel,
@@ -207,12 +208,12 @@ export default function MemberPortal({
               <p className="text-sm text-slate-600">Essai réalisé</p>
             ) : null}
             {latestApplication.paymentStatus === "paid" ? (
-              <a
-                href={`/api/club/applications/${latestApplication.id}/receipt`}
+              <PaymentReceiptLink
+                applicationId={latestApplication.id}
                 className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
               >
                 Télécharger mon attestation de paiement
-              </a>
+              </PaymentReceiptLink>
             ) : null}
           </div>
           {!isInscriptionFinalized ? (
@@ -401,12 +402,12 @@ export default function MemberPortal({
                     Essai : {application.trialAttended ? "Réalisé" : "Pas encore réalisé"}
                   </p>
                   {application.paymentStatus === "paid" ? (
-                    <a
-                      href={`/api/club/applications/${application.id}/receipt`}
+                    <PaymentReceiptLink
+                      applicationId={application.id}
                       className="mt-2 inline-block text-sm font-semibold text-emerald-700 underline"
                     >
                       Télécharger l&apos;attestation de paiement
-                    </a>
+                    </PaymentReceiptLink>
                   ) : null}
                   {application.notes ? (
                     <p className="mt-2 text-sm text-amber-800">Message du bureau : {application.notes}</p>

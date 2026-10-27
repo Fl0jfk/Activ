@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import PaymentReceiptLink from "@/components/payment-receipt-link";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
 import type { PaymentMethod, RegistrationApplication } from "@/lib/club-data";
 import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
@@ -463,12 +464,12 @@ export default function DossierPanel({
 
       <ApplicantBlock application={application} />
       {application.paymentStatus === "paid" ? (
-        <a
-          href={`/api/club/applications/${application.id}/receipt`}
+        <PaymentReceiptLink
+          applicationId={application.id}
           className="inline-flex rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
         >
           Télécharger l&apos;attestation de paiement
-        </a>
+        </PaymentReceiptLink>
       ) : null}
       {!isPaper ? (
         <BulletinRevalidationBlock
@@ -761,12 +762,12 @@ export default function DossierPanel({
                 : "Aucune adresse e-mail : l'attestation peut être téléchargée ci-dessous."}{" "}
               {isPaper ? "Dossier papier traité." : "Adhésion active sur Clerk."}
             </p>
-            <a
-              href={`/api/club/applications/${application.id}/receipt`}
+            <PaymentReceiptLink
+              applicationId={application.id}
               className="mt-3 inline-flex rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               Télécharger l&apos;attestation de paiement
-            </a>
+            </PaymentReceiptLink>
             {application.licenseEndDate ? (
               <p className="mt-1">
                 Licence valable jusqu&apos;au{" "}
