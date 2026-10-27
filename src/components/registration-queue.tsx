@@ -8,6 +8,7 @@ import type { DisciplineOption } from "@/lib/discipline-options";
 import {
   DOSSIER_STEP_LABELS,
   filterApplicationsByQueue,
+  getApplicationDisciplineNames,
   getDossierStep,
   stepBadgeClass,
   type QueueFilter,
@@ -61,15 +62,9 @@ export default function RegistrationQueue({
   return (
     <div className="space-y-3">
       {filtered.map((application) => {
-        const disciplineIds =
-          application.disciplineIds?.length
-            ? application.disciplineIds
-            : [application.disciplineId];
         const disciplineName =
-          disciplines
-            .filter((discipline) => disciplineIds.includes(discipline.id))
-            .map((discipline) => discipline.name)
-            .join(", ") || "Discipline";
+          getApplicationDisciplineNames(application, disciplines).join(", ") ||
+          "Discipline";
         const isExpanded = expandedId === application.id;
         const step = getDossierStep(application);
 

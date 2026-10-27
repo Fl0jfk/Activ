@@ -158,6 +158,31 @@ export function isDossierFinalise(application: RegistrationApplication): boolean
   return getDossierStep(application) === "finalized";
 }
 
+/** Toutes les activités d'un dossier, y compris celles ajoutées via le bulletin. */
+export function getApplicationDisciplineIds(
+  application: RegistrationApplication,
+): string[] {
+  const ids = [
+    ...(application.disciplineIds ?? []),
+    ...(application.membershipBulletin?.selectedDisciplineIds ?? []),
+    application.disciplineId,
+  ];
+  return Array.from(
+    new Set(ids.filter((id): id is string => Boolean(id && id.trim()))),
+  );
+}
+
+/** Libellés uniques des activités d'un dossier, dans l'ordre du bulletin. */
+export function getApplicationDisciplineNames(
+  application: RegistrationApplication,
+  disciplines: { id: string; name: string }[],
+): string[] {
+  const names = getApplicationDisciplineIds(application)
+    .map((id) => disciplines.find((discipline) => discipline.id === id)?.name?.trim())
+    .filter((name): name is string => Boolean(name));
+  return Array.from(new Set(names));
+}
+
 export type QueueFilter = "en_cours" | "finalized" | "all";
 
 export function filterApplicationsByQueue(

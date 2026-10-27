@@ -14,6 +14,7 @@ import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
 import {
+  getApplicationDisciplineIds,
   getDossierStep,
   type DossierStep,
   type QueueFilter,
@@ -315,13 +316,9 @@ export default function BureauCockpit({
         .map((discipline) => ({
           id: discipline.id,
           name: discipline.name,
-          count: applications.filter((application) => {
-            const disciplineIds =
-              application.disciplineIds?.length
-                ? application.disciplineIds
-                : [application.disciplineId];
-            return disciplineIds.includes(discipline.id);
-          }).length,
+          count: applications.filter((application) =>
+            getApplicationDisciplineIds(application).includes(discipline.id),
+          ).length,
         }))
         .sort((a, b) => b.count - a.count),
     [applications, disciplines],

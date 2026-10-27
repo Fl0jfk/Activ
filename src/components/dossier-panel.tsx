@@ -145,8 +145,9 @@ function PhaseStepper({ current }: { current: DossierProcessingPhase }) {
   return (
     <ol className="grid grid-cols-2 gap-1 md:flex md:flex-row md:gap-2">
       {steps.map((step) => {
-        const isDone = step < current;
-        const isCurrent = step === current;
+        const isCompleted = step === 5 && current === 5;
+        const isDone = step < current || isCompleted;
+        const isCurrent = step === current && !isCompleted;
         return (
           <li
             key={step}

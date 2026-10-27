@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { DisciplineOption } from "@/lib/discipline-options";
+import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
 type BureauBroadcastPanelProps = {
   disciplines: DisciplineOption[];
@@ -33,8 +34,7 @@ function countPreview(
       .filter((app) => app.status === "approved" && app.email?.trim())
       .filter((app) => {
         if (!disciplineId) return true;
-        if (app.disciplineId === disciplineId) return true;
-        return Boolean(app.disciplineIds?.includes(disciplineId));
+        return getApplicationDisciplineIds(app).includes(disciplineId);
       })
       .map((app) => app.email.trim().toLowerCase()),
   );

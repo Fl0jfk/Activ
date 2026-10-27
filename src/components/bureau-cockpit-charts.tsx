@@ -70,7 +70,7 @@ export function DonutChart({
                 fill="none"
                 stroke={segment.color}
                 strokeWidth={thickness}
-                strokeLinecap="round"
+                strokeLinecap="butt"
                 strokeDasharray={`${dash} ${circumference - dash}`}
                 transform={`rotate(${rotation} ${size / 2} ${size / 2})`}
               />
