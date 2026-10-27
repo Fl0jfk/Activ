@@ -138,7 +138,7 @@ export default function HomeGalleryPanel() {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="bento-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Galerie d&apos;accueil</h2>

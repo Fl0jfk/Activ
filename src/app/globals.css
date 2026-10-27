@@ -63,6 +63,10 @@ body::-webkit-scrollbar {
     @apply min-w-0 rounded-3xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(8,47,73,0.08)] backdrop-blur-sm;
   }
 
+  .bento-card {
+    @apply min-w-0 rounded-[1.75rem] border border-white/70 bg-white/85 shadow-[0_20px_60px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl;
+  }
+
   .text-break {
     @apply min-w-0 break-words [overflow-wrap:anywhere];
   }

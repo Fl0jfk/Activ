@@ -1,6 +1,7 @@
 "use client";
 
 import SiteImage from "@/components/site-image";
+import { uploadSiteImage } from "@/lib/client-image-upload";
 import { useRef, useState } from "react";
 
 type SiteImageFieldProps = {
@@ -31,17 +32,8 @@ export default function SiteImageField({
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/admin/site-image", {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await response.json()) as { url?: string; message?: string };
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.message ?? "Envoi impossible.");
-      }
-      onChange(payload.url);
+      const url = await uploadSiteImage(file);
+      onChange(url);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Envoi impossible.");
     } finally {
@@ -75,7 +67,7 @@ export default function SiteImageField({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
+          accept="image/*"
           disabled={disabled || isUploading}
           onChange={(event) => void handleFileChange(event.target.files?.[0] ?? null)}
           className="block w-full text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white disabled:opacity-50"

@@ -1,7 +1,8 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { RegistrationApplication } from "@/lib/club-data";
 import { paymentMethodLabel } from "@/lib/dossier-workflow";
-import { MEMBERSHIP_SEASON_LABEL } from "@/lib/membership-bulletin";
+import { MEMBERSHIP_ADHESION_FEE, MEMBERSHIP_SEASON_LABEL } from "@/lib/membership-bulletin";
+import { buildMembershipActivityCatalog, membershipActivityLabels } from "@/lib/membership-activities";
 import { isAllowedSiteImageKey, readSiteImageObject } from "@/lib/s3-upload";
 import type { AssociationData } from "@/lib/site-data-types";
 
@@ -38,16 +39,6 @@ function siteImageKeyFromUrl(url: string): string | null {
   return isAllowedSiteImageKey(key) ? key : null;
 }
 
-function resolveAmount(application: RegistrationApplication, disciplineAnnualFee?: string): string {
-  const bulletinTotal = application.membershipBulletin?.grandTotal;
-  if (typeof bulletinTotal === "number" && bulletinTotal > 0) {
-    return formatEuro(bulletinTotal);
-  }
-  const fee = disciplineAnnualFee?.trim();
-  if (fee) return fee;
-  return "Selon tarif en vigueur";
-}
-
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -63,6 +54,33 @@ function wrapText(text: string, maxChars: number): string[] {
   }
   if (current) lines.push(current);
   return lines.length > 0 ? lines : ["-"];
+}
+
+function paymentAmount(application: RegistrationApplication): number | null {
+  if (typeof application.amountPaid === "number" && Number.isFinite(application.amountPaid)) {
+    return application.amountPaid;
+  }
+  const bulletinTotal = application.membershipBulletin?.grandTotal;
+  if (typeof bulletinTotal === "number" && bulletinTotal > 0) {
+    return bulletinTotal;
+  }
+  return null;
+}
+
+function disciplineNames(
+  application: RegistrationApplication,
+  siteData: AssociationData,
+): string[] {
+  const ids =
+    application.disciplineIds && application.disciplineIds.length > 0
+      ? application.disciplineIds
+      : application.disciplineId
+        ? [application.disciplineId]
+        : [];
+  const names = ids
+    .map((id) => siteData.disciplines.find((entry) => entry.id === id)?.name?.trim())
+    .filter((name): name is string => Boolean(name));
+  return names.length > 0 ? names : ["Association"];
 }
 
 async function embedStamp(pdfDoc: PDFDocument, stampImageUrl: string) {
@@ -92,13 +110,35 @@ export async function buildPaymentReceiptPdf(params: {
 }): Promise<Uint8Array> {
   const { application, siteData } = params;
   const association = siteData.association;
-  const disciplineEntry = siteData.disciplines.find((entry) => entry.id === application.disciplineId);
-  const discipline = disciplineEntry?.name ?? "Association";
-  const amount = resolveAmount(application, disciplineEntry?.annualFee);
   const paidAtLabel = formatDateFr(params.paidAt);
-  const memberName = application.fullName.trim() || `${application.firstName} ${application.lastName}`.trim();
-  const receiptNumber = `R-${application.id.slice(-8).toUpperCase()}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
-  const addressLine = [application.address, application.postalCode, application.city].filter(Boolean).join(", ") || "-";
+  const memberName =
+    application.fullName.trim() || `${application.firstName} ${application.lastName}`.trim();
+  const receiptNumber = `A-${application.id.slice(-8).toUpperCase()}-${new Date()
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, "")}`;
+  const addressLine =
+    [application.address, application.postalCode, application.city].filter(Boolean).join(", ") || "-";
+
+  const catalog = buildMembershipActivityCatalog(siteData);
+  const storedLabels = application.membershipBulletin?.selectedActivityLabels;
+  const activityLabels =
+    storedLabels && storedLabels.length > 0
+      ? storedLabels
+      : membershipActivityLabels(application.membershipBulletin?.selectedSlots ?? [], catalog);
+  const activities =
+    activityLabels.length > 0
+      ? activityLabels
+      : disciplineNames(application, siteData);
+
+  const paidAmount = paymentAmount(application);
+  const disciplineEntry = siteData.disciplines.find(
+    (entry) => entry.id === application.disciplineId,
+  );
+  const amountLabel =
+    paidAmount !== null
+      ? formatEuro(paidAmount)
+      : disciplineEntry?.annualFee?.trim() || "Selon tarif en vigueur";
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -122,7 +162,15 @@ export async function buildPaymentReceiptPdf(params: {
   let y = 760;
   const left = 56;
 
-  const draw = (text: string, options?: { bold?: boolean; size?: number; color?: ReturnType<typeof rgb>; gap?: number }) => {
+  const draw = (
+    text: string,
+    options?: {
+      bold?: boolean;
+      size?: number;
+      color?: ReturnType<typeof rgb>;
+      gap?: number;
+    },
+  ) => {
     const size = options?.size ?? 10;
     page.drawText(text, {
       x: left,
@@ -134,33 +182,8 @@ export async function buildPaymentReceiptPdf(params: {
     y -= options?.gap ?? size + 6;
   };
 
-  draw(association.name || "Association", { bold: true, size: 16, gap: 16 });
-  if (association.tagline) draw(association.tagline, { size: 10, color: muted, gap: 14 });
-  if (association.address) draw(association.address, { size: 9, color: muted, gap: 12 });
-  if (association.city) draw(association.city, { size: 9, color: muted, gap: 12 });
-  if (association.contactEmail) draw(association.contactEmail, { size: 9, color: muted, gap: 18 });
-
-  draw("RECU DE PAIEMENT", { bold: true, size: 18, gap: 14 });
-  draw(`N. ${receiptNumber}`, { size: 9, color: muted, gap: 22 });
-
-  draw("L'association certifie avoir bien recu le paiement suivant.", { size: 11, gap: 20 });
-
-  const rows: Array<[string, string]> = [
-    ["Date du recu", paidAtLabel],
-    ["Adherent", memberName],
-    ["E-mail", application.email || "-"],
-    ["Adresse", addressLine],
-    ["Discipline", discipline],
-    ["Saison", MEMBERSHIP_SEASON_LABEL],
-    ["Mode de paiement", paymentMethodLabel(application.paymentMethod)],
-    ["Montant", amount],
-  ];
-  if (application.licenseEndDate) {
-    rows.push(["Licence valable jusqu'au", formatDateFr(`${application.licenseEndDate}T12:00:00`)]);
-  }
-
-  for (const [label, value] of rows) {
-    const valueLines = wrapText(value, 48);
+  const drawRow = (label: string, value: string) => {
+    const valueLines = wrapText(value, 46);
     page.drawText(`${label} :`, {
       x: left,
       y,
@@ -169,7 +192,7 @@ export async function buildPaymentReceiptPdf(params: {
       color: ink,
     });
     page.drawText(valueLines[0] ?? "-", {
-      x: 210,
+      x: 214,
       y,
       size: 10,
       font,
@@ -178,7 +201,7 @@ export async function buildPaymentReceiptPdf(params: {
     y -= 16;
     for (const extraLine of valueLines.slice(1)) {
       page.drawText(extraLine, {
-        x: 210,
+        x: 214,
         y,
         size: 10,
         font,
@@ -186,19 +209,96 @@ export async function buildPaymentReceiptPdf(params: {
       });
       y -= 16;
     }
+  };
+
+  draw(association.name || "Association", { bold: true, size: 16, gap: 16 });
+  if (association.tagline) draw(association.tagline, { size: 10, color: muted, gap: 14 });
+  if (association.address) draw(association.address, { size: 9, color: muted, gap: 4 });
+  if (association.city) draw(association.city, { size: 9, color: muted, gap: 4 });
+  if (association.contactEmail) draw(association.contactEmail, { size: 9, color: muted, gap: 4 });
+  const legalIdentifiers = [
+    association.siret?.trim() ? `SIRET : ${association.siret.trim()}` : "",
+    association.rna?.trim() ? `RNA : ${association.rna.trim()}` : "",
+  ].filter(Boolean);
+  if (legalIdentifiers.length > 0) {
+    draw(legalIdentifiers.join("  ·  "), { size: 9, color: muted, gap: 18 });
+  } else {
+    y -= 14;
+  }
+
+  draw("ATTESTATION DE PAIEMENT", { bold: true, size: 18, gap: 14 });
+  draw(`N° ${receiptNumber}`, { size: 9, color: muted, gap: 22 });
+
+  draw(
+    "L'association certifie avoir encaissé le paiement de l'adhésion et des activités indiquées ci-dessous.",
+    { size: 11, gap: 20 },
+  );
+
+  drawRow("Date du paiement", paidAtLabel);
+  drawRow("Adhérent", memberName);
+  drawRow("E-mail", application.email || "-");
+  drawRow("Adresse", addressLine);
+  drawRow(
+    activities.length > 1 ? "Activités" : "Activité",
+    activities.join(" ; "),
+  );
+  drawRow("Saison", MEMBERSHIP_SEASON_LABEL);
+  drawRow("Mode de paiement", paymentMethodLabel(application.paymentMethod));
+  drawRow("Montant réglé", amountLabel);
+  if (application.licenseEndDate) {
+    drawRow("Licence valable jusqu'au", formatDateFr(`${application.licenseEndDate}T12:00:00`));
+  }
+  if (application.signedBulletinReceivedAt) {
+    drawRow(
+      "Bulletin papier signé reçu le",
+      formatDateFr(`${application.signedBulletinReceivedAt}T12:00:00`),
+    );
+  }
+
+  const bulletin = application.membershipBulletin;
+  if (bulletin) {
+    y -= 8;
+    draw("DÉTAIL DU RÈGLEMENT", { bold: true, size: 10, gap: 14 });
+    drawRow("Cotisation annuelle obligatoire", formatEuro(MEMBERSHIP_ADHESION_FEE));
+    drawRow("Participation aux activités", formatEuro(bulletin.activitiesTotal));
+    drawRow("Total bulletin", formatEuro(bulletin.grandTotal));
   }
 
   y -= 12;
   draw(
-    "Ce document atteste de la reception du paiement par l'association.",
-    { size: 8, color: muted, gap: 12 },
+    "La présente attestation est délivrée à l'adhérent pour faire valoir ses droits auprès de son employeur, de sa mutuelle ou de tout organisme de remboursement.",
+    { size: 8, color: muted, gap: 4 },
   );
-  draw("Il ne constitue pas une facture. Conservez ce recu pour vos dossiers.", { size: 8, color: muted, gap: 24 });
+  const valueLineY = y - 48;
+  const valueText =
+    paidAmount !== null
+      ? `Montant total acquitté : ${formatEuro(paidAmount)}.`
+      : "Montant total acquitté : selon tarif en vigueur.";
+  page.drawText(valueText, {
+    x: left,
+    y: valueLineY,
+    size: 9,
+    font: fontBold,
+    color: ink,
+  });
+  page.drawText(
+    "Cette attestation ne constitue pas une facture. Conservez ce document pour vos dossiers.",
+    {
+      x: left,
+      y: valueLineY - 14,
+      size: 8,
+      font,
+      color: muted,
+    },
+  );
 
-  const stamp = association.stampImageUrl ? await embedStamp(pdfDoc, association.stampImageUrl) : null;
+  y = Math.min(y, valueLineY - 32);
+  const stamp = association.stampImageUrl
+    ? await embedStamp(pdfDoc, association.stampImageUrl)
+    : null;
   if (stamp) {
     const scaled = stamp.scaleToFit(130, 130);
-    const stampY = Math.max(70, y - scaled.height + 10);
+    const stampY = Math.max(72, y - scaled.height + 10);
     page.drawImage(stamp, {
       x: 400,
       y: stampY,
@@ -207,7 +307,7 @@ export async function buildPaymentReceiptPdf(params: {
     });
     page.drawText("Cachet de l'association", {
       x: 400,
-      y: Math.max(56, stampY - 12),
+      y: Math.max(58, stampY - 12),
       size: 8,
       font,
       color: muted,
@@ -230,7 +330,7 @@ export async function buildPaymentReceiptPdf(params: {
     });
   }
 
-  page.drawText("Document genere automatiquement par l'espace bureau Activ'.", {
+  page.drawText("Document généré automatiquement par l'espace bureau Activ'.", {
     x: left,
     y: 52,
     size: 8,

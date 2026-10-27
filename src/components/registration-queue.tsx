@@ -61,8 +61,15 @@ export default function RegistrationQueue({
   return (
     <div className="space-y-3">
       {filtered.map((application) => {
+        const disciplineIds =
+          application.disciplineIds?.length
+            ? application.disciplineIds
+            : [application.disciplineId];
         const disciplineName =
-          disciplines.find((d) => d.id === application.disciplineId)?.name ?? "Discipline";
+          disciplines
+            .filter((discipline) => disciplineIds.includes(discipline.id))
+            .map((discipline) => discipline.name)
+            .join(", ") || "Discipline";
         const isExpanded = expandedId === application.id;
         const step = getDossierStep(application);
 
@@ -85,8 +92,17 @@ export default function RegistrationQueue({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase text-cyan-700">{disciplineName}</p>
-                <p className="font-semibold text-slate-900">{application.fullName}</p>
-                <p className="text-break text-sm text-slate-600">{application.email}</p>
+                <p className="font-semibold text-slate-900">
+                  {application.fullName}
+                  {application.origin === "paper" ? (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
+                      Papier
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-break text-sm text-slate-600">
+                  {application.email || "Sans e-mail"}
+                </p>
               </div>
               <div className="shrink-0 sm:text-right">
                 <span

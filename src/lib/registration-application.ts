@@ -5,7 +5,11 @@ import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 
 export type RegistrationApplicantInput = {
   disciplineId: string;
+  disciplineIds?: string[];
   trialSlotId?: string | null;
+  origin?: "online" | "paper";
+  signedBulletinReceivedAt?: string | null;
+  amountPaid?: number | null;
   firstName: string;
   lastName: string;
   phone: string;
@@ -40,6 +44,13 @@ export function buildRegistrationApplication(
     documents: Array.isArray(input.documents) ? input.documents : [],
     requestKind: "trial_and_preregistration",
     disciplineId: input.disciplineId,
+    disciplineIds:
+      input.disciplineIds && input.disciplineIds.length > 0
+        ? input.disciplineIds
+        : [input.disciplineId],
+    origin: input.origin ?? "online",
+    signedBulletinReceivedAt: input.signedBulletinReceivedAt ?? null,
+    amountPaid: input.amountPaid ?? null,
     trialSlotId: withTrial ? (input.trialSlotId ?? null) : null,
     motivation: input.motivation?.trim() ?? "",
     createdAt,

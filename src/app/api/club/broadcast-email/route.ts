@@ -14,10 +14,11 @@ export async function GET(request: NextRequest) {
   }
 
   const disciplineId = request.nextUrl.searchParams.get("disciplineId")?.trim() || null;
+  const recipientEmail = request.nextUrl.searchParams.get("recipientEmail")?.trim() || null;
   const clubData = await readClubData();
-  const recipientCount = countApprovedMemberEmails(clubData, { disciplineId });
+  const recipientCount = countApprovedMemberEmails(clubData, { disciplineId, recipientEmail });
 
-  return jsonOk({ recipientCount, disciplineId });
+  return jsonOk({ recipientCount, disciplineId, recipientEmail });
 }
 
 export async function POST(request: NextRequest) {
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
 
   let payload: {
     disciplineId?: string | null;
+    recipientEmail?: string | null;
     subject?: string;
     message?: string;
   };
@@ -45,9 +47,13 @@ export async function POST(request: NextRequest) {
   const subject = payload.subject?.trim() ?? "";
   const message = payload.message?.trim() ?? "";
   const disciplineId = payload.disciplineId?.trim() || null;
+  const recipientEmail = payload.recipientEmail?.trim().toLowerCase() || null;
 
   if (!subject || !message) {
     return jsonError("L'objet et le message sont obligatoires.", 400);
+  }
+  if (recipientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+    return jsonError("Adresse e-mail du destinataire invalide.", 400);
   }
   if (subject.length > 200) {
     return jsonError("L'objet est trop long.", 400);
@@ -56,7 +62,7 @@ export async function POST(request: NextRequest) {
     return jsonError("Le message est trop long.", 400);
   }
 
-  if (disciplineId) {
+  if (disciplineId && !recipientEmail) {
     const siteData = await readSiteData();
     const exists = siteData.disciplines.some((entry) => entry.id === disciplineId);
     if (!exists) {
@@ -65,10 +71,18 @@ export async function POST(request: NextRequest) {
   }
 
   const clubData = await readClubData();
-  const recipients = collectApprovedMemberEmails(clubData, { disciplineId });
+  const recipients = collectApprovedMemberEmails(clubData, {
+    disciplineId: recipientEmail ? null : disciplineId,
+    recipientEmail,
+  });
 
   if (recipients.length === 0) {
-    return jsonError("Aucun adhérent approuvé pour ce destinataire.", 400);
+    return jsonError(
+      recipientEmail
+        ? "Cette adresse ne correspond pas à un adhérent approuvé."
+        : "Aucun adhérent approuvé pour ce destinataire.",
+      400,
+    );
   }
 
   const text = `${message}\n\n—\nL'équipe Activ'`;

@@ -1,5 +1,6 @@
 import MembershipBulletinForm from "@/components/membership-bulletin-form";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
+import { buildMembershipActivityCatalog } from "@/lib/membership-activities";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export default async function PreinscriptionPage({ searchParams }: PageProps) {
   const { discipline: disciplineParam, revalidateToken } = await searchParams;
   const siteData = await readSiteData();
   const disciplines = getActiveDisciplineOptions(siteData);
+  const activityOptions = buildMembershipActivityCatalog(siteData);
 
   const matchedDiscipline = disciplineParam
     ? disciplines.find((d) => d.slug === disciplineParam || d.id === disciplineParam)
@@ -19,7 +21,7 @@ export default async function PreinscriptionPage({ searchParams }: PageProps) {
 
   return (
     <MembershipBulletinForm
-      disciplines={disciplines}
+      activityOptions={activityOptions}
       initialDisciplineId={matchedDiscipline?.id}
       revalidateToken={revalidateToken}
     />

@@ -92,6 +92,14 @@ export type RegistrationApplication = {
   documents: { name: string; url: string; uploadedAt: string }[];
   requestKind: "trial_and_preregistration" | "trial_only";
   disciplineId: string;
+  /** Toutes les activités d'un bulletin (la première reste `disciplineId`). */
+  disciplineIds?: string[];
+  /** Dossier saisi au bureau pour un adhérent papier, sans compte Clerk. */
+  origin?: "online" | "paper";
+  /** Date à laquelle le bulletin papier signé a été réceptionné. */
+  signedBulletinReceivedAt?: string | null;
+  /** Montant encaissé saisi manuellement (adhérent papier). */
+  amountPaid?: number | null;
   trialSlotId: string | null;
   motivation: string;
   createdAt: string;
@@ -160,6 +168,18 @@ function normalizeClubData(data: ClubData): ClubData {
       postalCode: application.postalCode ?? "",
       city: application.city ?? "",
       documents: application.documents ?? [],
+      disciplineIds:
+        Array.isArray(application.disciplineIds) && application.disciplineIds.length > 0
+          ? application.disciplineIds
+          : application.disciplineId
+            ? [application.disciplineId]
+            : [],
+      origin: application.origin ?? "online",
+      signedBulletinReceivedAt: application.signedBulletinReceivedAt ?? null,
+      amountPaid:
+        typeof application.amountPaid === "number" && Number.isFinite(application.amountPaid)
+          ? application.amountPaid
+          : null,
       trialSlotId: application.trialSlotId ?? null,
       paymentMethod: application.paymentMethod ?? "",
       licenseEndDate: application.licenseEndDate ?? null,

@@ -39,8 +39,16 @@ async function embedSignature(pdfDoc: PDFDocument, dataUrl: string) {
   return pdfDoc.embedJpg(bytes);
 }
 
+type PdfActivityOption = {
+  id: string;
+  day: string;
+  time: string;
+  activity: string;
+};
+
 export async function buildMembershipBulletinPdf(
   payload: MembershipBulletinFormPayload,
+  options?: { activityOptions?: PdfActivityOption[] },
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -98,7 +106,11 @@ export async function buildMembershipBulletinPdf(
   y -= 6;
 
   draw("3. CHOIX DES ACTIVITÉS", { bold: true, size: 10, gap: 14 });
-  for (const slot of MEMBERSHIP_ACTIVITY_SLOTS) {
+  const activityOptions =
+    options?.activityOptions && options.activityOptions.length > 0
+      ? options.activityOptions
+      : MEMBERSHIP_ACTIVITY_SLOTS;
+  for (const slot of activityOptions) {
     const checked = payload.selectedSlots.includes(slot.id) ? "[X]" : "[ ]";
     draw(`${checked}  ${slot.day}  ${slot.time}  ${slot.activity}`);
   }

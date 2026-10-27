@@ -33,14 +33,15 @@ export async function notifyMemberPaymentReceipt(
     const associationName = siteData.association.name || "l'association";
     const method = paymentMethodLabel(application.paymentMethod);
     const memberName = application.fullName.trim() || "adhérent";
-    const filename = `recu-paiement-${slugifyName(memberName)}.pdf`;
+    const filename = `attestation-paiement-${slugifyName(memberName)}.pdf`;
 
-    const subject = `[${associationName}] Reçu de paiement`;
+    const subject = `[${associationName}] Attestation de paiement`;
     const text = [
       `Bonjour ${memberName},`,
       "",
       `${associationName} certifie avoir bien reçu votre paiement (${method}).`,
-      "Vous trouverez le reçu officiel en pièce jointe de cet e-mail.",
+      "Vous trouverez votre attestation de paiement en pièce jointe de cet e-mail, avec le cachet de l'association.",
+      "Ce document peut être transmis à votre employeur, votre mutuelle ou tout organisme de remboursement.",
       "",
       "Sportivement,",
       associationName,
@@ -50,8 +51,10 @@ export async function notifyMemberPaymentReceipt(
       <p>Bonjour ${escapeHtml(memberName)},</p>
       <p><strong>${escapeHtml(associationName)}</strong> certifie avoir bien reçu votre paiement
       (${escapeHtml(method)}).</p>
-      <p>Vous trouverez le <strong>reçu officiel en pièce jointe</strong> de cet e-mail
-      (date, informations de l'association, mode de paiement).</p>
+      <p>Vous trouverez votre <strong>attestation de paiement en pièce jointe</strong> de cet e-mail,
+      avec le cachet de l'association (date, activités, montant et mode de paiement).</p>
+      <p>Ce document peut être transmis à votre employeur, votre mutuelle ou tout organisme de
+      remboursement.</p>
       <p>Sportivement,<br/>${escapeHtml(associationName)}</p>
     `;
 

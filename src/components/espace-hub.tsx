@@ -85,38 +85,46 @@ export default function EspaceHub({
   return (
     <main className="min-w-0 overflow-x-hidden pb-8">
       <section className="mx-auto mt-4 flex w-full max-w-6xl flex-wrap gap-2 px-4 sm:px-8">
-        <button
-          type="button"
-          onClick={() => setActiveTab("member")}
-          className={`rounded-full px-4 py-2 text-sm font-semibold ${
-            activeTab === "member" ? "bg-cyan-700 text-white" : "bg-white text-slate-800"
-          }`}
-        >
-          Mon espace
-        </button>
-        {canAccessClubOperations ? (
+        <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-white/70 bg-white/70 p-1 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur-xl">
           <button
             type="button"
-            onClick={() => setActiveTab("cockpit")}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              activeTab === "cockpit" ? "bg-cyan-700 text-white" : "bg-white text-slate-800"
+            onClick={() => setActiveTab("member")}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "member"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:bg-white hover:text-slate-900"
             }`}
           >
-            Cockpit bureau
-            {pendingCount > 0 ? ` (${pendingCount})` : ""}
+            Mon espace
           </button>
-        ) : null}
-        {canAccessCoachPortal ? (
-          <button
-            type="button"
-            onClick={() => setActiveTab("coach")}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              activeTab === "coach" ? "bg-cyan-700 text-white" : "bg-white text-slate-800"
-            }`}
-          >
-            Espace coach
-          </button>
-        ) : null}
+          {canAccessClubOperations ? (
+            <button
+              type="button"
+              onClick={() => setActiveTab("cockpit")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "cockpit"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+              }`}
+            >
+              Cockpit bureau
+              {pendingCount > 0 ? ` (${pendingCount})` : ""}
+            </button>
+          ) : null}
+          {canAccessCoachPortal ? (
+            <button
+              type="button"
+              onClick={() => setActiveTab("coach")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "coach"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+              }`}
+            >
+              Espace coach
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {activeTab === "member" ? (

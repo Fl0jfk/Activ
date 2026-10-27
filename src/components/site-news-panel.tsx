@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AssociationData, SiteNewsItem, SitePoll } from "@/lib/site-data-types";
 import { randomId } from "@/lib/ids";
 import SiteImageField from "@/components/site-image-field";
+import { uploadSiteImage } from "@/lib/client-image-upload";
 import { RichTextContent } from "@/lib/chat-message-links";
 import {
   ASSOCIATION_GENERAL_NEWS,
@@ -131,17 +132,7 @@ export default function SiteNewsPanel() {
     try {
       const uploadedUrls: string[] = [];
       for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append("file", file);
-        const response = await fetch("/api/admin/site-image", {
-          method: "POST",
-          body: formData,
-        });
-        const payload = (await response.json()) as { url?: string; message?: string };
-        if (!response.ok || !payload.url) {
-          throw new Error(payload.message ?? "Envoi impossible.");
-        }
-        uploadedUrls.push(payload.url);
+        uploadedUrls.push(await uploadSiteImage(file));
       }
       updateDraft({
         galleryImages: [...(draft.galleryImages ?? []), ...uploadedUrls],
@@ -251,12 +242,87 @@ export default function SiteNewsPanel() {
     if (saved && draft?.id === item.id) cancelEdit();
   }
 
+  function linkedPollForNews(newsId: string): SitePoll | null {
+    return data?.polls.find((poll) => poll.newsId === newsId) ?? null;
+  }
+
+  async function removePollOnly(item: SiteNewsItem) {
+    if (!data) return;
+    const poll =
+      linkedPollForNews(item.id) ??
+      (pollDraft.id ? data.polls.find((entry) => entry.id === pollDraft.id) : undefined);
+    if (!poll) {
+      setStatusMessage("Aucun sondage lié à cette actualité.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Supprimer uniquement le sondage ? L'actualité restera en ligne et deviendra un article normal.",
+      )
+    ) {
+      return;
+    }
+
+    const nextCta =
+      !item.ctaLabel?.trim() || /avis|voter|sondage/i.test(item.ctaLabel)
+        ? "Lire la suite"
+        : item.ctaLabel;
+    const nextData: AssociationData = {
+      ...data,
+      polls: data.polls.filter(
+        (entry) => entry.id !== poll.id && entry.newsId !== item.id,
+      ),
+      news: data.news.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              kind: entry.kind === "sondage" ? "autre" : entry.kind,
+              ctaLabel: nextCta,
+            }
+          : entry,
+      ),
+    };
+
+    const saved = await persistSiteData(
+      nextData,
+      "Sondage supprimé. L'actualité est conservée sur le site.",
+    );
+    if (!saved) return;
+
+    setPollDraft(emptyPollDraft());
+    setDraft((previous) =>
+      previous && previous.id === item.id
+        ? {
+            ...previous,
+            kind: previous.kind === "sondage" ? "autre" : previous.kind,
+            ctaLabel: nextCta,
+          }
+        : previous,
+    );
+  }
+
   if (!data && isLoading) {
-    return <p className="text-sm text-slate-600">Chargement des actualités…</p>;
+    return (
+      <section className="bento-card p-5">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+          Actualités du site
+        </h2>
+        <p className="mt-3 text-sm text-slate-500">Chargement des actualités…</p>
+      </section>
+    );
   }
 
   if (!data) {
-    return <p className="text-sm text-rose-600">{statusMessage || "Actualités indisponibles."}</p>;
+    return (
+      <section className="bento-card p-5">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+          Actualités du site
+        </h2>
+        <p className="mt-3 text-sm text-rose-600">
+          {statusMessage || "Actualités indisponibles."}
+        </p>
+      </section>
+    );
   }
 
   const busy = isLoading || isSaving;
@@ -267,6 +333,9 @@ export default function SiteNewsPanel() {
   function renderDraftForm(options: { heading?: string; compact?: boolean }) {
     if (!draft) return null;
     const { heading, compact } = options;
+    const linkedPoll =
+      linkedPollForNews(draft.id) ??
+      (pollDraft.id ? data!.polls.find((poll) => poll.id === pollDraft.id) : null);
 
     return (
       <>
@@ -449,6 +518,16 @@ export default function SiteNewsPanel() {
                   </button>
                 ) : null}
               </div>
+              {linkedPoll && draft ? (
+                <button
+                  type="button"
+                  onClick={() => void removePollOnly(draft)}
+                  disabled={busy}
+                  className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                >
+                  Supprimer uniquement le sondage (conserver l&apos;actualité)
+                </button>
+              ) : null}
             </div>
           ) : null}
           <SiteImageField
@@ -492,7 +571,7 @@ export default function SiteNewsPanel() {
             )}
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept="image/*"
               multiple
               disabled={busy}
               onChange={(event) => {
@@ -526,9 +605,9 @@ export default function SiteNewsPanel() {
   }
 
   return (
-    <section className="min-w-0 overflow-x-hidden rounded-2xl border border-orange-200 bg-gradient-to-br from-amber-50/80 to-orange-50/50 p-5 shadow-sm">
+    <section className="bento-card min-w-0 overflow-x-hidden p-5">
       <div>
-        <h2 className="text-lg font-bold text-slate-900">Actualités du site</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-slate-950">Actualités du site</h2>
         <p className="mt-1 text-sm text-slate-600">
           Gérées uniquement ici. Chaque validation ou suppression est enregistrée automatiquement sur le site
           public. La discipline est optionnelle : choisissez « Association (général) » pour une actualité qui
@@ -614,6 +693,16 @@ export default function SiteNewsPanel() {
                     >
                       Modifier
                     </button>
+                    {linkedPollForNews(item.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => void removePollOnly(item)}
+                        disabled={busy || Boolean(draft)}
+                        className="rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50 sm:py-1 sm:text-xs"
+                      >
+                        Supprimer le sondage
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void removeNews(item)}

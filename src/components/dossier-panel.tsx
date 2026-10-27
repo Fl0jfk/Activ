@@ -182,7 +182,14 @@ function ApplicantBlock({ application }: { application: RegistrationApplication 
   const bulletin = application.membershipBulletin;
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
+        {application.origin === "paper" ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
+            Adhérent papier
+          </span>
+        ) : null}
+      </div>
       <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-slate-500">Nom</dt>
@@ -190,7 +197,7 @@ function ApplicantBlock({ application }: { application: RegistrationApplication 
         </div>
         <div>
           <dt className="text-slate-500">E-mail</dt>
-          <dd className="text-break font-medium text-slate-900">{application.email}</dd>
+          <dd className="text-break font-medium text-slate-900">{application.email || "—"}</dd>
         </div>
         <div>
           <dt className="text-slate-500">Téléphone</dt>
@@ -208,6 +215,28 @@ function ApplicantBlock({ application }: { application: RegistrationApplication 
           <dt className="text-slate-500">Ville</dt>
           <dd className="font-medium text-slate-900">{application.city?.trim() || "—"}</dd>
         </div>
+        {application.origin === "paper" ? (
+          <>
+            <div>
+              <dt className="text-slate-500">Bulletin papier signé</dt>
+              <dd className="font-medium text-slate-900">
+                {application.signedBulletinReceivedAt
+                  ? `Reçu le ${new Date(
+                      `${application.signedBulletinReceivedAt}T12:00:00`,
+                    ).toLocaleDateString("fr-FR")}`
+                  : "Non coché"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Montant saisi au bureau</dt>
+              <dd className="font-medium text-slate-900">
+                {typeof application.amountPaid === "number"
+                  ? `${application.amountPaid.toFixed(2).replace(".", ",")} €`
+                  : "—"}
+              </dd>
+            </div>
+          </>
+        ) : null}
         {bulletin ? (
           <>
             <div>
@@ -398,6 +427,7 @@ export default function DossierPanel({
   onMessage,
 }: DossierPanelProps) {
   const phase = getDossierProcessingPhase(application);
+  const isPaper = application.origin === "paper";
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(application.paymentMethod || "");
   const [busy, setBusy] = useState(false);
 
@@ -432,11 +462,21 @@ export default function DossierPanel({
       <p className="text-sm text-slate-600">{PROCESSING_PHASE_DESCRIPTIONS[phase]}</p>
 
       <ApplicantBlock application={application} />
-      <BulletinRevalidationBlock
-        applicationId={application.id}
-        busy={busy}
-        onRequestBulletinRevalidation={onRequestBulletinRevalidation}
-      />
+      {application.paymentStatus === "paid" ? (
+        <a
+          href={`/api/club/applications/${application.id}/receipt`}
+          className="inline-flex rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+        >
+          Télécharger l&apos;attestation de paiement
+        </a>
+      ) : null}
+      {!isPaper ? (
+        <BulletinRevalidationBlock
+          applicationId={application.id}
+          busy={busy}
+          onRequestBulletinRevalidation={onRequestBulletinRevalidation}
+        />
+      ) : null}
       <DocumentsBlock
         applicationId={application.id}
         documents={application.documents}
@@ -457,25 +497,35 @@ export default function DossierPanel({
       {phase === 1 ? (
         <div className="space-y-3 border-t border-slate-200 pt-4">
           <p className="text-sm font-medium text-slate-800">
-            Dossier reçu. Passez à la validation de l&apos;espace membre Clerk avant de traiter les pièces.
+            {isPaper
+              ? "Dossier papier reçu. Aucun espace membre Clerk n'est nécessaire : passez directement à la préparation du paiement."
+              : "Dossier reçu. Passez à la validation de l'espace membre Clerk avant de traiter les pièces."}
           </p>
           <button
             type="button"
             disabled={busy}
             onClick={() =>
               void run(() =>
-                onUpdate(application.id, { dossierPhase: "espace_validation", status: "pending" })
+                onUpdate(
+                  application.id,
+                  isPaper
+                    ? { dossierPhase: "payment", status: "approved" }
+                    : { dossierPhase: "espace_validation", status: "pending" },
+                ),
               )
             }
             className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Passer à la validation de l&apos;espace
+            {isPaper ? "Passer à la préparation du paiement" : "Passer à la validation de l'espace"}
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => {
-              if (window.confirm("Refuser ce dossier et supprimer le compte Clerk ?")) {
+              const message = isPaper
+                ? "Refuser ce dossier papier ?"
+                : "Refuser ce dossier et supprimer le compte Clerk ?";
+              if (window.confirm(message)) {
                 void run(() => onReject(application.id));
               }
             }}
@@ -486,7 +536,58 @@ export default function DossierPanel({
         </div>
       ) : null}
 
-      {phase === 2 ? (
+      {phase === 2 && isPaper ? (
+        <div className="space-y-3 border-t border-slate-200 pt-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
+            <p>
+              <strong>Dossier papier :</strong> aucun compte Clerk à valider.
+            </p>
+            <p className="mt-1 text-xs text-amber-900">
+              Les pièces et le paiement peuvent être traités directement par le bureau.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  onUpdate(application.id, { dossierPhase: "payment", status: "approved" }),
+                )
+              }
+              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Passer au paiement
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  onUpdate(application.id, { dossierPhase: "documents", status: "pending" }),
+                )
+              }
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Passer aux pièces
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  onUpdate(application.id, { dossierPhase: "reception", status: "pending" }),
+                )
+              }
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Revenir à la réception
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {phase === 2 && !isPaper ? (
         <div className="space-y-3 border-t border-slate-200 pt-4">
           <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-sm text-violet-950">
             <p>
@@ -541,7 +642,9 @@ export default function DossierPanel({
       {phase === 3 ? (
         <div className="space-y-3 border-t border-slate-200 pt-4">
           <p className="text-sm font-medium text-slate-800">
-            L&apos;espace membre est actif. Contrôlez les pièces jointes.
+            {isPaper
+              ? "Dossier papier. Contrôlez les pièces jointes puis passez au paiement."
+              : "L'espace membre est actif. Contrôlez les pièces jointes."}
           </p>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
@@ -652,9 +755,18 @@ export default function DossierPanel({
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
             <p className="font-semibold">Dossier finalisé</p>
             <p className="mt-1">
-              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}). Un reçu PDF a été
-              envoyé à l&apos;adhérent. Adhésion active sur Clerk.
+              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}).{" "}
+              {application.email
+                ? "L'attestation de paiement a été envoyée à l'adhérent."
+                : "Aucune adresse e-mail : l'attestation peut être téléchargée ci-dessous."}{" "}
+              {isPaper ? "Dossier papier traité." : "Adhésion active sur Clerk."}
             </p>
+            <a
+              href={`/api/club/applications/${application.id}/receipt`}
+              className="mt-3 inline-flex rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Télécharger l&apos;attestation de paiement
+            </a>
             {application.licenseEndDate ? (
               <p className="mt-1">
                 Licence valable jusqu&apos;au{" "}
@@ -695,7 +807,9 @@ export default function DossierPanel({
               onClick={() => {
                 if (
                   window.confirm(
-                    "Refuser ce dossier ? Le compte Clerk sera supprimé si possible.",
+                    isPaper
+                      ? "Refuser ce dossier papier ?"
+                      : "Refuser ce dossier ? Le compte Clerk sera supprimé si possible.",
                   )
                 ) {
                   void run(() => onReject(application.id));

@@ -11,10 +11,10 @@ import {
 import { notifyBureauNewPreinscription } from "@/lib/preinscription-notify";
 import {
   buildMembershipBulletinRecord,
-  resolvePrimaryDisciplineId,
   validateMembershipBulletinPayload,
   type MembershipBulletinFormPayload,
 } from "@/lib/membership-bulletin";
+import { buildMembershipActivityCatalog, resolveMembershipDisciplineIds } from "@/lib/membership-activities";
 import { buildMembershipBulletinPdf } from "@/lib/membership-bulletin-pdf";
 import { sendEmail } from "@/lib/mailer";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
@@ -55,48 +55,95 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const ALREADY_RECEIVED_MESSAGE =
+  "Votre bulletin d'adhésion a déjà bien été reçu. Le bureau va le traiter, vous recevrez une confirmation par e-mail. Vous n'avez pas besoin de le renvoyer.";
+
 async function handleBulletinSubmission(payload: MembershipBulletinFormPayload & { bulletinMode?: boolean }) {
-  const validation = validateMembershipBulletinPayload(payload, { requirePassword: true });
+  const siteData = await readSiteData();
+  const activityOptions = buildMembershipActivityCatalog(siteData);
+  const validation = validateMembershipBulletinPayload(payload, {
+    requirePassword: true,
+    activityOptions,
+  });
   if (!validation.ok) {
     return jsonError(validation.message, 400);
   }
 
   const email = payload.email.trim().toLowerCase();
   const data = await readClubData();
-  const existingApplication = data.applications.some(
-    (entry) => entry.email.trim().toLowerCase() === email && entry.status === "pending",
+  const existingApplication = data.applications.find(
+    (entry) =>
+      entry.email.trim().toLowerCase() === email &&
+      entry.status !== "rejected" &&
+      entry.status !== "cancelled",
   );
   if (existingApplication) {
-    return jsonError("Une demande est déjà en attente pour cet email.", 409);
+    return jsonOk({ message: ALREADY_RECEIVED_MESSAGE, alreadyReceived: true });
   }
 
-  const siteData = await readSiteData();
-  const disciplines = getActiveDisciplineOptions(siteData);
-  const disciplineId = resolvePrimaryDisciplineId(payload.selectedSlots, disciplines);
+  const activeDisciplines = getActiveDisciplineOptions(siteData);
+  const disciplineIds = resolveMembershipDisciplineIds(payload.selectedSlots, activityOptions);
+  const disciplineId =
+    disciplineIds[0] ?? (activeDisciplines.length === 1 ? activeDisciplines[0].id : null);
   if (!disciplineId) {
-    return jsonError("Impossible de rattacher une discipline. Réessayez plus tard.", 400);
+    return jsonError(
+      "Impossible de rattacher cette activité à une discipline du site. Contactez le bureau de l'association.",
+      400,
+    );
   }
+  const allDisciplineIds = [
+    disciplineId,
+    ...disciplineIds.filter((id) => id !== disciplineId),
+  ];
 
-  const disciplineIds = [disciplineId];
   const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
-    disciplineIds,
+    disciplineIds: allDisciplineIds,
     espaceValidated: false,
     membershipStatus: "pending",
     registrationState: "pending",
   });
 
   const client = await clerkClient();
-  const createdUser = await client.users.createUser({
-    firstName: payload.firstName.trim(),
-    lastName: payload.lastName.trim(),
-    emailAddress: [email],
-    password: payload.password,
-    privateMetadata,
-    publicMetadata,
-  });
+  let createdUser: { id: string } | undefined;
+  try {
+    createdUser = await client.users.createUser({
+      firstName: payload.firstName.trim(),
+      lastName: payload.lastName.trim(),
+      emailAddress: [email],
+      password: payload.password,
+      privateMetadata,
+      publicMetadata,
+    });
+  } catch (error) {
+    const parsedError = parseClerkError(error);
+    if (parsedError.status === 409) {
+      const latestData = await readClubData();
+      const alreadyRegistered = latestData.applications.some(
+        (entry) =>
+          entry.email.trim().toLowerCase() === email &&
+          entry.status !== "rejected" &&
+          entry.status !== "cancelled",
+      );
+      if (alreadyRegistered) {
+        return jsonOk({ message: ALREADY_RECEIVED_MESSAGE, alreadyReceived: true });
+      }
+      console.error("Bulletin blocked: Clerk account already exists", { email });
+      return jsonError(
+        "Un compte existe déjà avec cette adresse e-mail. Connectez-vous à votre espace membre, ou utilisez « Mot de passe oublié ». Si le problème persiste, contactez le bureau.",
+        409,
+        "existing_account",
+      );
+    }
+    console.error("Bulletin blocked: Clerk user creation failed", { email, error });
+    return jsonError(parsedError.message, parsedError.status, "clerk_error");
+  }
+
+  if (!createdUser) {
+    return jsonError("Erreur serveur pendant la création du compte.", 500);
+  }
 
   try {
-    const pdfBytes = await buildMembershipBulletinPdf(payload);
+    const pdfBytes = await buildMembershipBulletinPdf(payload, { activityOptions });
     const uploadedPdf = await uploadBytesToS3({
       body: pdfBytes,
       keyPrefix: "data/club-documents/bulletins",
@@ -105,9 +152,10 @@ async function handleBulletinSubmission(payload: MembershipBulletinFormPayload &
       userSegment: createdUser.id,
     });
 
-    const membershipBulletin = buildMembershipBulletinRecord(payload);
+    const membershipBulletin = buildMembershipBulletinRecord(payload, { activityOptions });
     const application = buildRegistrationApplication({
       disciplineId,
+      disciplineIds: allDisciplineIds,
       trialSlotId: null,
       firstName: payload.firstName,
       lastName: payload.lastName,

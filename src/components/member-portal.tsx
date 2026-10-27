@@ -69,7 +69,15 @@ export default function MemberPortal({
   const isInscriptionFinalized = inscriptionStep === "finalized" || hasFullMembership;
 
   const myDisciplineNames = useMemo(() => {
-    const ids = new Set(applications.map((a) => a.disciplineId));
+    const ids = new Set(
+      applications.flatMap((application) =>
+        application.disciplineIds?.length
+          ? application.disciplineIds
+          : application.disciplineId
+            ? [application.disciplineId]
+            : [],
+      ),
+    );
     return disciplines.filter((d) => ids.has(d.id)).map((d) => d.name);
   }, [applications, disciplines]);
 
@@ -197,6 +205,14 @@ export default function MemberPortal({
             ) : null}
             {latestApplication.trialAttended ? (
               <p className="text-sm text-slate-600">Essai réalisé</p>
+            ) : null}
+            {latestApplication.paymentStatus === "paid" ? (
+              <a
+                href={`/api/club/applications/${latestApplication.id}/receipt`}
+                className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+              >
+                Télécharger mon attestation de paiement
+              </a>
             ) : null}
           </div>
           {!isInscriptionFinalized ? (
@@ -355,21 +371,43 @@ export default function MemberPortal({
           ) : (
             applications.map((application) => {
               const step = getMemberInscriptionStep(application);
+              const applicationDisciplineIds =
+                application.disciplineIds?.length
+                  ? application.disciplineIds
+                  : [application.disciplineId];
+              const applicationDisciplineNames = disciplines
+                .filter((discipline) => applicationDisciplineIds.includes(discipline.id))
+                .map((discipline) => discipline.name);
               return (
                 <article key={application.id} className="rounded-xl border border-slate-200 p-4">
                   <p className="font-semibold text-slate-900">
-                    {disciplines.find((d) => d.id === application.disciplineId)?.name ?? "Discipline"}
+                    {applicationDisciplineNames.length > 0
+                      ? applicationDisciplineNames.join(", ")
+                      : "Discipline"}
                   </p>
-                  <p className="mt-2">
+                  <p className="mt-2 flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${stepBadgeClass(step)}`}
                     >
                       {getMemberInscriptionLabel(application)}
                     </span>
+                    {application.origin === "paper" ? (
+                      <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                        Bulletin papier
+                      </span>
+                    ) : null}
                   </p>
                   <p className="mt-2 text-sm text-slate-700">
                     Essai : {application.trialAttended ? "Réalisé" : "Pas encore réalisé"}
                   </p>
+                  {application.paymentStatus === "paid" ? (
+                    <a
+                      href={`/api/club/applications/${application.id}/receipt`}
+                      className="mt-2 inline-block text-sm font-semibold text-emerald-700 underline"
+                    >
+                      Télécharger l&apos;attestation de paiement
+                    </a>
+                  ) : null}
                   {application.notes ? (
                     <p className="mt-2 text-sm text-amber-800">Message du bureau : {application.notes}</p>
                   ) : null}

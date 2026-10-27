@@ -49,7 +49,7 @@ export default function LicenseRenewalPanel({
 
   if (alerts.length === 0) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="bento-card p-5">
         <h2 className="text-lg font-bold text-slate-900">Renouvellements</h2>
         <p className="mt-1 text-sm text-slate-600">
           Aucune licence à renouveler dans les 30 prochains jours.
@@ -60,7 +60,7 @@ export default function LicenseRenewalPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5 shadow-sm">
+    <section className="bento-card p-5">
       <h2 className="text-lg font-bold text-rose-950">Renouvellements</h2>
       <p className="mt-1 text-sm text-rose-900/80">
         Licences expirées ou qui se terminent dans moins de 30 jours.

@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SignaturePad from "@/components/signature-pad";
-import type { DisciplineOption } from "@/lib/discipline-options";
+import type { MembershipActivityOption } from "@/lib/membership-activities";
 import {
-  MEMBERSHIP_ACTIVITY_SLOTS,
   MEMBERSHIP_ADHESION_FEE,
   MEMBERSHIP_SEASON_LABEL,
   computeMembershipTotals,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/membership-bulletin";
 
 type MembershipBulletinFormProps = {
-  disciplines: DisciplineOption[];
+  activityOptions: MembershipActivityOption[];
   initialDisciplineId?: string;
   revalidateToken?: string;
 };
@@ -42,7 +42,7 @@ function formatDateFr(isoDate: string): string {
 /** Safari renvoie "The string did not match the expected pattern" si on parse du non-JSON. */
 async function readJsonMessage(
   response: Response,
-): Promise<{ message?: string; ok: boolean }> {
+): Promise<{ message?: string; code?: string; ok: boolean }> {
   const text = await response.text();
   if (!text.trim()) {
     return {
@@ -53,8 +53,8 @@ async function readJsonMessage(
     };
   }
   try {
-    const payload = JSON.parse(text) as { message?: string };
-    return { ok: response.ok, message: payload.message };
+    const payload = JSON.parse(text) as { message?: string; code?: string };
+    return { ok: response.ok, message: payload.message, code: payload.code };
   } catch {
     return {
       ok: false,
@@ -66,7 +66,7 @@ async function readJsonMessage(
 }
 
 export default function MembershipBulletinForm({
-  disciplines,
+  activityOptions,
   initialDisciplineId,
   revalidateToken,
 }: MembershipBulletinFormProps) {
@@ -86,11 +86,8 @@ export default function MembershipBulletinForm({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
   const [selectedSlots, setSelectedSlots] = useState<string[]>(() => {
     if (!initialDisciplineId) return [];
-    const discipline = disciplines.find((entry) => entry.id === initialDisciplineId);
-    if (!discipline) return [];
-    const haystack = `${discipline.name} ${discipline.slug}`.toLowerCase();
-    const matched = MEMBERSHIP_ACTIVITY_SLOTS.find((slot) =>
-      slot.matchKeywords.some((keyword) => haystack.includes(keyword)),
+    const matched = activityOptions.find(
+      (option) => option.disciplineId === initialDisciplineId,
     );
     return matched ? [matched.id] : [];
   });
@@ -105,6 +102,7 @@ export default function MembershipBulletinForm({
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingToken, setIsLoadingToken] = useState(Boolean(revalidateToken));
 
@@ -296,6 +294,7 @@ export default function MembershipBulletinForm({
     event.preventDefault();
     setIsLoading(true);
     setMessage("");
+    setErrorCode("");
     try {
       const endpoint = isRevalidationMode
         ? "/api/public-membership-bulletin/revalidate"
@@ -314,6 +313,7 @@ export default function MembershipBulletinForm({
       });
       const payload = await readJsonMessage(response);
       if (!payload.ok) {
+        if (payload.code) setErrorCode(payload.code);
         throw new Error(payload.message ?? "Envoi impossible.");
       }
       router.push(isRevalidationMode ? "/?bulletin=revalidated" : "/?preregistration=received");
@@ -496,27 +496,34 @@ export default function MembershipBulletinForm({
                 Adhésion obligatoire : <strong>{MEMBERSHIP_ADHESION_FEE} €</strong> (ajoutée au tarif
                 des activités).
               </p>
-              <div className="space-y-2">
-                {MEMBERSHIP_ACTIVITY_SLOTS.map((slot) => (
-                  <label
-                    key={slot.id}
-                    className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSlots.includes(slot.id)}
-                      onChange={() => toggleSlot(slot.id)}
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="font-semibold">
-                        {slot.day} {slot.time}
+              {activityOptions.length === 0 ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Aucune activité n&apos;est encore ouverte aux inscriptions. Contactez le bureau de
+                  l&apos;association.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {activityOptions.map((slot) => (
+                    <label
+                      key={slot.id}
+                      className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSlots.includes(slot.id)}
+                        onChange={() => toggleSlot(slot.id)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-semibold">
+                          {slot.day} {slot.time}
+                        </span>
+                        <span className="block text-slate-600">{slot.activity}</span>
                       </span>
-                      <span className="block text-slate-600">{slot.activity}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
+                    </label>
+                  ))}
+                </div>
+              )}
               <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-950">
                 <p>1 activité : 180 € · 2 activités : 260 € · 3 activités : 320 €</p>
                 <p className="mt-1 font-semibold">
@@ -716,7 +723,18 @@ export default function MembershipBulletinForm({
           )}
         </div>
 
-        {message ? <p className="mt-3 text-sm font-medium text-rose-700">{message}</p> : null}
+        {message ? (
+          <div className="mt-3 text-sm font-medium text-rose-700">
+            <p>{message}</p>
+            {errorCode === "existing_account" ? (
+              <p className="mt-2">
+                <Link href="/sign-in" className="font-semibold underline">
+                  Se connecter à mon espace
+                </Link>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </main>
   );

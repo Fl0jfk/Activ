@@ -6,9 +6,11 @@ import {
   type MembershipBulletinFormPayload,
   validateMembershipBulletinPayload,
 } from "@/lib/membership-bulletin";
+import { buildMembershipActivityCatalog, resolveMembershipDisciplineIds } from "@/lib/membership-activities";
 import { buildMembershipBulletinPdf } from "@/lib/membership-bulletin-pdf";
 import { isBulletinRevalidationTokenActive } from "@/lib/bulletin-revalidation-email";
 import { sendEmail } from "@/lib/mailer";
+import { readSiteData } from "@/lib/site-data";
 import { uploadBytesToS3 } from "@/lib/s3-upload";
 
 export const maxDuration = 60;
@@ -53,7 +55,12 @@ export async function POST(request: NextRequest) {
   const token = payload.token?.trim() ?? "";
   if (!token) return jsonError("Lien invalide.", 400);
 
-  const validation = validateMembershipBulletinPayload(payload, { requirePassword: false });
+  const siteData = await readSiteData();
+  const activityOptions = buildMembershipActivityCatalog(siteData);
+  const validation = validateMembershipBulletinPayload(payload, {
+    requirePassword: false,
+    activityOptions,
+  });
   if (!validation.ok) return jsonError(validation.message, 400);
 
   const data = await readClubData();
@@ -64,7 +71,7 @@ export async function POST(request: NextRequest) {
   const application = data.applications.find((entry) => entry.id === tokenEntry.applicationId);
   if (!application) return jsonError("Dossier introuvable.", 404);
 
-  const pdfBytes = await buildMembershipBulletinPdf(payload);
+  const pdfBytes = await buildMembershipBulletinPdf(payload, { activityOptions });
   const uploadedPdf = await uploadBytesToS3({
     body: pdfBytes,
     keyPrefix: "data/club-documents/bulletins",
@@ -81,7 +88,12 @@ export async function POST(request: NextRequest) {
   application.postalCode = payload.postalCode.trim();
   application.city = payload.city.trim();
   application.email = payload.email.trim().toLowerCase();
-  application.membershipBulletin = buildMembershipBulletinRecord(payload);
+  application.membershipBulletin = buildMembershipBulletinRecord(payload, { activityOptions });
+  const disciplineIds = resolveMembershipDisciplineIds(payload.selectedSlots, activityOptions);
+  if (disciplineIds.length > 0) {
+    application.disciplineIds = disciplineIds;
+    application.disciplineId = disciplineIds[0]!;
+  }
   application.documents.push(uploadedPdf);
 
   tokenEntry.usedAt = new Date().toISOString();

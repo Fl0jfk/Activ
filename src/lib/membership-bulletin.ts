@@ -49,6 +49,10 @@ export type MembershipBulletinData = {
   emergencyContactName: string;
   emergencyContactPhone: string;
   selectedSlots: string[];
+  /** Libellés lisibles des activités cochées (PDF, reçu, espace membre). */
+  selectedActivityLabels?: string[];
+  /** Toutes les disciplines concernées par le bulletin (et pas seulement la principale). */
+  selectedDisciplineIds?: string[];
   paymentPlan: MembershipPaymentPlan;
   imageRights: MembershipImageRights;
   commitmentsAccepted: boolean;
@@ -56,6 +60,15 @@ export type MembershipBulletinData = {
   signedPlace: string;
   activitiesTotal: number;
   grandTotal: number;
+};
+
+/** Source d'activités utilisée pour valider et enregistrer un bulletin. */
+export type MembershipActivityLookup = {
+  id: string;
+  activity?: string;
+  day?: string;
+  time?: string;
+  disciplineId?: string | null;
 };
 
 export type MembershipBulletinFormPayload = {
@@ -142,9 +155,43 @@ export function resolvePrimaryDisciplineId(
   return disciplines[0]?.id ?? null;
 }
 
+function fallbackActivityLabel(activityId: string): string {
+  const legacy = MEMBERSHIP_ACTIVITY_SLOTS.find((slot) => slot.id === activityId);
+  if (!legacy) return activityId;
+  return `${legacy.day} ${legacy.time} — ${legacy.activity}`;
+}
+
+/** Complète un bulletin avec les libellés et disciplines réellement cochés. */
+export function membershipActivityDetails(
+  selectedSlots: string[],
+  activityOptions?: MembershipActivityLookup[],
+): { labels: string[]; disciplineIds: string[] } {
+  const optionsById = new Map((activityOptions ?? []).map((option) => [option.id, option]));
+  const labels: string[] = [];
+  const disciplineIds: string[] = [];
+
+  for (const slotId of selectedSlots) {
+    const option = optionsById.get(slotId);
+    if (option) {
+      const day = option.day?.trim() ?? "";
+      const time = option.time?.trim() ?? "";
+      const activity = option.activity?.trim() ?? "";
+      const scheduleLabel = [day, time].filter(Boolean).join(" ");
+      labels.push([scheduleLabel, activity].filter(Boolean).join(" — ") || slotId);
+      if (option.disciplineId && !disciplineIds.includes(option.disciplineId)) {
+        disciplineIds.push(option.disciplineId);
+      }
+      continue;
+    }
+    labels.push(fallbackActivityLabel(slotId));
+  }
+
+  return { labels, disciplineIds };
+}
+
 export function validateMembershipBulletinPayload(
   payload: MembershipBulletinFormPayload,
-  options?: { requirePassword?: boolean },
+  options?: { requirePassword?: boolean; activityOptions?: MembershipActivityLookup[] },
 ): { ok: true } | { ok: false; message: string } {
   const requirePassword = options?.requirePassword ?? true;
   if (
@@ -167,9 +214,12 @@ export function validateMembershipBulletinPayload(
   if (!Array.isArray(payload.selectedSlots) || payload.selectedSlots.length === 0) {
     return { ok: false, message: "Veuillez cocher au moins une activité." };
   }
-  const unknownSlot = payload.selectedSlots.some(
-    (id) => !MEMBERSHIP_ACTIVITY_SLOTS.some((slot) => slot.id === id),
+  const allowedActivityIds = new Set(
+    (options?.activityOptions?.length
+      ? options.activityOptions.map((option) => option.id)
+      : MEMBERSHIP_ACTIVITY_SLOTS.map((slot) => slot.id)),
   );
+  const unknownSlot = payload.selectedSlots.some((id) => !allowedActivityIds.has(id));
   if (unknownSlot) {
     return { ok: false, message: "Créneau d'activité invalide." };
   }
@@ -193,13 +243,17 @@ export function validateMembershipBulletinPayload(
 
 export function buildMembershipBulletinRecord(
   payload: MembershipBulletinFormPayload,
+  options?: { activityOptions?: MembershipActivityLookup[] },
 ): MembershipBulletinData {
   const totals = computeMembershipTotals(payload.selectedSlots);
+  const details = membershipActivityDetails(payload.selectedSlots, options?.activityOptions);
   return {
     birthDate: payload.birthDate.trim(),
     emergencyContactName: payload.emergencyContactName.trim(),
     emergencyContactPhone: payload.emergencyContactPhone.trim(),
     selectedSlots: [...payload.selectedSlots],
+    selectedActivityLabels: details.labels,
+    selectedDisciplineIds: details.disciplineIds,
     paymentPlan: payload.paymentPlan,
     imageRights: payload.imageRights,
     commitmentsAccepted: true,

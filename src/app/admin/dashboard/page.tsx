@@ -305,6 +305,34 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
                 placeholder="Adresse"
               />
             </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Numéro SIRET (facultatif)
+              <input
+                value={data.association.siret ?? ""}
+                onChange={(event) =>
+                  setData((prev) => ({
+                    ...prev,
+                    association: { ...prev.association, siret: event.target.value },
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Ex. 123 456 789 00012"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Numéro RNA (facultatif)
+              <input
+                value={data.association.rna ?? ""}
+                onChange={(event) =>
+                  setData((prev) => ({
+                    ...prev,
+                    association: { ...prev.association, rna: event.target.value },
+                  }))
+                }
+                className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                placeholder="Ex. W123456789"
+              />
+            </label>
             <SiteImageField
               label="Tampon / cachet de l'association"
               helpText="Affiché sur les reçus PDF envoyés aux adhérents après validation d'un paiement. PNG ou JPEG recommandé (fond transparent possible)."
