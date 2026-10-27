@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
-import { reloadAtBureauDossiers } from "@/lib/bureau-navigation";
+import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
 
 export function useClubApplicationActions() {
   const [message, setMessage] = useState("");
@@ -14,7 +14,7 @@ export function useClubApplicationActions() {
       body: JSON.stringify(payload),
     });
     if (response.ok) {
-      reloadAtBureauDossiers();
+      reloadAfterDossierChange();
       return;
     }
     const body = (await response.json()) as { message?: string };
@@ -28,7 +28,7 @@ export function useClubApplicationActions() {
     const body = (await response.json()) as { message?: string };
     if (response.ok) {
       setMessage(body.message ?? "Espace membre activé.");
-      reloadAtBureauDossiers();
+      reloadAfterDossierChange();
     } else {
       setMessage(body.message ?? "Impossible d'activer l'espace.");
     }
@@ -41,7 +41,7 @@ export function useClubApplicationActions() {
     const body = (await response.json()) as { message?: string };
     if (response.ok) {
       setMessage(body.message ?? "Dossier refusé.");
-      reloadAtBureauDossiers();
+      reloadAfterDossierChange();
     } else {
       setMessage(body.message ?? "Impossible de refuser le dossier.");
     }
@@ -66,7 +66,7 @@ export function useClubApplicationActions() {
           body.secureLink,
         );
       }
-      reloadAtBureauDossiers();
+      reloadAfterDossierChange();
     } else {
       setMessage(body.message ?? "Impossible d'envoyer la demande.");
     }
@@ -85,7 +85,7 @@ export function useClubApplicationActions() {
           body.secureLink,
         );
       }
-      reloadAtBureauDossiers();
+      reloadAfterDossierChange();
     } else {
       setMessage(body.message ?? "Impossible d'envoyer la demande de revalidation.");
     }

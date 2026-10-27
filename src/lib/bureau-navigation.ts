@@ -1,7 +1,4 @@
-/** Recharge la page en restant sur la section dossiers du cockpit. */
-export function reloadAtBureauDossiers(): void {
-  if (window.location.hash !== "#dossiers") {
-    window.location.hash = "dossiers";
-  }
+/** Recharge la page courante après une action sur un dossier. */
+export function reloadAfterDossierChange(): void {
   window.location.reload();
 }

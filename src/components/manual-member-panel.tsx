@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import type { DisciplineOption } from "@/lib/discipline-options";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/dossier-workflow";
-import { reloadAtBureauDossiers } from "@/lib/bureau-navigation";
+import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
 
 type ManualMemberPanelProps = {
   disciplines: DisciplineOption[];
@@ -95,7 +95,7 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
       setPaymentStatus("unpaid");
       setPaymentMethod("");
       setNotes("");
-      window.setTimeout(() => reloadAtBureauDossiers(), 900);
+      window.setTimeout(() => reloadAfterDossierChange(), 900);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Ajout impossible.");
     } finally {

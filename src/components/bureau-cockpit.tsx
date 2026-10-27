@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import AdminDashboardPage from "@/app/admin/dashboard/page";
-import BureauBroadcastPanel from "@/components/bureau-broadcast-panel";
+import Link from "next/link";
+import { useMemo, type ReactNode } from "react";
 import {
   BarChart,
   DonutChart,
@@ -11,15 +10,6 @@ import {
   Sparkline,
   StackedBarChart,
 } from "@/components/bureau-cockpit-charts";
-import CoachAbsencePanel from "@/components/coach-absence-panel";
-import HomeGalleryPanel from "@/components/home-gallery-panel";
-import LicenseRenewalPanel from "@/components/license-renewal-panel";
-import ManualMemberPanel from "@/components/manual-member-panel";
-import MemberRequestsPanel from "@/components/member-requests-panel";
-import RegistrationQueue from "@/components/registration-queue";
-import ScheduleExceptionsPanel from "@/components/schedule-exceptions-panel";
-import SiteNewsPanel from "@/components/site-news-panel";
-import TrialSlotsPanel from "@/components/trial-slots-panel";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
@@ -34,6 +24,10 @@ type BureauCockpitProps = {
   canManageSite: boolean;
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
+  memberRequestPendingCount: number;
+  renewalCount: number;
+  newsCount: number;
+  galleryCount: number;
   disciplines: DisciplineOption[];
   slots: TrialSlotSummary[];
   applications: RegistrationApplication[];
@@ -169,45 +163,6 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
   );
 }
 
-function CockpitPanel({
-  id,
-  eyebrow,
-  title,
-  description,
-  action,
-  children,
-  className = "",
-}: {
-  id?: string;
-  eyebrow: string;
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      id={id}
-      className={`anchor-section bento-card p-5 sm:p-6 ${className}`}
-    >
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-700">
-            {eyebrow}
-          </p>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
-          {description ? (
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>
-          ) : null}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function SectionHeading({
   id,
   eyebrow,
@@ -306,14 +261,15 @@ export default function BureauCockpit({
   canManageSite,
   canApproveCoachAbsences,
   coachAbsencePendingCount,
+  memberRequestPendingCount,
+  renewalCount,
+  newsCount,
+  galleryCount,
   disciplines,
   slots,
   applications,
   weekSchedule,
 }: BureauCockpitProps) {
-  const [queueFilter, setQueueFilter] = useState<QueueFilter>("en_cours");
-  const [siteAdminOpen, setSiteAdminOpen] = useState(false);
-
   const metrics = useMemo(() => {
     const steps: Record<DossierStep, number> = {
       new_request: 0,
@@ -421,13 +377,6 @@ export default function BureauCockpit({
     [weekSchedule],
   );
 
-  const queueSubtitle =
-    queueFilter === "en_cours"
-      ? "Dossiers qui demandent une action du bureau."
-      : queueFilter === "finalized"
-        ? "Dossiers finalisés et paiement encaissé."
-        : "Historique complet des demandes.";
-
   const filterOptions: {
     id: QueueFilter;
     label: string;
@@ -463,28 +412,28 @@ export default function BureauCockpit({
     value: number;
     tone: Tone;
     icon: IconName;
-    onClick: () => void;
+    href: string;
   }[] = [
     {
       label: "À examiner",
       value: metrics.steps.new_request + metrics.steps.awaiting_espace,
       tone: "cyan",
       icon: "sparkles",
-      onClick: () => selectQueueFilter("en_cours"),
+      href: "/espace/bureau/dossiers?filtre=en_cours",
     },
     {
       label: "Pièces manquantes",
       value: metrics.steps.missing_document,
       tone: "rose",
       icon: "users",
-      onClick: () => selectQueueFilter("en_cours"),
+      href: "/espace/bureau/dossiers?filtre=en_cours",
     },
     {
       label: "Paiements en attente",
       value: metrics.steps.awaiting_payment,
       tone: "amber",
       icon: "clock",
-      onClick: () => selectQueueFilter("en_cours"),
+      href: "/espace/bureau/dossiers?filtre=en_cours",
     },
     ...(canApproveCoachAbsences
       ? [
@@ -493,24 +442,97 @@ export default function BureauCockpit({
             value: coachAbsencePendingCount,
             tone: "violet" as Tone,
             icon: "shield" as IconName,
-            onClick: () => scrollToSection("absences-coach"),
+            href: "/espace/bureau/planning#absences-coach",
           },
         ]
       : []),
   ];
 
-  function selectQueueFilter(filter: QueueFilter) {
-    setQueueFilter(filter);
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById("dossiers")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  function scrollToSection(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  const toolCards: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    href: string;
+    icon: IconName;
+    tone: Tone;
+    stats: { label: string; value: number; alert?: boolean }[];
+  }[] = [
+    {
+      eyebrow: "Inscriptions",
+      title: "Dossiers",
+      description:
+        "File de traitement, validation des pièces et adhésions papier reçues au bureau.",
+      href: "/espace/bureau/dossiers",
+      icon: "users",
+      tone: "cyan",
+      stats: [
+        { label: "À traiter", value: metrics.enCours, alert: metrics.enCours > 0 },
+        { label: "Finalisés", value: metrics.finalises },
+      ],
+    },
+    {
+      eyebrow: "Semaine",
+      title: "Essais & planning",
+      description:
+        "Créneaux d’essai, ajustements de séances et validation des absences coach.",
+      href: "/espace/bureau/planning",
+      icon: "calendar",
+      tone: "violet",
+      stats: [
+        { label: "Créneaux d’essai", value: slots.length },
+        {
+          label: canApproveCoachAbsences ? "Absences à valider" : "Séances cette semaine",
+          value: canApproveCoachAbsences ? coachAbsencePendingCount : weekSchedule.length,
+          alert: canApproveCoachAbsences && coachAbsencePendingCount > 0,
+        },
+      ],
+    },
+    {
+      eyebrow: "Échanges",
+      title: "Communication",
+      description: "Envoyez un e-mail à tous les adhérents, à une activité ou à une personne.",
+      href: "/espace/bureau/communication",
+      icon: "mail",
+      tone: "emerald",
+      stats: [
+        { label: "Adhérents à jour", value: metrics.finalises },
+        { label: "Activités", value: disciplines.length },
+      ],
+    },
+    {
+      eyebrow: "Support",
+      title: "Adhérents",
+      description: "Demandes envoyées depuis l’espace personnel et licences à renouveler.",
+      href: "/espace/bureau/adherents",
+      icon: "shield",
+      tone: "amber",
+      stats: [
+        {
+          label: "Demandes",
+          value: memberRequestPendingCount,
+          alert: memberRequestPendingCount > 0,
+        },
+        { label: "À renouveler", value: renewalCount, alert: renewalCount > 0 },
+      ],
+    },
+    ...(canManageSite
+      ? [
+          {
+            eyebrow: "Publication",
+            title: "Contenu du site",
+            description:
+              "Actualités, galerie d’accueil et informations de l’association. Les anciennes actualités sont archivées.",
+            href: "/espace/bureau/contenu",
+            icon: "image" as IconName,
+            tone: "slate" as Tone,
+            stats: [
+              { label: "Actualités", value: newsCount },
+              { label: "Photos", value: galleryCount },
+            ],
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="mx-auto mt-6 min-w-0 w-full max-w-6xl space-y-6 overflow-x-hidden px-4 pb-16 sm:px-8">
@@ -524,8 +546,8 @@ export default function BureauCockpit({
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             {canManageSite
-              ? "Inscriptions, planning, communication, absences coach et contenu du site — tout au même endroit."
-              : "Pré-inscriptions, essais, planning et communication par e-mail."}
+              ? "Vue d’ensemble des inscriptions, du planning et de la communication. Chaque outil s’ouvre sur sa propre page."
+              : "Vue d’ensemble des pré-inscriptions, des essais et des e-mails. Chaque outil s’ouvre sur sa propre page."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -576,10 +598,9 @@ export default function BureauCockpit({
               </div>
               <div className="w-full space-y-2">
                 {filterOptions.map((option) => (
-                  <button
+                  <Link
                     key={option.id}
-                    type="button"
-                    onClick={() => selectQueueFilter(option.id)}
+                    href={`/espace/bureau/dossiers?filtre=${option.id}`}
                     className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left transition hover:border-white/20 hover:bg-white/[0.08]"
                   >
                     <span className="flex items-center gap-2.5 text-sm text-white/75 lg:text-xs xl:text-sm">
@@ -592,7 +613,7 @@ export default function BureauCockpit({
                         className="h-3.5 w-3.5 text-white/30 transition group-hover:text-white/70 lg:h-3 lg:w-3 xl:h-3.5 xl:w-3.5"
                       />
                     </span>
-                  </button>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -610,7 +631,7 @@ export default function BureauCockpit({
             </div>
 
             <p className="mt-auto pt-4 text-[11px] leading-5 text-white/50">
-              Cliquez sur une ligne pour filtrer la file de traitement.
+              Chaque ligne ouvre la file de traitement correspondante sur la page Dossiers.
             </p>
           </div>
         </section>
@@ -837,10 +858,9 @@ export default function BureauCockpit({
 
           <div className="mt-4 space-y-2">
             {priorityItems.map((item) => (
-              <button
+              <Link
                 key={item.label}
-                type="button"
-                onClick={item.onClick}
+                href={item.href}
                 className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-left transition hover:border-slate-200 hover:bg-white"
               >
                 <span className="flex min-w-0 items-center gap-2.5">
@@ -855,7 +875,7 @@ export default function BureauCockpit({
                   <span className="text-sm font-semibold text-slate-950">{item.value}</span>
                   <span className="text-slate-300 transition group-hover:text-slate-500">→</span>
                 </span>
-              </button>
+              </Link>
             ))}
           </div>
 
@@ -870,192 +890,93 @@ export default function BureauCockpit({
               Actions rapides
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => scrollToSection("communication")}
+              <Link
+                href="/espace/bureau/communication"
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
               >
                 <Icon name="mail" className="h-4 w-4 text-cyan-600" />
                 Écrire un e-mail
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("adherent-papier")}
+              </Link>
+              <Link
+                href="/espace/bureau/dossiers#adherent-papier"
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
               >
                 <Icon name="plus" className="h-4 w-4 text-cyan-600" />
                 Adhérent papier
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("planning")}
+              </Link>
+              <Link
+                href="/espace/bureau/planning"
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
               >
                 <Icon name="calendar" className="h-4 w-4 text-cyan-600" />
                 Planning
-              </button>
+              </Link>
               {canManageSite ? (
-                <button
-                  type="button"
-                  onClick={() => scrollToSection("contenu-site")}
+                <Link
+                  href="/espace/bureau/contenu"
                   className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
                 >
                   <Icon name="image" className="h-4 w-4 text-cyan-600" />
                   Contenu du site
-                </button>
+                </Link>
               ) : null}
             </div>
           </div>
         </section>
       </div>
-
-      <CockpitPanel
-        id="dossiers"
-        eyebrow="Traitement"
-        title="Dossiers d'adhésion"
-        description={queueSubtitle}
-        action={
-          <div className="inline-flex max-w-full overflow-x-auto rounded-full border border-slate-200 bg-slate-100/80 p-1">
-            {filterOptions.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setQueueFilter(option.id)}
-                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                  queueFilter === option.id
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {option.label}
-                <span className="ml-1.5 text-[10px] text-slate-500">{option.value}</span>
-              </button>
-            ))}
-          </div>
-        }
-      >
-        <RegistrationQueue
-          disciplines={disciplines}
-          applications={applications}
-          queueFilter={queueFilter}
-        />
-      </CockpitPanel>
-
-      <section id="planning" className="anchor-section space-y-4">
+      <section className="anchor-section space-y-4 pt-2">
         <SectionHeading
-          eyebrow="Planning"
-          title="Essais & planning"
-          description="Créez des créneaux d'essai et ajustez les séances de la semaine."
-          action={
-            <span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200">
-              {slots.length} créneau{slots.length > 1 ? "x" : ""} d&apos;essai
-            </span>
-          }
+          eyebrow="Raccourcis"
+          title="Outils du bureau"
+          description="Chaque outil a sa propre page : le cockpit reste léger et les formulaires lourds sont à portée de clic."
         />
-        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-          <CockpitPanel
-            eyebrow="Essais"
-            title="Prochains créneaux"
-            description="Inscriptions aux séances d'essai et suivi des présences."
-          >
-            <TrialSlotsPanel
-              disciplines={disciplines}
-              slots={slots}
-              applications={applications}
-            />
-          </CockpitPanel>
-          <ScheduleExceptionsPanel canManageSite={canManageSite} />
-        </div>
-      </section>
 
-      <section id="communication" className="anchor-section space-y-4">
-        <SectionHeading
-          eyebrow="Échanges"
-          title="Communication & support"
-          description="Écrivez aux adhérents, enregistrez une inscription papier et traitez les demandes reçues."
-        />
-        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-          <BureauBroadcastPanel disciplines={disciplines} applications={applications} />
-          <div className="flex min-w-0 flex-col gap-4">
-            <div id="adherent-papier" className="anchor-section min-w-0">
-              <ManualMemberPanel disciplines={disciplines} />
-            </div>
-            <CockpitPanel
-              id="demandes"
-              eyebrow="Support"
-              title="Demandes des membres"
-              description="Demandes envoyées depuis l'espace personnel. Passage en « En cours » puis « Traitée » avec message et pièce jointe optionnelle."
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {toolCards.map((card) => (
+            <Link
+              key={card.href}
+              href={card.href}
+              className="bento-card group flex min-w-0 flex-col p-5 transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_26px_60px_-34px_rgba(15,23,42,0.45)]"
             >
-              <MemberRequestsPanel />
-            </CockpitPanel>
-            <div className="min-w-0">
-              <LicenseRenewalPanel disciplines={disciplines} applications={applications} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {canApproveCoachAbsences ? (
-        <CockpitPanel
-          id="absences-coach"
-          eyebrow="Réservé au président"
-          title="Absences coach"
-          description="Une fois validée, l'absence apparaît sur le site et les adhérents de la discipline sont prévenus par e-mail."
-          action={
-            coachAbsencePendingCount > 0 ? (
-              <span className="rounded-full bg-violet-600 px-3 py-1 text-xs font-semibold text-white">
-                {coachAbsencePendingCount} en attente
-              </span>
-            ) : (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                À jour
-              </span>
-            )
-          }
-        >
-          <CoachAbsencePanel disciplines={disciplines} />
-        </CockpitPanel>
-      ) : null}
-
-      {canManageSite ? (
-        <section id="contenu-site" className="anchor-section space-y-4">
-          <SectionHeading
-            eyebrow="Publication"
-            title="Contenu du site"
-            description="Actualités, galerie et informations de l'association."
-          />
-          <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <SiteNewsPanel />
-            <HomeGalleryPanel />
-          </div>
-
-          <CockpitPanel
-            eyebrow="Configuration"
-            title="Informations, disciplines & planning"
-            description="Coordonnées de l'association, tampon des reçus, organigramme, disciplines et horaires."
-          >
-            <button
-              type="button"
-              onClick={() => setSiteAdminOpen((open) => !open)}
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:bg-slate-100"
-            >
-              <span className="text-sm font-semibold text-slate-800">
-                {siteAdminOpen
-                  ? "Masquer les paramètres du site"
-                  : "Ouvrir les paramètres du site"}
-              </span>
-              <span className="text-xs font-medium text-slate-500">
-                {siteAdminOpen ? "Replier" : "Déplier"}
-              </span>
-            </button>
-            {siteAdminOpen ? (
-              <div className="mt-4">
-                <AdminDashboardPage embedded />
+              <div className="flex items-start justify-between gap-3">
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-2xl ${TONE_STYLES[card.tone].icon}`}
+                >
+                  <Icon name={card.icon} className="h-5 w-5" />
+                </span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition group-hover:border-cyan-200 group-hover:text-cyan-700">
+                  <Icon name="arrow" className="h-3.5 w-3.5" />
+                </span>
               </div>
-            ) : null}
-          </CockpitPanel>
-        </section>
-      ) : null}
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                {card.eyebrow}
+              </p>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
+                {card.title}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{card.description}</p>
+              <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+                {card.stats.map((stat) => (
+                  <div key={stat.label} className="rounded-2xl bg-slate-50/80 px-3 py-2.5">
+                    <p
+                      className={`text-lg font-semibold tracking-tight ${
+                        stat.alert ? "text-amber-600" : "text-slate-900"
+                      }`}
+                    >
+                      {stat.value}
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <p className="text-xs leading-5 text-slate-500">
+          Astuce : les priorités et les actions rapides ci-dessus ouvrent directement la bonne page.
+        </p>
+      </section>
     </div>
   );
 }

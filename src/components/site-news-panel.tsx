@@ -40,6 +40,7 @@ export default function SiteNewsPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraft] = useState<SiteNewsItem | null>(null);
+  const [showOldNews, setShowOldNews] = useState(false);
   const [pollDraft, setPollDraft] = useState<PollDraft>({
     id: null,
     question: "",
@@ -68,6 +69,24 @@ export default function SiteNewsPanel() {
     () => (data ? sortNewsByDateDesc(data.news) : []),
     [data]
   );
+
+  const { currentNews, archivedNews } = useMemo(() => {
+    const threshold = new Date();
+    threshold.setMonth(threshold.getMonth() - 1);
+    threshold.setHours(0, 0, 0, 0);
+
+    const current: SiteNewsItem[] = [];
+    const archived: SiteNewsItem[] = [];
+    for (const item of sortedNews) {
+      const itemDate = new Date(`${item.date}T23:59:59`);
+      if (!Number.isNaN(itemDate.getTime()) && itemDate < threshold) {
+        archived.push(item);
+      } else {
+        current.push(item);
+      }
+    }
+    return { currentNews: current, archivedNews: archived };
+  }, [sortedNews]);
 
   const persistSiteData = useCallback(
     async (nextData: AssociationData, successMessage: string): Promise<boolean> => {
@@ -98,6 +117,7 @@ export default function SiteNewsPanel() {
   }
 
   function startEdit(item: SiteNewsItem) {
+    setShowOldNews(true);
     setDraft({
       ...item,
       ctaLabel:
@@ -604,6 +624,91 @@ export default function SiteNewsPanel() {
     );
   }
 
+  function renderNewsItem(item: SiteNewsItem) {
+    return (
+      <li
+        key={item.id}
+        className={`rounded-xl border bg-white p-4 transition ${
+          editingNewsId === item.id
+            ? "border-cyan-400 shadow-md ring-2 ring-cyan-200"
+            : "border-orange-200"
+        }`}
+      >
+        {editingNewsId === item.id && draft ? (
+          <div>
+            <p className="mb-3 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+              Modification en cours
+            </p>
+            {renderDraftForm({ compact: true })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              {item.imageUrl ? (
+                <Image
+                  src={item.imageUrl}
+                  alt=""
+                  width={96}
+                  height={72}
+                  unoptimized
+                  className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold uppercase text-orange-700">
+                  {newsKindLabel(item.kind)} ·{" "}
+                  {resolveNewsDisciplineLabel(item.disciplineId, data!.disciplines)}
+                </p>
+                <h3 className="mt-0.5 font-semibold text-slate-900">{item.title}</h3>
+                <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
+                {item.location ? (
+                  <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
+                ) : null}
+                {item.description ? (
+                  <RichTextContent
+                    content={item.description}
+                    className="mt-2 text-sm text-slate-600"
+                  />
+                ) : null}
+                <p className="mt-2 text-xs font-semibold text-orange-800">
+                  Bouton : {item.ctaLabel?.trim() || "Lire la suite"}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+              <button
+                type="button"
+                onClick={() => startEdit(item)}
+                disabled={busy || Boolean(draft)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 sm:py-1 sm:text-xs"
+              >
+                Modifier
+              </button>
+              {linkedPollForNews(item.id) ? (
+                <button
+                  type="button"
+                  onClick={() => void removePollOnly(item)}
+                  disabled={busy || Boolean(draft)}
+                  className="rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50 sm:py-1 sm:text-xs"
+                >
+                  Supprimer le sondage
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void removeNews(item)}
+                disabled={busy || Boolean(draft)}
+                className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50 sm:py-1 sm:text-xs"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        )}
+      </li>
+    );
+  }
+
   return (
     <section className="bento-card min-w-0 overflow-x-hidden p-5">
       <div>
@@ -636,92 +741,44 @@ export default function SiteNewsPanel() {
       ) : null}
 
       <ul className="mt-4 space-y-3">
-        {sortedNews.length > 0 ? (
-          sortedNews.map((item) => (
-            <li
-              key={item.id}
-              className={`rounded-xl border bg-white p-4 transition ${
-                editingNewsId === item.id
-                  ? "border-cyan-400 shadow-md ring-2 ring-cyan-200"
-                  : "border-orange-200"
-              }`}
-            >
-              {editingNewsId === item.id && draft ? (
-                <div>
-                  <p className="mb-3 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
-                    Modification en cours
-                  </p>
-                  {renderDraftForm({ compact: true })}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <div className="flex gap-3">
-                    {item.imageUrl ? (
-                      <Image
-                        src={item.imageUrl}
-                        alt=""
-                        width={96}
-                        height={72}
-                        unoptimized
-                        className="h-16 w-24 shrink-0 rounded-lg object-cover"
-                      />
-                    ) : null}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold uppercase text-orange-700">
-                        {newsKindLabel(item.kind)} ·{" "}
-                        {resolveNewsDisciplineLabel(item.disciplineId, data.disciplines)}
-                      </p>
-                      <h3 className="mt-0.5 font-semibold text-slate-900">{item.title}</h3>
-                      <p className="mt-1 text-sm text-slate-700">{formatEventSchedule(item)}</p>
-                      {item.location ? (
-                        <p className="mt-1 text-sm text-slate-600">Lieu : {item.location}</p>
-                      ) : null}
-                      {item.description ? (
-                        <RichTextContent content={item.description} className="mt-2 text-sm text-slate-600" />
-                      ) : null}
-                      <p className="mt-2 text-xs font-semibold text-orange-800">
-                        Bouton : {item.ctaLabel?.trim() || "Lire la suite"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(item)}
-                      disabled={busy || Boolean(draft)}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 sm:py-1 sm:text-xs"
-                    >
-                      Modifier
-                    </button>
-                    {linkedPollForNews(item.id) ? (
-                      <button
-                        type="button"
-                        onClick={() => void removePollOnly(item)}
-                        disabled={busy || Boolean(draft)}
-                        className="rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50 sm:py-1 sm:text-xs"
-                      >
-                        Supprimer le sondage
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => void removeNews(item)}
-                      disabled={busy || Boolean(draft)}
-                      className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50 sm:py-1 sm:text-xs"
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))
+        {currentNews.length > 0 ? (
+          currentNews.map((item) => renderNewsItem(item))
         ) : (
           <li className="rounded-xl border border-dashed border-orange-200 bg-white/70 p-4 text-sm text-slate-600">
-            Aucune actualité publiée pour le moment.
+            {archivedNews.length > 0
+              ? "Aucune actualité récente. Les actualités de plus d’un mois sont archivées ci-dessous."
+              : "Aucune actualité publiée pour le moment."}
           </li>
         )}
       </ul>
+
+      {archivedNews.length > 0 ? (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            onClick={() => setShowOldNews((value) => !value)}
+            aria-expanded={showOldNews}
+            className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:bg-slate-100"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-slate-800">
+                Anciennes actualités
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Publiées il y a plus d’un mois — conservées sans encombrer la liste principale.
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-slate-600">
+              {archivedNews.length} · {showOldNews ? "Masquer" : "Afficher"}
+            </span>
+          </button>
+          {showOldNews ? (
+            <ul className="mt-3 space-y-3">
+              {archivedNews.map((item) => renderNewsItem(item))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {statusMessage ? (
         <p className={`mt-3 text-sm ${statusMessage.includes("impossible") ? "text-rose-600" : "text-slate-600"}`}>

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
 import type { PaymentMethod, RegistrationApplication } from "@/lib/club-data";
-import { reloadAtBureauDossiers } from "@/lib/bureau-navigation";
+import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
 import {
   PAYMENT_METHOD_OPTIONS,
   PROCESSING_PHASE_DESCRIPTIONS,
@@ -302,7 +302,7 @@ function DocumentsBlock({
       const body = (await response.json()) as { message?: string };
       if (response.ok) {
         onMessage(body.message ?? "Pièce jointe ajoutée.");
-        reloadAtBureauDossiers();
+        reloadAfterDossierChange();
       } else {
         onMessage(body.message ?? "Échec de l'envoi.");
       }

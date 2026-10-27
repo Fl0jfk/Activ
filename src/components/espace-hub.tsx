@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import BureauCockpit from "@/components/bureau-cockpit";
 import CoachPortal from "@/components/coach-portal";
 import MemberPortal from "@/components/member-portal";
@@ -20,6 +21,9 @@ type EspaceHubProps = {
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
   memberRequestPendingCount: number;
+  renewalCount: number;
+  newsCount: number;
+  galleryCount: number;
   membershipStatus: "pending" | "approved" | "rejected";
   hasFullMembership: boolean;
   disciplines: DisciplineOption[];
@@ -37,9 +41,6 @@ function initialTab(
   canAccessCoachPortal: boolean,
   defaultTab?: EspaceTab,
 ): EspaceTab {
-  if (typeof window !== "undefined" && window.location.hash === "#dossiers" && canAccessClubOperations) {
-    return "cockpit";
-  }
   return (
     defaultTab ??
     (canAccessClubOperations ? "cockpit" : canAccessCoachPortal ? "coach" : "member")
@@ -53,6 +54,9 @@ export default function EspaceHub({
   canApproveCoachAbsences,
   coachAbsencePendingCount,
   memberRequestPendingCount,
+  renewalCount,
+  newsCount,
+  galleryCount,
   membershipStatus,
   hasFullMembership,
   disciplines,
@@ -67,6 +71,7 @@ export default function EspaceHub({
   const [activeTab, setActiveTab] = useState<EspaceTab>(() =>
     initialTab(canAccessClubOperations, canAccessCoachPortal, defaultTab),
   );
+  const router = useRouter();
 
   const pendingCount = useMemo(
     () => allApplications.filter(isDossierEnCours).length + memberRequestPendingCount,
@@ -75,12 +80,8 @@ export default function EspaceHub({
 
   useEffect(() => {
     if (window.location.hash !== "#dossiers" || !canAccessClubOperations) return;
-    setActiveTab("cockpit");
-    const timer = window.setTimeout(() => {
-      document.getElementById("dossiers")?.scrollIntoView({ behavior: "auto", block: "start" });
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [canAccessClubOperations]);
+    router.replace("/espace/bureau/dossiers");
+  }, [canAccessClubOperations, router]);
 
   return (
     <main className="min-w-0 overflow-x-hidden pb-8">
@@ -145,6 +146,10 @@ export default function EspaceHub({
           canManageSite={canManageSite}
           canApproveCoachAbsences={canApproveCoachAbsences}
           coachAbsencePendingCount={coachAbsencePendingCount}
+          memberRequestPendingCount={memberRequestPendingCount}
+          renewalCount={renewalCount}
+          newsCount={newsCount}
+          galleryCount={galleryCount}
           disciplines={disciplines}
           slots={slots}
           applications={allApplications}

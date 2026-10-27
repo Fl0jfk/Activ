@@ -13,6 +13,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
 import { readClubData } from "@/lib/club-data";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
+import { listApplicationsNeedingLicenseRenewal } from "@/lib/license-renewal";
 import { readSiteData } from "@/lib/site-data";
 import { buildWeekSchedule } from "@/lib/schedule-week";
 
@@ -125,6 +126,10 @@ export default async function EspacePage() {
     (r) => r.status === "received" || r.status === "in_progress"
   ).length;
 
+  const renewalCount = listApplicationsNeedingLicenseRenewal(clubData.applications).length;
+  const newsCount = siteData.news.length;
+  const galleryCount = siteData.homeGallery.slides.length;
+
   const defaultTab = clubOps ? "cockpit" : coachPortal ? "coach" : "member";
 
   return (
@@ -135,6 +140,9 @@ export default async function EspacePage() {
       canApproveCoachAbsences={approveAbsences}
       coachAbsencePendingCount={coachAbsencePendingCount}
       memberRequestPendingCount={memberRequestPendingCount}
+      renewalCount={renewalCount}
+      newsCount={newsCount}
+      galleryCount={galleryCount}
       membershipStatus={currentUser.membershipStatus}
       hasFullMembership={currentUser.membershipStatus === "approved" || clubOps || coachPortal}
       disciplines={disciplines}
