@@ -40,7 +40,7 @@ export async function notifyMemberPaymentReceipt(
       `Bonjour ${memberName},`,
       "",
       `${associationName} certifie avoir bien reçu votre paiement (${method}).`,
-      "Vous trouverez votre attestation de paiement en pièce jointe de cet e-mail, avec le cachet de l'association.",
+      "Vous trouverez votre attestation de paiement en pièce jointe de cet e-mail, avec le cachet de l'association et la signature du président.",
       "Ce document peut être transmis à votre employeur, votre mutuelle ou tout organisme de remboursement.",
       "",
       "Sportivement,",

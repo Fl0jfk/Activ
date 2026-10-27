@@ -345,6 +345,18 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
                 }))
               }
             />
+            <SiteImageField
+              label="Signature du président"
+              helpText="Ajoutée au-dessus du nom du président sur les attestations de paiement. Importez une signature sur fond transparent (PNG) pour un meilleur rendu."
+              value={data.association.signatureImageUrl ?? ""}
+              emptyValue=""
+              onChange={(signatureImageUrl) =>
+                setData((prev) => ({
+                  ...prev,
+                  association: { ...prev.association, signatureImageUrl },
+                }))
+              }
+            />
           </div>
         </section>
 

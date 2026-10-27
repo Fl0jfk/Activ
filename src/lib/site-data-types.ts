@@ -98,6 +98,8 @@ export type AssociationData = {
     address: string;
     /** Tampon / cachet officiel, utilisé sur les reçus de paiement. */
     stampImageUrl: string;
+    /** Signature manuscrite du président, apposée sur les attestations de paiement. */
+    signatureImageUrl?: string;
     /** Mentions légales facultatives affichées sur les attestations de paiement. */
     siret?: string;
     rna?: string;

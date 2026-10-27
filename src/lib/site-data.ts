@@ -242,6 +242,7 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
     association: {
       ...data.association,
       stampImageUrl: resolveSiteImageSrc(data.association.stampImageUrl, ""),
+      signatureImageUrl: resolveSiteImageSrc(data.association.signatureImageUrl, ""),
       organisation: {
         boardMembers: data.association.organisation?.boardMembers ?? [
           {
