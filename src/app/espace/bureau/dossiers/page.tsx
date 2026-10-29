@@ -1,6 +1,7 @@
 import BureauDossiersView from "@/components/bureau-dossiers-view";
 import BureauPageHeader from "@/components/bureau-page-header";
 import ManualMemberPanel from "@/components/manual-member-panel";
+import MemberContactRequestsPanel from "@/components/member-contact-requests-panel";
 import { loadBureauPageData } from "@/lib/bureau-page-data";
 import { getDossierStep, type QueueFilter } from "@/lib/dossier-workflow";
 
@@ -27,11 +28,25 @@ export default async function BureauDossiersPage({
         title="Dossiers d’adhésion"
         description="File de traitement des pré-inscriptions, validation des pièces et enregistrement des adhésions papier reçues au bureau."
         action={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-            {enCours} à traiter
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              {enCours} à traiter
+            </span>
+            {data.contactChangeRequests.length > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/70 bg-cyan-50/80 px-3 py-1.5 text-xs font-semibold text-cyan-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                {data.contactChangeRequests.length} demande
+                {data.contactChangeRequests.length > 1 ? "s" : ""} de coordonnées
+              </span>
+            ) : null}
+          </div>
         }
+      />
+
+      <MemberContactRequestsPanel
+        requests={data.contactChangeRequests}
+        applications={data.applications}
       />
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">

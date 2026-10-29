@@ -26,6 +26,7 @@ type BureauCockpitProps = {
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
   memberRequestPendingCount: number;
+  contactChangePendingCount: number;
   renewalCount: number;
   newsCount: number;
   galleryCount: number;
@@ -263,6 +264,7 @@ export default function BureauCockpit({
   canApproveCoachAbsences,
   coachAbsencePendingCount,
   memberRequestPendingCount,
+  contactChangePendingCount,
   renewalCount,
   newsCount,
   galleryCount,
@@ -457,6 +459,11 @@ export default function BureauCockpit({
       stats: [
         { label: "À traiter", value: metrics.enCours, alert: metrics.enCours > 0 },
         { label: "Finalisés", value: metrics.finalises },
+        {
+          label: "Coordonnées",
+          value: contactChangePendingCount,
+          alert: contactChangePendingCount > 0,
+        },
       ],
     },
     {

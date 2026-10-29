@@ -69,6 +69,27 @@ export type MemberRequest = {
   bureauAttachment?: MemberRequestDocument | null;
 };
 
+export type MemberContactChangeStatus = "pending" | "approved" | "rejected";
+
+/** Demande de modification des coordonnées d’un adhérent, validée par le bureau. */
+export type MemberContactChangeRequest = {
+  id: string;
+  applicationId: string;
+  clerkUserId: string | null;
+  status: MemberContactChangeStatus;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  postalCode: string;
+  city: string;
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  rejectionReason: string;
+};
+
 export type TrialSlot = {
   id: string;
   disciplineId: string;
@@ -145,6 +166,7 @@ export type ClubData = {
   bulletinRevalidationTokens: BulletinRevalidationToken[];
   coachAbsenceRequests: CoachAbsenceRequest[];
   memberRequests: MemberRequest[];
+  contactChangeRequests: MemberContactChangeRequest[];
   updatedAt: string;
 };
 
@@ -194,6 +216,23 @@ function normalizeClubData(data: ClubData): ClubData {
       attachment: request.attachment ?? null,
       bureauAttachment: request.bureauAttachment ?? null,
       bureauReply: request.bureauReply ?? "",
+    })),
+    contactChangeRequests: (data.contactChangeRequests ?? []).map((request) => ({
+      ...request,
+      status:
+        request.status === "approved" || request.status === "rejected"
+          ? request.status
+          : "pending",
+      firstName: request.firstName ?? "",
+      lastName: request.lastName ?? "",
+      email: request.email ?? "",
+      phone: request.phone ?? "",
+      address: request.address ?? "",
+      postalCode: request.postalCode ?? "",
+      city: request.city ?? "",
+      reviewedAt: request.reviewedAt ?? null,
+      reviewedBy: request.reviewedBy ?? null,
+      rejectionReason: request.rejectionReason ?? "",
     })),
     updatedAt: data.updatedAt ?? new Date().toISOString(),
   };

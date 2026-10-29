@@ -370,8 +370,8 @@ function ApplicantBlock({
             </label>
           </div>
           <p className="text-xs text-slate-500">
-            L&apos;e-mail sert aux envois du bureau et aux notifications. La connexion à
-            l&apos;espace membre reste liée au compte existant.
+            L&apos;e-mail sert aux envois du bureau et devient aussi l&apos;adresse de connexion
+            à l&apos;espace membre (compte Clerk). L&apos;ancienne adresse est retirée du compte.
           </p>
           {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
           <div className="flex flex-wrap gap-2">

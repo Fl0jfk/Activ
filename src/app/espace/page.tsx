@@ -129,6 +129,20 @@ export default async function EspacePage() {
     (r) => r.status === "received" || r.status === "in_progress"
   ).length;
 
+  const contactChangePendingCount = (clubData.contactChangeRequests ?? []).filter(
+    (request) => request.status === "pending"
+  ).length;
+
+  const latestApplicationId = myApplications.find(
+    (application) =>
+      application.status !== "rejected" && application.status !== "cancelled"
+  )?.id;
+  const contactChangeRequest =
+    (clubData.contactChangeRequests ?? []).find(
+      (request) =>
+        request.applicationId === latestApplicationId && request.status === "pending"
+    ) ?? null;
+
   const renewalCount = listApplicationsNeedingLicenseRenewal(clubData.applications).length;
   const newsCount = siteData.news.length;
   const galleryCount = siteData.homeGallery.slides.length;
@@ -143,6 +157,7 @@ export default async function EspacePage() {
       canApproveCoachAbsences={approveAbsences}
       coachAbsencePendingCount={coachAbsencePendingCount}
       memberRequestPendingCount={memberRequestPendingCount}
+      contactChangePendingCount={contactChangePendingCount}
       renewalCount={renewalCount}
       newsCount={newsCount}
       galleryCount={galleryCount}
@@ -156,6 +171,7 @@ export default async function EspacePage() {
       bureauWeekSchedule={fullWeekSchedule}
       upcomingEvents={upcomingEvents}
       pendingDocument={pendingDocument}
+      contactChangeRequest={contactChangeRequest}
       defaultTab={defaultTab}
     />
   );

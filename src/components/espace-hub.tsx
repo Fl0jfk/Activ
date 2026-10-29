@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import BureauCockpit from "@/components/bureau-cockpit";
 import CoachPortal from "@/components/coach-portal";
 import MemberPortal from "@/components/member-portal";
-import type { RegistrationApplication } from "@/lib/club-data";
+import type { RegistrationApplication, MemberContactChangeRequest } from "@/lib/club-data";
 import { isDossierEnCours } from "@/lib/dossier-workflow";
 import type { TrialSlotSummary } from "@/lib/club-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
@@ -21,6 +21,7 @@ type EspaceHubProps = {
   canApproveCoachAbsences: boolean;
   coachAbsencePendingCount: number;
   memberRequestPendingCount: number;
+  contactChangePendingCount: number;
   renewalCount: number;
   newsCount: number;
   galleryCount: number;
@@ -34,6 +35,7 @@ type EspaceHubProps = {
   bureauWeekSchedule: WeekScheduleEntry[];
   upcomingEvents: UpcomingEvent[];
   pendingDocument: PendingDocument;
+  contactChangeRequest?: MemberContactChangeRequest | null;
   defaultTab?: EspaceTab;
 };
 
@@ -55,6 +57,7 @@ export default function EspaceHub({
   canApproveCoachAbsences,
   coachAbsencePendingCount,
   memberRequestPendingCount,
+  contactChangePendingCount,
   renewalCount,
   newsCount,
   galleryCount,
@@ -68,6 +71,7 @@ export default function EspaceHub({
   bureauWeekSchedule,
   upcomingEvents,
   pendingDocument,
+  contactChangeRequest,
   defaultTab,
 }: EspaceHubProps) {
   const [activeTab, setActiveTab] = useState<EspaceTab>(() =>
@@ -140,6 +144,7 @@ export default function EspaceHub({
           weekSchedule={weekSchedule}
           upcomingEvents={upcomingEvents}
           pendingDocument={pendingDocument}
+          contactChangeRequest={contactChangeRequest}
         />
       ) : null}
 
@@ -149,6 +154,7 @@ export default function EspaceHub({
           canApproveCoachAbsences={canApproveCoachAbsences}
           coachAbsencePendingCount={coachAbsencePendingCount}
           memberRequestPendingCount={memberRequestPendingCount}
+          contactChangePendingCount={contactChangePendingCount}
           renewalCount={renewalCount}
           newsCount={newsCount}
           galleryCount={galleryCount}

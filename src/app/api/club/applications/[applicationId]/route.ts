@@ -8,6 +8,14 @@ import { addOneYearLicenseDate } from "@/lib/license-renewal";
 import { notifyMemberPaymentReceipt } from "@/lib/payment-receipt-notify";
 import { computeMembershipStatus, syncClerkAfterAdminPatch } from "@/lib/registration-clerk-sync";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
+import {
+  applyContactValues,
+  applyContactValuesToMember,
+  mergeContactInput,
+  validateContactValues,
+  type MemberContactValues,
+} from "@/lib/member-contact";
+import { syncContactToClerk } from "@/lib/member-contact-clerk";
 
 export async function PATCH(
   request: NextRequest,
@@ -66,46 +74,28 @@ export async function PATCH(
       typeof payload.postalCode === "string" ||
       typeof payload.city === "string";
 
+    let contactValues: MemberContactValues | null = null;
     if (contactChanged) {
-      if (typeof payload.email === "string") {
-        const email = payload.email.trim().toLowerCase();
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          return jsonError("Adresse e-mail invalide.", 400);
+      contactValues = mergeContactInput(application, payload);
+      const validation = validateContactValues(contactValues);
+      if (!validation.ok) {
+        return jsonError(validation.message, 400);
+      }
+      if (typeof payload.fullName === "string" && payload.fullName.trim()) {
+        // Conserver la possibilité de ne transmettre que le nom complet.
+        if (
+          typeof payload.firstName !== "string" &&
+          typeof payload.lastName !== "string"
+        ) {
+          const parts = payload.fullName.trim().split(/\s+/);
+          contactValues = {
+            ...contactValues,
+            firstName: parts[0] ?? contactValues.firstName,
+            lastName: parts.slice(1).join(" ") || contactValues.lastName,
+          };
         }
-        application.email = email;
       }
-
-      if (typeof payload.firstName === "string" || typeof payload.lastName === "string") {
-        const firstName =
-          typeof payload.firstName === "string"
-            ? payload.firstName.trim()
-            : application.firstName?.trim() ?? "";
-        const lastName =
-          typeof payload.lastName === "string"
-            ? payload.lastName.trim()
-            : application.lastName?.trim() ?? "";
-        application.firstName = firstName;
-        application.lastName = lastName;
-        application.fullName =
-          `${firstName} ${lastName}`.trim() ||
-          application.fullName.trim() ||
-          application.email;
-      } else if (typeof payload.fullName === "string" && payload.fullName.trim()) {
-        application.fullName = payload.fullName.trim();
-      }
-
-      if (typeof payload.phone === "string") {
-        application.phone = payload.phone.trim();
-      }
-      if (typeof payload.address === "string") {
-        application.address = payload.address.trim();
-      }
-      if (typeof payload.postalCode === "string") {
-        application.postalCode = payload.postalCode.trim();
-      }
-      if (typeof payload.city === "string") {
-        application.city = payload.city.trim();
-      }
+      applyContactValues(application, contactValues);
     }
 
     if (payload.status) {
@@ -165,14 +155,37 @@ export async function PATCH(
         member.role = payload.role;
       }
       if (contactChanged) {
-        member.fullName = application.fullName;
-        member.email = application.email;
+        applyContactValuesToMember(member, application);
       }
       member.membershipStatus = computedMembershipStatus;
       member.updatedAt = new Date().toISOString();
     }
 
+    if (contactChanged) {
+      // Une modification directe remplace une éventuelle demande en attente.
+      for (const pending of data.contactChangeRequests ?? []) {
+        if (pending.applicationId === application.id && pending.status === "pending") {
+          pending.status = "rejected";
+          pending.reviewedAt = new Date().toISOString();
+          pending.reviewedBy = currentUser.fullName;
+          pending.rejectionReason =
+            "Coordonnées modifiées directement par le bureau.";
+        }
+      }
+    }
+
     await saveClubData(data);
+
+    let contactSyncWarning: string | null = null;
+    if (contactValues && application.clerkUserId) {
+      const contactSync = await syncContactToClerk({
+        clerkUserId: application.clerkUserId,
+        values: contactValues,
+      });
+      if (!contactSync.ok) {
+        contactSyncWarning = contactSync.warning;
+      }
+    }
 
     const nextRole = payload.role ?? member?.role ?? "member";
 
@@ -194,14 +207,23 @@ export async function PATCH(
     const justPaid = previousPaymentStatus !== "paid" && application.paymentStatus === "paid";
     if (justPaid) {
       const receipt = await notifyMemberPaymentReceipt(application);
+      const baseMessage = receipt.sent
+        ? "Mise a jour effectuee. Un recu PDF a ete envoye a l'adherent."
+        : "Mise a jour effectuee. Le recu n'a pas pu etre envoye (e-mail manquant ou SMTP).";
       return jsonOk({
-        message: receipt.sent
-          ? "Mise a jour effectuee. Un recu PDF a ete envoye a l'adherent."
-          : "Mise a jour effectuee. Le recu n'a pas pu etre envoye (e-mail manquant ou SMTP).",
+        message: contactSyncWarning
+          ? `${baseMessage} ${contactSyncWarning}`
+          : baseMessage,
+        warning: contactSyncWarning ?? undefined,
       });
     }
 
-    return jsonOk({ message: "Mise a jour effectuee." });
+    return jsonOk({
+      message: contactSyncWarning
+        ? `Mise a jour effectuee. ${contactSyncWarning}`
+        : "Mise a jour effectuee.",
+      warning: contactSyncWarning ?? undefined,
+    });
   } catch (error) {
     console.error("Failed to update application", error);
     return jsonError("Erreur serveur.", 500);

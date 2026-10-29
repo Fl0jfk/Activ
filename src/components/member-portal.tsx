@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import PaymentReceiptLink from "@/components/payment-receipt-link";
-import type { RegistrationApplication } from "@/lib/club-data";
+import type { RegistrationApplication, MemberContactChangeRequest } from "@/lib/club-data";
 import {
   getMemberInscriptionLabel,
   getMemberInscriptionStep,
@@ -17,6 +17,7 @@ import type { DisciplineOption } from "@/lib/discipline-options";
 import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
 import { formatEventSchedule, newsKindLabel } from "@/lib/site-news";
 import MemberRequestsSection from "@/components/member-requests-section";
+import MemberContactSection from "@/components/member-contact-section";
 
 type MemberPortalProps = {
   disciplines: DisciplineOption[];
@@ -27,6 +28,7 @@ type MemberPortalProps = {
   weekSchedule: WeekScheduleEntry[];
   upcomingEvents: UpcomingEvent[];
   pendingDocument: PendingDocument;
+  contactChangeRequest?: MemberContactChangeRequest | null;
 };
 
 const PAYMENT_LABELS: Record<RegistrationApplication["paymentStatus"], string> = {
@@ -44,6 +46,7 @@ export default function MemberPortal({
   weekSchedule,
   upcomingEvents,
   pendingDocument,
+  contactChangeRequest = null,
 }: MemberPortalProps) {
   const [disciplineId, setDisciplineId] = useState(disciplines[0]?.id ?? "");
   const [trialSlotId, setTrialSlotId] = useState("");
@@ -67,6 +70,11 @@ export default function MemberPortal({
 
   const latestApplication = applications[0] ?? null;
   const inscriptionStep = latestApplication ? getMemberInscriptionStep(latestApplication) : null;
+  const contactApplication =
+    applications.find(
+      (application) =>
+        application.status !== "rejected" && application.status !== "cancelled",
+    ) ?? null;
   const isInscriptionFinalized = inscriptionStep === "finalized" || hasFullMembership;
 
   const myDisciplineNames = useMemo(() => {
@@ -418,6 +426,13 @@ export default function MemberPortal({
           )}
         </div>
       </section>
+
+      {contactApplication ? (
+        <MemberContactSection
+          application={contactApplication}
+          pendingRequest={contactChangeRequest}
+        />
+      ) : null}
 
       <MemberRequestsSection />
 
