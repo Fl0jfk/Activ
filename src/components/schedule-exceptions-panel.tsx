@@ -8,6 +8,7 @@ import {
   buildWeekSchedule,
   formatWeekRangeLabel,
   getPublicScheduleReference,
+  parseScheduleTimeToMinutes,
 } from "@/lib/schedule-week";
 
 type PendingNotify = {
@@ -24,9 +25,7 @@ type ScheduleExceptionsPanelProps = {
 const DAY_OPTIONS = Object.entries(DAY_LABELS) as [string, string][];
 
 function timeToMinutes(value: string): number {
-  const match = /^(\d{1,2})[h:](\d{0,2})/.exec(value.trim());
-  if (!match) return Number.MAX_SAFE_INTEGER;
-  return Number(match[1]) * 60 + Number(match[2] || "0");
+  return parseScheduleTimeToMinutes(value) ?? Number.MAX_SAFE_INTEGER;
 }
 
 export default function ScheduleExceptionsPanel({

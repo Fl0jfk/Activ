@@ -1,6 +1,9 @@
 "use client";
 
-import type { WeekScheduleEntry } from "@/lib/schedule-week";
+import {
+  parseScheduleTimeToMinutes,
+  type WeekScheduleEntry,
+} from "@/lib/schedule-week";
 
 type WeekCalendarProps = {
   entries: WeekScheduleEntry[];
@@ -27,15 +30,6 @@ const DISCIPLINE_COLORS = [
   "#047857",
 ];
 
-function toMinutes(value: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours > 23 || minutes > 59) return null;
-  return hours * 60 + minutes;
-}
-
 function colorFor(disciplineId: string): string {
   let hash = 0;
   for (let index = 0; index < disciplineId.length; index += 1) {
@@ -47,14 +41,19 @@ function colorFor(disciplineId: string): string {
 /** Répartit les séances qui se chevauchent sur plusieurs colonnes. */
 function positionDay(entries: WeekScheduleEntry[]): PositionedEntry[] {
   const sorted = entries
-    .map((entry) => {
-      const startMin = toMinutes(entry.startTime);
-      const endMin = toMinutes(entry.endTime);
-      return {
-        entry,
-        startMin: startMin ?? 8 * 60,
-        endMin: Math.max(endMin ?? 9 * 60, (startMin ?? 8 * 60) + 30),
-      };
+    .flatMap((entry) => {
+      const parsedStart = parseScheduleTimeToMinutes(entry.startTime);
+      const parsedEnd = parseScheduleTimeToMinutes(entry.endTime);
+      if (parsedStart === null && parsedEnd === null) return [];
+      const startMin = parsedStart ?? Math.max(0, (parsedEnd ?? 0) - 60);
+      const endMin = parsedEnd ?? Math.min(24 * 60, startMin + 60);
+      return [
+        {
+          entry,
+          startMin,
+          endMin: Math.max(endMin, startMin + 15),
+        },
+      ];
     })
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 

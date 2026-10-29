@@ -126,6 +126,21 @@ function compareTime(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true });
 }
 
+/**
+ * Accepte les horaires saisis librement : `14:30`, `14h30`, `14h`, `9:00`…
+ * Renvoie null si la valeur n'est pas exploitable.
+ */
+export function parseScheduleTimeToMinutes(value: string): number | null {
+  const match = /^(\d{1,2})\s*(?:[h:.]\s*(\d{0,2}))?/.exec(value.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2] || "0");
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours > 24 || minutes > 59) return null;
+  if (hours === 24 && minutes > 0) return null;
+  return hours * 60 + minutes;
+}
+
 export function buildWeekSchedule(
   data: AssociationData,
   reference = new Date()
