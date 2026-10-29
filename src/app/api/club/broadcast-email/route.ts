@@ -97,9 +97,10 @@ export async function POST(request: NextRequest) {
     message:
       result.failed === 0
         ? `E-mail envoyé à ${result.sent} destinataire${result.sent > 1 ? "s" : ""}.`
-        : `Envoi terminé : ${result.sent} réussi(s), ${result.failed} échec(s).`,
+        : `Envoi terminé : ${result.sent} réussi(s), ${result.failed} adresse(s) en échec.`,
     sent: result.sent,
     failed: result.failed,
+    failures: result.failures,
     recipientCount: recipients.length,
   });
 }

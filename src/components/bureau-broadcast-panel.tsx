@@ -17,6 +17,23 @@ type ApprovedMember = {
   name: string;
 };
 
+type SendFailure = {
+  email: string;
+  reason: "invalid_address" | "mailbox_unavailable" | "send_failed";
+  detail: string;
+};
+
+function failureLabel(reason: SendFailure["reason"]): string {
+  switch (reason) {
+    case "mailbox_unavailable":
+      return "Adresse introuvable ou boîte indisponible";
+    case "invalid_address":
+      return "Adresse refusée par le serveur";
+    default:
+      return "Envoi impossible";
+  }
+}
+
 function normalizeSearch(value: string): string {
   return value
     .normalize("NFD")
@@ -52,6 +69,7 @@ export default function BureauBroadcastPanel({
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [failures, setFailures] = useState<SendFailure[]>([]);
   const [isSending, setIsSending] = useState(false);
 
   const approvedMembers = useMemo(() => {
@@ -125,6 +143,7 @@ export default function BureauBroadcastPanel({
 
     setIsSending(true);
     setStatusMessage("");
+    setFailures([]);
 
     try {
       const response = await fetch("/api/club/broadcast-email", {
@@ -137,11 +156,17 @@ export default function BureauBroadcastPanel({
           message: message.trim(),
         }),
       });
-      const payload = (await response.json()) as { message?: string };
+      const payload = (await response.json()) as {
+        message?: string;
+        failures?: SendFailure[];
+      };
       if (!response.ok) {
         throw new Error(payload.message ?? "Envoi impossible.");
       }
       setStatusMessage(payload.message ?? "E-mail envoyé.");
+      if (Array.isArray(payload.failures) && payload.failures.length > 0) {
+        setFailures(payload.failures);
+      }
       setSubject("");
       setMessage("");
       setRecipientEmail("");
@@ -330,6 +355,30 @@ export default function BureauBroadcastPanel({
       </form>
 
       {statusMessage ? <p className="mt-3 text-sm text-slate-700">{statusMessage}</p> : null}
+
+      {failures.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {failures.length} adresse{failures.length > 1 ? "s" : ""} en échec
+          </p>
+          <ul className="mt-2 space-y-2">
+            {failures.map((failure) => (
+              <li key={failure.email} className="text-xs text-amber-900">
+                <span className="break-all font-semibold">{failure.email}</span>
+                <span className="mt-0.5 block text-amber-800">
+                  {failureLabel(failure.reason)}
+                  {failure.detail ? ` · ${failure.detail}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs leading-5 text-amber-800">
+            Une adresse introuvable est généralement une faute de frappe dans le dossier de
+            l&apos;adhérent. Corrigez-la dans la fiche, puis relancez l&apos;envoi à cette
+            personne.
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }

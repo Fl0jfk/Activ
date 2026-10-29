@@ -32,6 +32,57 @@ function defaultReplyTo(): string | undefined {
   return process.env.SMTP_USER?.trim() || undefined;
 }
 
+export type EmailFailureReason = "invalid_address" | "mailbox_unavailable" | "send_failed";
+
+export type EmailFailure = {
+  email: string;
+  reason: EmailFailureReason;
+  /** Message lisible renvoyé par le serveur de messagerie. */
+  detail: string;
+};
+
+type SendEmailFailure = {
+  sent: false;
+  reason: "smtp_not_configured" | EmailFailureReason;
+  detail: string;
+};
+
+function describeMailError(error: unknown): {
+  reason: EmailFailureReason;
+  detail: string;
+} {
+  const candidate = error as {
+    responseCode?: number;
+    response?: string;
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    typeof candidate?.responseCode === "number" ? candidate.responseCode : null;
+  const response = candidate?.response?.trim() || "";
+  const fallback = candidate?.message?.trim() || "";
+
+  // 550 / 551 / 553 : adresse inexistante ou boîte indisponible (rejet définitif).
+  if (code === 550 || code === 551 || code === 553) {
+    return {
+      reason: "mailbox_unavailable",
+      detail: response || "Adresse introuvable ou boîte de réception indisponible.",
+    };
+  }
+
+  if (candidate?.code === "EENVELOPE") {
+    return {
+      reason: "invalid_address",
+      detail: response || fallback || "Adresse e-mail refusée.",
+    };
+  }
+
+  return {
+    reason: "send_failed",
+    detail: response || fallback || "Erreur d'envoi.",
+  };
+}
+
 export async function sendEmail(params: {
   to: string;
   subject: string;
@@ -43,11 +94,15 @@ export async function sendEmail(params: {
     content: Buffer | Uint8Array;
     contentType?: string;
   }[];
-}) {
+}): Promise<{ sent: true } | SendEmailFailure> {
   const transporter = createTransporter();
   const from = process.env.MAIL_FROM;
   if (!transporter || !from) {
-    return { sent: false as const, reason: "smtp_not_configured" as const };
+    return {
+      sent: false as const,
+      reason: "smtp_not_configured" as const,
+      detail: "L'envoi d'e-mails n'est pas configuré sur le serveur.",
+    };
   }
 
   try {
@@ -67,7 +122,7 @@ export async function sendEmail(params: {
     return { sent: true as const };
   } catch (error) {
     console.error("sendEmail failed", error);
-    return { sent: false as const, reason: "send_failed" as const };
+    return { sent: false as const, ...describeMailError(error) };
   }
 }
 
@@ -80,16 +135,20 @@ export async function sendEmailToMany(
     text: string;
     replyTo?: string;
   },
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ sent: number; failed: number; failures: EmailFailure[] }> {
   let sent = 0;
-  let failed = 0;
+  const failures: EmailFailure[] = [];
   for (const to of recipients) {
     const result = await sendEmail({ ...params, to });
     if (result.sent) {
       sent += 1;
     } else {
-      failed += 1;
+      failures.push({
+        email: to,
+        reason: result.reason === "smtp_not_configured" ? "send_failed" : result.reason,
+        detail: result.detail,
+      });
     }
   }
-  return { sent, failed };
+  return { sent, failed: failures.length, failures };
 }
