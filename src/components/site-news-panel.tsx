@@ -95,7 +95,9 @@ export default function SiteNewsPanel() {
       const response = await fetch("/api/admin/site-data", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextData),
+        // N'envoyer que les sections gérées ici : un panneau ouvert depuis longtemps
+        // ne doit pas réécrire les sondages ou la galerie modifiés ailleurs.
+        body: JSON.stringify({ news: nextData.news, polls: nextData.polls }),
       });
       if (!response.ok) {
         setStatusMessage("Enregistrement impossible. Réessayez dans un instant.");
@@ -252,11 +254,17 @@ export default function SiteNewsPanel() {
 
   async function removeNews(item: SiteNewsItem) {
     if (!data) return;
-    if (!window.confirm(`Supprimer l'actualité « ${item.title} » ?`)) return;
+    const hasPoll = data.polls.some((poll) => poll.newsId === item.id);
+    const warning = hasPoll
+      ? `Supprimer l'actualité « ${item.title} » et son sondage ?`
+      : `Supprimer l'actualité « ${item.title} » ?`;
+    if (!window.confirm(warning)) return;
     const nextData = {
       ...data,
       news: data.news.filter((entry) => entry.id !== item.id),
-      polls: data.polls.map((poll) => (poll.newsId === item.id ? { ...poll, newsId: null } : poll)),
+      // Le sondage appartenait à cette actualité : on le supprime aussi pour qu'il
+      // ne réapparaisse pas seul sur l'accueil.
+      polls: data.polls.filter((poll) => poll.newsId !== item.id),
     };
     const saved = await persistSiteData(nextData, "Actualité supprimée du site.");
     if (saved && draft?.id === item.id) cancelEdit();
@@ -264,6 +272,24 @@ export default function SiteNewsPanel() {
 
   function linkedPollForNews(newsId: string): SitePoll | null {
     return data?.polls.find((poll) => poll.newsId === newsId) ?? null;
+  }
+
+  const orphanPolls = useMemo(() => {
+    if (!data) return [] as SitePoll[];
+    return data.polls.filter(
+      (poll) => !poll.newsId || !data.news.some((item) => item.id === poll.newsId),
+    );
+  }, [data]);
+
+  async function removeOrphanPoll(poll: SitePoll) {
+    if (!data) return;
+    if (!window.confirm(`Supprimer le sondage « ${poll.question} » ?`)) return;
+    const nextData: AssociationData = {
+      ...data,
+      polls: data.polls.filter((entry) => entry.id !== poll.id),
+    };
+    const saved = await persistSiteData(nextData, "Sondage supprimé du site.");
+    if (saved && pollDraft.id === poll.id) setPollDraft(emptyPollDraft());
   }
 
   async function removePollOnly(item: SiteNewsItem) {
@@ -730,6 +756,36 @@ export default function SiteNewsPanel() {
           Ajouter une actualité
         </button>
       </div>
+
+      {orphanPolls.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50/70 p-4">
+          <p className="text-sm font-semibold text-amber-900">
+            Sondage{orphanPolls.length > 1 ? "s" : ""} sans actualité ({orphanPolls.length})
+          </p>
+          <p className="mt-1 text-xs leading-5 text-amber-800">
+            Ces sondages ne sont plus rattachés à une actualité mais restent visibles seuls sur
+            l&apos;accueil. Supprimez-les pour les retirer du site.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {orphanPolls.map((poll) => (
+              <li
+                key={poll.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2"
+              >
+                <span className="min-w-0 flex-1 text-sm text-slate-800">{poll.question}</span>
+                <button
+                  type="button"
+                  onClick={() => void removeOrphanPoll(poll)}
+                  disabled={busy}
+                  className="shrink-0 rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 disabled:opacity-50"
+                >
+                  Supprimer
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {isCreating ? (
         <article className="mt-4 rounded-xl border-2 border-cyan-400 bg-cyan-50/40 p-4 shadow-sm">

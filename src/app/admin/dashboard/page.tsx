@@ -89,7 +89,15 @@ export default function AdminDashboardPage({ embedded = false }: { embedded?: bo
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(data),
+      // Le panneau ne gère ni les sondages ni la galerie : ne pas les réécrire depuis
+      // un état chargé plus tôt (cela faisait réapparaître un sondage supprimé).
+      body: JSON.stringify({
+        association: data.association,
+        disciplines: data.disciplines,
+        schedule: data.schedule,
+        scheduleExceptions: data.scheduleExceptions,
+        news: data.news,
+      }),
     });
 
     if (!response.ok) {

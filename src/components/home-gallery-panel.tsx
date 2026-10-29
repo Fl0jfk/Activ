@@ -58,7 +58,8 @@ export default function HomeGalleryPanel() {
       const response = await fetch("/api/admin/site-data", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextData),
+        // Section uniquement : évite d'écraser les actualités ou sondages mis à jour ailleurs.
+        body: JSON.stringify({ homeGallery: nextGallery }),
       });
       if (!response.ok) {
         setStatusMessage("Enregistrement impossible. Réessayez dans un instant.");
