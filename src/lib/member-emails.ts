@@ -1,4 +1,5 @@
 import type { ClubData, RegistrationApplication } from "@/lib/club-data";
+import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
 export type MemberEmailAudience = {
   /** `null` ou omis = tous les adhérents approuvés */
@@ -15,12 +16,15 @@ function isApprovedApplication(app: RegistrationApplication): boolean {
   return app.status === "approved" && Boolean(app.email?.trim());
 }
 
+/**
+ * Un dossier compte pour une activité dès qu'elle figure dans la discipline principale,
+ * les activités multiples du dossier ou le bulletin d'adhésion signé.
+ */
 function applicationMatchesDiscipline(
   app: RegistrationApplication,
   disciplineId: string,
 ): boolean {
-  if (app.disciplineId === disciplineId) return true;
-  return Boolean(app.disciplineIds?.includes(disciplineId));
+  return getApplicationDisciplineIds(app).includes(disciplineId);
 }
 
 /** Adresses uniques des dossiers approuvés (tous, filtrés par discipline ou une personne). */
