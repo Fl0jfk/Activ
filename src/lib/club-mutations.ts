@@ -11,4 +11,13 @@ export type ApplicationUpdatePayload = {
   licenseEndDate?: string | null;
   trialSlotId?: string;
   dossierPhase?: ApplicationDossierPhase;
+  /** Coordonnées modifiables depuis la fiche du dossier. */
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
 };

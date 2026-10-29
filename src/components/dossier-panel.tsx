@@ -180,90 +180,293 @@ function PhaseStepper({ current }: { current: DossierProcessingPhase }) {
   );
 }
 
-function ApplicantBlock({ application }: { application: RegistrationApplication }) {
+function splitFullName(
+  fullName: string,
+  firstName: string,
+  lastName: string,
+): { firstName: string; lastName: string } {
+  if (firstName.trim() || lastName.trim()) {
+    return { firstName: firstName.trim(), lastName: lastName.trim() };
+  }
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return { firstName: parts[0] ?? "", lastName: "" };
+  }
+  return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
+}
+
+function ApplicantBlock({
+  application,
+  busy,
+  onUpdate,
+}: {
+  application: RegistrationApplication;
+  busy: boolean;
+  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
+}) {
   const bulletin = application.membershipBulletin;
+  const initialName = splitFullName(
+    application.fullName,
+    application.firstName ?? "",
+    application.lastName ?? "",
+  );
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [firstName, setFirstName] = useState(initialName.firstName);
+  const [lastName, setLastName] = useState(initialName.lastName);
+  const [email, setEmail] = useState(application.email ?? "");
+  const [phone, setPhone] = useState(application.phone ?? "");
+  const [address, setAddress] = useState(application.address ?? "");
+  const [postalCode, setPostalCode] = useState(application.postalCode ?? "");
+  const [city, setCity] = useState(application.city ?? "");
+
+  function startEdit() {
+    const name = splitFullName(
+      application.fullName,
+      application.firstName ?? "",
+      application.lastName ?? "",
+    );
+    setFirstName(name.firstName);
+    setLastName(name.lastName);
+    setEmail(application.email ?? "");
+    setPhone(application.phone ?? "");
+    setAddress(application.address ?? "");
+    setPostalCode(application.postalCode ?? "");
+    setCity(application.city ?? "");
+    setError("");
+    setEditing(true);
+  }
+
+  async function save() {
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("Le prénom et le nom sont obligatoires.");
+      return;
+    }
+    const nextEmail = email.trim().toLowerCase();
+    if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      setError("Adresse e-mail invalide.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onUpdate(application.id, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: nextEmail,
+        phone: phone.trim(),
+        address: address.trim(),
+        postalCode: postalCode.trim(),
+        city: city.trim(),
+      });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fieldClass =
+    "mt-0.5 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900";
+
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
-        {application.origin === "paper" ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
-            Adhérent papier
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
+          {application.origin === "paper" ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
+              Adhérent papier
+            </span>
+          ) : null}
+        </div>
+        {!editing ? (
+          <button
+            type="button"
+            onClick={startEdit}
+            disabled={busy || saving}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+          >
+            Modifier les coordonnées
+          </button>
         ) : null}
       </div>
-      <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-slate-500">Nom</dt>
-          <dd className="font-medium text-slate-900">{application.fullName}</dd>
+
+      {editing ? (
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              Prénom
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="given-name"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Nom
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="family-name"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              E-mail
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="email"
+                placeholder="adresse@exemple.fr"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Téléphone
+              <input
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="tel"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+              Adresse
+              <input
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="street-address"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Code postal
+              <input
+                value={postalCode}
+                onChange={(event) => setPostalCode(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="postal-code"
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Ville
+              <input
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+                disabled={saving}
+                className={fieldClass}
+                autoComplete="address-level2"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">
+            L&apos;e-mail sert aux envois du bureau et aux notifications. La connexion à
+            l&apos;espace membre reste liée au compte existant.
+          </p>
+          {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {saving ? "Enregistrement…" : "Enregistrer les coordonnées"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+            >
+              Annuler
+            </button>
+          </div>
         </div>
-        <div>
-          <dt className="text-slate-500">E-mail</dt>
-          <dd className="text-break font-medium text-slate-900">{application.email || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Téléphone</dt>
-          <dd className="font-medium text-slate-900">{application.phone || "—"}</dd>
-        </div>
-        <div className="sm:col-span-2">
-          <dt className="text-slate-500">Adresse</dt>
-          <dd className="font-medium text-slate-900">{application.address?.trim() || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Code postal</dt>
-          <dd className="font-medium text-slate-900">{application.postalCode?.trim() || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Ville</dt>
-          <dd className="font-medium text-slate-900">{application.city?.trim() || "—"}</dd>
-        </div>
-        {application.origin === "paper" ? (
-          <>
-            <div>
-              <dt className="text-slate-500">Bulletin papier signé</dt>
-              <dd className="font-medium text-slate-900">
-                {application.signedBulletinReceivedAt
-                  ? `Reçu le ${new Date(
-                      `${application.signedBulletinReceivedAt}T12:00:00`,
-                    ).toLocaleDateString("fr-FR")}`
-                  : "Non coché"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Montant saisi au bureau</dt>
-              <dd className="font-medium text-slate-900">
-                {typeof application.amountPaid === "number"
-                  ? `${application.amountPaid.toFixed(2).replace(".", ",")} €`
-                  : "—"}
-              </dd>
-            </div>
-          </>
-        ) : null}
-        {bulletin ? (
-          <>
-            <div>
-              <dt className="text-slate-500">Date de naissance</dt>
-              <dd className="font-medium text-slate-900">{bulletin.birthDate}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Contact urgence</dt>
-              <dd className="font-medium text-slate-900">
-                {bulletin.emergencyContactName} — {bulletin.emergencyContactPhone}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Total bulletin</dt>
-              <dd className="font-medium text-slate-900">{bulletin.grandTotal} €</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Droit à l&apos;image</dt>
-              <dd className="font-medium text-slate-900">
-                {bulletin.imageRights === "authorize" ? "Autorisé" : "Refusé"}
-              </dd>
-            </div>
-          </>
-        ) : null}
-      </dl>
+      ) : (
+        <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-slate-500">Nom</dt>
+            <dd className="font-medium text-slate-900">{application.fullName}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">E-mail</dt>
+            <dd className="text-break font-medium text-slate-900">{application.email || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">Téléphone</dt>
+            <dd className="font-medium text-slate-900">{application.phone || "—"}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-slate-500">Adresse</dt>
+            <dd className="font-medium text-slate-900">{application.address?.trim() || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">Code postal</dt>
+            <dd className="font-medium text-slate-900">{application.postalCode?.trim() || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-500">Ville</dt>
+            <dd className="font-medium text-slate-900">{application.city?.trim() || "—"}</dd>
+          </div>
+          {application.origin === "paper" ? (
+            <>
+              <div>
+                <dt className="text-slate-500">Bulletin papier signé</dt>
+                <dd className="font-medium text-slate-900">
+                  {application.signedBulletinReceivedAt
+                    ? `Reçu le ${new Date(
+                        `${application.signedBulletinReceivedAt}T12:00:00`,
+                      ).toLocaleDateString("fr-FR")}`
+                    : "Non coché"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Montant saisi au bureau</dt>
+                <dd className="font-medium text-slate-900">
+                  {typeof application.amountPaid === "number"
+                    ? `${application.amountPaid.toFixed(2).replace(".", ",")} €`
+                    : "—"}
+                </dd>
+              </div>
+            </>
+          ) : null}
+          {bulletin ? (
+            <>
+              <div>
+                <dt className="text-slate-500">Date de naissance</dt>
+                <dd className="font-medium text-slate-900">{bulletin.birthDate}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Contact urgence</dt>
+                <dd className="font-medium text-slate-900">
+                  {bulletin.emergencyContactName} — {bulletin.emergencyContactPhone}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Total bulletin</dt>
+                <dd className="font-medium text-slate-900">{bulletin.grandTotal} €</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Droit à l&apos;image</dt>
+                <dd className="font-medium text-slate-900">
+                  {bulletin.imageRights === "authorize" ? "Autorisé" : "Refusé"}
+                </dd>
+              </div>
+            </>
+          ) : null}
+        </dl>
+      )}
       {application.motivation ? (
         <p className="mt-3 text-sm text-slate-700">
           <span className="font-medium text-slate-500">Motivation : </span>
@@ -463,7 +666,7 @@ export default function DossierPanel({
       <PhaseStepper current={phase} />
       <p className="text-sm text-slate-600">{PROCESSING_PHASE_DESCRIPTIONS[phase]}</p>
 
-      <ApplicantBlock application={application} />
+      <ApplicantBlock application={application} busy={busy} onUpdate={onUpdate} />
       {application.paymentStatus === "paid" ? (
         <PaymentReceiptLink
           applicationId={application.id}

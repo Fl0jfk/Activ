@@ -56,6 +56,58 @@ export async function PATCH(
       return jsonError("Non autorisé.", 401);
     }
 
+    const contactChanged =
+      typeof payload.firstName === "string" ||
+      typeof payload.lastName === "string" ||
+      typeof payload.fullName === "string" ||
+      typeof payload.email === "string" ||
+      typeof payload.phone === "string" ||
+      typeof payload.address === "string" ||
+      typeof payload.postalCode === "string" ||
+      typeof payload.city === "string";
+
+    if (contactChanged) {
+      if (typeof payload.email === "string") {
+        const email = payload.email.trim().toLowerCase();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return jsonError("Adresse e-mail invalide.", 400);
+        }
+        application.email = email;
+      }
+
+      if (typeof payload.firstName === "string" || typeof payload.lastName === "string") {
+        const firstName =
+          typeof payload.firstName === "string"
+            ? payload.firstName.trim()
+            : application.firstName?.trim() ?? "";
+        const lastName =
+          typeof payload.lastName === "string"
+            ? payload.lastName.trim()
+            : application.lastName?.trim() ?? "";
+        application.firstName = firstName;
+        application.lastName = lastName;
+        application.fullName =
+          `${firstName} ${lastName}`.trim() ||
+          application.fullName.trim() ||
+          application.email;
+      } else if (typeof payload.fullName === "string" && payload.fullName.trim()) {
+        application.fullName = payload.fullName.trim();
+      }
+
+      if (typeof payload.phone === "string") {
+        application.phone = payload.phone.trim();
+      }
+      if (typeof payload.address === "string") {
+        application.address = payload.address.trim();
+      }
+      if (typeof payload.postalCode === "string") {
+        application.postalCode = payload.postalCode.trim();
+      }
+      if (typeof payload.city === "string") {
+        application.city = payload.city.trim();
+      }
+    }
+
     if (payload.status) {
       application.status = payload.status;
     }
@@ -111,6 +163,10 @@ export async function PATCH(
     if (member) {
       if (payload.role) {
         member.role = payload.role;
+      }
+      if (contactChanged) {
+        member.fullName = application.fullName;
+        member.email = application.email;
       }
       member.membershipStatus = computedMembershipStatus;
       member.updatedAt = new Date().toISOString();
