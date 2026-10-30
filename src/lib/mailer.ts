@@ -1,4 +1,5 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
+import type SMTPPool from "nodemailer/lib/smtp-pool";
 
 /** Gmail : SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER + mot de passe d'application. */
 export function isMailConfigured(): boolean {
@@ -10,7 +11,10 @@ export function isMailConfigured(): boolean {
   );
 }
 
-function createTransporter() {
+let cachedTransporter: Transporter | null = null;
+let cachedSignature = "";
+
+function createTransporter(): Transporter | null {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT || 587);
   const user = process.env.SMTP_USER;
@@ -20,12 +24,27 @@ function createTransporter() {
     return null;
   }
 
-  return nodemailer.createTransport({
+  const signature = `${host}:${port}:${user}`;
+  if (cachedTransporter && cachedSignature === signature) {
+    return cachedTransporter;
+  }
+
+  const options: SMTPPool.Options = {
     host,
     port,
     secure: port === 465,
     auth: { user, pass },
-  });
+    // Réutilise la connexion SMTP : un envoi groupé de 60 messages ne
+    // rouvre pas 60 sessions (plus rapide et moins suspect pour les filtres).
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 100,
+    socketTimeout: 60_000,
+  };
+  const transporter = nodemailer.createTransport(options);
+  cachedTransporter = transporter;
+  cachedSignature = signature;
+  return transporter;
 }
 
 function defaultReplyTo(): string | undefined {
@@ -138,7 +157,11 @@ export async function sendEmailToMany(
 ): Promise<{ sent: number; failed: number; failures: EmailFailure[] }> {
   let sent = 0;
   const failures: EmailFailure[] = [];
-  for (const to of recipients) {
+  for (const [index, to] of recipients.entries()) {
+    if (index > 0) {
+      // Petit délai : évite les rafales qui déclenchent les filtres anti-spam.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
     const result = await sendEmail({ ...params, to });
     if (result.sent) {
       sent += 1;

@@ -372,6 +372,18 @@ export default function BureauBroadcastPanel({
               </li>
             ))}
           </ul>
+          {failures.some((failure) =>
+            /@(hotmail|outlook|live|msn)\./i.test(failure.email),
+          ) ? (
+            <p className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">
+              <strong>Adresses Hotmail / Outlook en échec :</strong> Microsoft renvoie souvent
+              « mailbox unavailable » pour des boîtes fermées ou désactivées après une longue
+              inactivité — l&apos;adresse existe peut-être encore, mais elle ne reçoit plus rien.
+              Demandez à l&apos;adhérent de confirmer son adresse, corrigez la fiche, puis
+              relancez l&apos;envoi. Les nouvelles inscriptions sont désormais vérifiées par un
+              code envoyé sur la boîte mail.
+            </p>
+          ) : null}
           <p className="mt-2 text-xs leading-5 text-amber-800">
             Une adresse introuvable est généralement une faute de frappe dans le dossier de
             l&apos;adhérent. Corrigez-la dans la fiche, puis relancez l&apos;envoi à cette

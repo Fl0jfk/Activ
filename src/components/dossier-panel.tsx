@@ -401,7 +401,19 @@ function ApplicantBlock({
           </div>
           <div>
             <dt className="text-slate-500">E-mail</dt>
-            <dd className="text-break font-medium text-slate-900">{application.email || "—"}</dd>
+            <dd className="text-break font-medium text-slate-900">
+              {application.email || "—"}
+              {application.emailVerifiedAt ? (
+                <span className="mt-1 block text-xs font-normal text-emerald-700">
+                  ✓ Vérifié le{" "}
+                  {new Date(application.emailVerifiedAt).toLocaleDateString("fr-FR")}
+                </span>
+              ) : application.origin === "online" ? (
+                <span className="mt-1 block text-xs font-normal text-amber-700">
+                  Adresse non confirmée par code
+                </span>
+              ) : null}
+            </dd>
           </div>
           <div>
             <dt className="text-slate-500">Téléphone</dt>

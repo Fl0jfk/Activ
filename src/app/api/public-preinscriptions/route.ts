@@ -21,6 +21,10 @@ import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { readSiteData } from "@/lib/site-data";
 import { uploadBytesToS3 } from "@/lib/s3-upload";
 import { validateTrialSlotForRegistration } from "@/lib/trial-slots";
+import {
+  consumeVerifiedEmailCode,
+  findVerifiedEmailCode,
+} from "@/lib/email-verification";
 
 /** PDF + S3 + Clerk : laisser assez de temps, e-mails hors chemin critique. */
 export const maxDuration = 60;
@@ -41,6 +45,7 @@ export async function POST(request: NextRequest) {
       city?: string;
       email?: string;
       password?: string;
+      emailVerificationId?: string;
     };
 
     if (payload.bulletinMode) {
@@ -58,7 +63,12 @@ export async function POST(request: NextRequest) {
 const ALREADY_RECEIVED_MESSAGE =
   "Votre bulletin d'adhésion a déjà bien été reçu. Le bureau va le traiter, vous recevrez une confirmation par e-mail. Vous n'avez pas besoin de le renvoyer.";
 
-async function handleBulletinSubmission(payload: MembershipBulletinFormPayload & { bulletinMode?: boolean }) {
+async function handleBulletinSubmission(
+  payload: MembershipBulletinFormPayload & {
+    bulletinMode?: boolean;
+    emailVerificationId?: string;
+  },
+) {
   const siteData = await readSiteData();
   const activityOptions = buildMembershipActivityCatalog(siteData);
   const validation = validateMembershipBulletinPayload(payload, {
@@ -79,6 +89,19 @@ async function handleBulletinSubmission(payload: MembershipBulletinFormPayload &
   );
   if (existingApplication) {
     return jsonOk({ message: ALREADY_RECEIVED_MESSAGE, alreadyReceived: true });
+  }
+
+  const emailVerification = findVerifiedEmailCode(
+    data,
+    email,
+    payload.emailVerificationId,
+  );
+  if (!emailVerification) {
+    return jsonError(
+      "Confirmez votre adresse e-mail avec le code reçu avant d'envoyer votre bulletin.",
+      400,
+      "email_not_verified",
+    );
   }
 
   const activeDisciplines = getActiveDisciplineOptions(siteData);
@@ -168,6 +191,7 @@ async function handleBulletinSubmission(payload: MembershipBulletinFormPayload &
       documents: [uploadedPdf],
       clerkUserId: createdUser.id,
       membershipBulletin,
+      emailVerifiedAt: consumeVerifiedEmailCode(emailVerification),
     });
 
     data.applications.unshift(application);
@@ -230,6 +254,7 @@ async function handleLegacySubmission(payload: {
   city?: string;
   email?: string;
   password?: string;
+  emailVerificationId?: string;
   motivation?: string;
   documents?: { name: string; url: string; uploadedAt: string }[];
 }) {
@@ -270,6 +295,19 @@ async function handleLegacySubmission(payload: {
     return jsonError("Une demande est déjà en attente pour cet email.", 409);
   }
 
+  const emailVerification = findVerifiedEmailCode(
+    data,
+    payload.email.trim().toLowerCase(),
+    payload.emailVerificationId,
+  );
+  if (!emailVerification) {
+    return jsonError(
+      "Confirmez votre adresse e-mail avec le code reçu avant d'envoyer votre demande.",
+      400,
+      "email_not_verified",
+    );
+  }
+
   const disciplineIds = [payload.disciplineId];
   const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({
     disciplineIds,
@@ -302,6 +340,7 @@ async function handleLegacySubmission(payload: {
       motivation: payload.motivation,
       documents: payload.documents,
       clerkUserId: createdUser.id,
+      emailVerifiedAt: consumeVerifiedEmailCode(emailVerification),
     });
 
     data.applications.unshift(application);

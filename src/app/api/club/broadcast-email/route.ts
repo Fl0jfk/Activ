@@ -7,6 +7,9 @@ import { isMailConfigured, sendEmailToMany } from "@/lib/mailer";
 import { collectApprovedMemberEmails, countApprovedMemberEmails } from "@/lib/member-emails";
 import { readSiteData } from "@/lib/site-data";
 
+/** 60 destinataires en séquence : laisser de la marge avant le timeout. */
+export const maxDuration = 120;
+
 export async function GET(request: NextRequest) {
   const auth = await requireClubOps();
   if (!auth.ok) {

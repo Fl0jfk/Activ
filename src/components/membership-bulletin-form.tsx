@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SignaturePad from "@/components/signature-pad";
+import EmailVerificationField from "@/components/email-verification-field";
 import type { MembershipActivityOption } from "@/lib/membership-activities";
 import {
   MEMBERSHIP_ADHESION_FEE,
@@ -80,6 +81,7 @@ export default function MembershipBulletinForm({
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
+  const [emailVerificationId, setEmailVerificationId] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [emergencyContactName, setEmergencyContactName] = useState("");
@@ -172,8 +174,11 @@ export default function MembershipBulletinForm({
     };
   }, [revalidateToken]);
 
-  function buildPayload(): MembershipBulletinFormPayload {
+  function buildPayload(): MembershipBulletinFormPayload & {
+    emailVerificationId?: string;
+  } {
     return {
+      emailVerificationId: emailVerificationId ?? undefined,
       firstName,
       lastName,
       phone,
@@ -224,6 +229,9 @@ export default function MembershipBulletinForm({
       }
       if (!isRevalidationMode && password !== passwordConfirm) {
         return "Les mots de passe ne correspondent pas.";
+      }
+      if (!isRevalidationMode && !emailVerificationId) {
+        return "Confirmez votre adresse e-mail avec le code reçu avant de continuer.";
       }
     }
     if (step === 1) {
@@ -429,16 +437,29 @@ export default function MembershipBulletinForm({
                   required
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
-                E-mail *
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                  required
-                />
-              </label>
+              <div className="flex flex-col gap-2 sm:col-span-2">
+                <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                  E-mail *
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailVerificationId(null);
+                    }}
+                    className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                    required
+                  />
+                </label>
+                {!isRevalidationMode ? (
+                  <EmailVerificationField
+                    email={email}
+                    verificationId={emailVerificationId}
+                    onVerified={setEmailVerificationId}
+                    disabled={isLoading}
+                  />
+                ) : null}
+              </div>
               {!isRevalidationMode ? (
                 <>
                   <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">

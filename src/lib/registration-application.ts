@@ -21,6 +21,8 @@ export type RegistrationApplicantInput = {
   documents?: { name: string; url: string; uploadedAt: string }[];
   clerkUserId: string | null;
   membershipBulletin?: MembershipBulletinData | null;
+  /** Adresse e-mail confirmée par code lors de l'inscription. */
+  emailVerifiedAt?: string | null;
 };
 
 export function buildRegistrationApplication(
@@ -62,6 +64,7 @@ export function buildRegistrationApplication(
     licenseEndDate: null,
     notes: "",
     membershipBulletin: input.membershipBulletin ?? null,
+    emailVerifiedAt: input.emailVerifiedAt ?? null,
   };
 }
 

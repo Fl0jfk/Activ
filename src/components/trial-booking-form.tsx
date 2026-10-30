@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import EmailVerificationField from "@/components/email-verification-field";
 import { formatTrialSlotDate, type TrialSlotListItem } from "@/lib/trial-slots";
 
 export type TrialSlotOption = TrialSlotListItem;
@@ -30,6 +31,7 @@ export default function TrialBookingForm({
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
+  const [emailVerificationId, setEmailVerificationId] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [motivation, setMotivation] = useState("");
@@ -44,6 +46,10 @@ export default function TrialBookingForm({
     }
     if (password !== passwordConfirm) {
       setMessage("Les mots de passe ne correspondent pas.");
+      return;
+    }
+    if (!emailVerificationId) {
+      setMessage("Confirmez votre adresse e-mail avec le code reçu avant d'envoyer.");
       return;
     }
     setIsLoading(true);
@@ -62,6 +68,7 @@ export default function TrialBookingForm({
         city,
         email,
         password,
+        emailVerificationId,
         motivation,
         documents: [],
       }),
@@ -174,16 +181,27 @@ export default function TrialBookingForm({
                     required
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-                  E-mail
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-                    required
+                <div className="flex flex-col gap-2 sm:col-span-2">
+                  <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+                    E-mail
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailVerificationId(null);
+                      }}
+                      className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
+                      required
+                    />
+                  </label>
+                  <EmailVerificationField
+                    email={email}
+                    verificationId={emailVerificationId}
+                    onVerified={setEmailVerificationId}
+                    disabled={isLoading}
                   />
-                </label>
+                </div>
                 <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
                   Mot de passe
                   <input

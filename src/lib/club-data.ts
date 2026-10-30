@@ -132,6 +132,20 @@ export type RegistrationApplication = {
   licenseEndDate: string | null;
   notes: string;
   membershipBulletin?: MembershipBulletinData | null;
+  /** Date de confirmation de l'adresse e-mail lors de l'inscription. */
+  emailVerifiedAt?: string | null;
+};
+
+/** Code envoyé par e-mail pour prouver que l'adresse existe avant création du compte. */
+export type EmailVerificationCode = {
+  id: string;
+  email: string;
+  codeHash: string;
+  attempts: number;
+  createdAt: string;
+  expiresAt: string;
+  verifiedAt: string | null;
+  consumedAt: string | null;
 };
 
 export type DocumentRequestToken = {
@@ -167,6 +181,7 @@ export type ClubData = {
   coachAbsenceRequests: CoachAbsenceRequest[];
   memberRequests: MemberRequest[];
   contactChangeRequests: MemberContactChangeRequest[];
+  emailVerificationCodes: EmailVerificationCode[];
   updatedAt: string;
 };
 
@@ -207,6 +222,7 @@ function normalizeClubData(data: ClubData): ClubData {
       licenseEndDate: application.licenseEndDate ?? null,
       dossierPhase: getApplicationDossierPhase(application),
       membershipBulletin: application.membershipBulletin ?? null,
+      emailVerifiedAt: application.emailVerifiedAt ?? null,
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
     bulletinRevalidationTokens: data.bulletinRevalidationTokens ?? [],
@@ -233,6 +249,13 @@ function normalizeClubData(data: ClubData): ClubData {
       reviewedAt: request.reviewedAt ?? null,
       reviewedBy: request.reviewedBy ?? null,
       rejectionReason: request.rejectionReason ?? "",
+    })),
+    emailVerificationCodes: (data.emailVerificationCodes ?? []).map((entry) => ({
+      ...entry,
+      email: entry.email?.trim().toLowerCase() ?? "",
+      attempts: typeof entry.attempts === "number" ? entry.attempts : 0,
+      verifiedAt: entry.verifiedAt ?? null,
+      consumedAt: entry.consumedAt ?? null,
     })),
     updatedAt: data.updatedAt ?? new Date().toISOString(),
   };
