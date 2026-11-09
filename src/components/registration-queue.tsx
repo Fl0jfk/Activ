@@ -118,6 +118,7 @@ export default function RegistrationQueue({
                 <DossierPanel
                   application={application}
                   disciplineName={disciplineName}
+                  disciplines={disciplines}
                   onUpdate={updateApplication}
                   onRequestDocument={requestMissingDocument}
                   onRequestBulletinRevalidation={requestBulletinRevalidation}

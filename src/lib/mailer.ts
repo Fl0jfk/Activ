@@ -145,7 +145,31 @@ export async function sendEmail(params: {
   }
 }
 
-/** Envoi individuel à chaque destinataire (équivalent CCI : pas de liste visible). */
+/** Adresses en copie cachée par message (Gmail en accepte jusqu'à 100). */
+const BCC_BATCH_SIZE = 40;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
+}
+
+function addressOf(entry: unknown): string {
+  if (typeof entry === "string") return entry.trim().toLowerCase();
+  const address = (entry as { address?: string } | null)?.address;
+  return address ? address.trim().toLowerCase() : "";
+}
+
+/**
+ * Envoi groupé en copie cachée (CCI), par lots de 40 adresses.
+ *
+ * Un message par adhérent (~60 envois SMTP à la suite) dépassait la durée
+ * maximale de la fonction serveur : l'envoi s'arrêtait en cours de route et
+ * seule une partie des adhérents recevait le mail. En CCI, deux envois
+ * suffisent et personne ne voit les adresses des autres.
+ */
 export async function sendEmailToMany(
   recipients: string[],
   params: {
@@ -155,23 +179,69 @@ export async function sendEmailToMany(
     replyTo?: string;
   },
 ): Promise<{ sent: number; failed: number; failures: EmailFailure[] }> {
+  const unique = Array.from(
+    new Set(recipients.map((email) => email.trim().toLowerCase()).filter(Boolean)),
+  );
+  const transporter = createTransporter();
+  const from = process.env.MAIL_FROM;
+  if (!transporter || !from) {
+    return {
+      sent: 0,
+      failed: unique.length,
+      failures: unique.map((email) => ({
+        email,
+        reason: "send_failed" as const,
+        detail: "L'envoi d'e-mails n'est pas configuré sur le serveur.",
+      })),
+    };
+  }
+
   let sent = 0;
   const failures: EmailFailure[] = [];
-  for (const [index, to] of recipients.entries()) {
-    if (index > 0) {
-      // Petit délai : évite les rafales qui déclenchent les filtres anti-spam.
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-    const result = await sendEmail({ ...params, to });
-    if (result.sent) {
-      sent += 1;
-    } else {
-      failures.push({
-        email: to,
-        reason: result.reason === "smtp_not_configured" ? "send_failed" : result.reason,
-        detail: result.detail,
+
+  for (const batch of chunk(unique, BCC_BATCH_SIZE)) {
+    try {
+      const info = await transporter.sendMail({
+        from,
+        // Message adressé à l'association, adhérents en copie cachée.
+        to: from,
+        bcc: batch,
+        replyTo: params.replyTo ?? defaultReplyTo(),
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
       });
+      const rejected = new Set(
+        ((info.rejected ?? []) as unknown[]).map(addressOf).filter(Boolean),
+      );
+      for (const email of batch) {
+        if (rejected.has(email)) {
+          failures.push({
+            email,
+            reason: "invalid_address",
+            detail: "Adresse refusée par le serveur de messagerie.",
+          });
+        } else {
+          sent += 1;
+        }
+      }
+    } catch (error) {
+      console.error("sendEmailToMany: batch failed, retrying one by one", error);
+      // Lot refusé en bloc : nouvel essai adresse par adresse pour isoler l'erreur.
+      for (const email of batch) {
+        const result = await sendEmail({ ...params, to: email });
+        if (result.sent) {
+          sent += 1;
+        } else {
+          failures.push({
+            email,
+            reason: result.reason === "smtp_not_configured" ? "send_failed" : result.reason,
+            detail: result.detail,
+          });
+        }
+      }
     }
   }
+
   return { sent, failed: failures.length, failures };
 }

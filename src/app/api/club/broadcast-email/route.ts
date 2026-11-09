@@ -7,7 +7,7 @@ import { isMailConfigured, sendEmailToMany } from "@/lib/mailer";
 import { collectApprovedMemberEmails, countApprovedMemberEmails } from "@/lib/member-emails";
 import { readSiteData } from "@/lib/site-data";
 
-/** 60 destinataires en séquence : laisser de la marge avant le timeout. */
+/** Envoi en CCI par lots : marge en cas de nouvel essai adresse par adresse. */
 export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {

@@ -76,16 +76,33 @@ function matchScore(discipline: Pick<Discipline, "name" | "slug">, keywords: str
   );
 }
 
-function findBestDiscipline(
-  disciplines: Pick<Discipline, "id" | "name" | "slug">[],
+const IGNORED_NAME_WORDS = new Set(["sur", "de", "du", "des", "la", "le", "les", "et", "en"]);
+
+/**
+ * Mots du nom de la discipline qui ne figurent pas dans les mots-clés.
+ * Sert à départager « Yoga » et « Yoga sur chaise » pour le mot-clé « yoga » :
+ * sans cela, la première discipline de la liste gagnait (souvent la chaise).
+ */
+function extraWordCount(discipline: Pick<Discipline, "name">, keywords: string[]): number {
+  const normalizedKeywords = keywords.map(normalizeText);
+  return normalizeText(discipline.name)
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word && !IGNORED_NAME_WORDS.has(word))
+    .filter((word) => !normalizedKeywords.some((keyword) => keyword.includes(word) || word.includes(keyword)))
+    .length;
+}
+
+export function findBestDiscipline<T extends Pick<Discipline, "id" | "name" | "slug">>(
+  disciplines: T[],
   keywords: string[],
-): Pick<Discipline, "id" | "name" | "slug"> | null {
-  let best: { discipline: Pick<Discipline, "id" | "name" | "slug">; score: number } | null = null;
+): T | null {
+  let best: { discipline: T; score: number; extra: number } | null = null;
   for (const discipline of disciplines) {
     const score = matchScore(discipline, keywords);
     if (score <= 0) continue;
-    if (!best || score > best.score) {
-      best = { discipline, score };
+    const extra = extraWordCount(discipline, keywords);
+    if (!best || score > best.score || (score === best.score && extra < best.extra)) {
+      best = { discipline, score, extra };
     }
   }
   return best?.discipline ?? null;
@@ -240,4 +257,67 @@ export function legacyMembershipActivityLabel(activityId: string): string | null
   const legacy = MEMBERSHIP_ACTIVITY_SLOTS.find((slot) => slot.id === activityId);
   if (!legacy) return null;
   return `${legacy.day} ${legacy.time} — ${legacy.activity}`;
+}
+
+type DisciplineRepairTarget = {
+  disciplineId: string;
+  disciplineIds?: string[];
+  disciplinesSetByBureau?: boolean;
+  membershipBulletin?: {
+    selectedSlots: string[];
+    selectedDisciplineIds?: string[];
+  } | null;
+};
+
+/**
+ * Recalcule les activités d'un dossier à partir des créneaux cochés sur le bulletin.
+ *
+ * Les dossiers enregistrés avant la correction du rapprochement « Yoga » /
+ * « Yoga sur chaise » gardaient la mauvaise discipline. Le bulletin signé
+ * fait foi, sauf si le bureau a modifié les activités à la main.
+ * Retourne `true` si le dossier a été modifié.
+ */
+export function repairApplicationDisciplines(
+  application: DisciplineRepairTarget,
+  catalog: MembershipActivityOption[],
+): boolean {
+  if (application.disciplinesSetByBureau) return false;
+  const bulletin = application.membershipBulletin;
+  const selectedSlots = bulletin?.selectedSlots ?? [];
+  if (!bulletin || selectedSlots.length === 0) return false;
+
+  const resolved: string[] = [];
+  let allResolved = true;
+  for (const slotId of selectedSlots) {
+    const disciplineId = findMembershipActivityOption(catalog, slotId)?.disciplineId;
+    if (!disciplineId) {
+      allResolved = false;
+      continue;
+    }
+    if (!resolved.includes(disciplineId)) resolved.push(disciplineId);
+  }
+  if (resolved.length === 0) return false;
+
+  // Créneau supprimé du planning : on garde aussi ce qui était enregistré.
+  const next = allResolved
+    ? resolved
+    : Array.from(
+        new Set([
+          ...resolved,
+          ...(application.disciplineIds ?? []),
+          ...(bulletin.selectedDisciplineIds ?? []),
+        ]),
+      );
+
+  const current = application.disciplineIds ?? [];
+  const unchanged =
+    application.disciplineId === next[0] &&
+    current.length === next.length &&
+    current.every((id, index) => id === next[index]);
+  if (unchanged) return false;
+
+  application.disciplineIds = next;
+  application.disciplineId = next[0]!;
+  bulletin.selectedDisciplineIds = next;
+  return true;
 }

@@ -6,6 +6,7 @@ import {
   updateUserMetadata,
 } from "@/lib/clerk";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
+import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 import type { AppRole } from "@/lib/roles";
 import { isBureauRole } from "@/lib/roles";
 import { clerkClient } from "@clerk/nextjs/server";
@@ -82,7 +83,8 @@ export async function syncApplicationClerkMetadata(params: {
     params.role ?? "member",
   );
   const bureauBypass = isBureauRole(role);
-  const disciplineIds = params.application.disciplineId ? [params.application.disciplineId] : [];
+  // Toutes les activités du dossier (et pas seulement la principale) pour l'espace membre.
+  const disciplineIds = getApplicationDisciplineIds(params.application);
   const espaceValidated = bureauBypass ? true : params.espaceValidated;
   const membershipStatus = bureauBypass ? "approved" : params.membershipStatus;
   const { privateMetadata, publicMetadata } = buildMemberClerkMetadata({

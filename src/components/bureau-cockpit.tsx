@@ -318,8 +318,13 @@ export default function BureauCockpit({
         .map((discipline) => ({
           id: discipline.id,
           name: discipline.name,
-          count: applications.filter((application) =>
-            getApplicationDisciplineIds(application).includes(discipline.id),
+          // Effectif réel : un adhérent compte dans chacune de ses activités,
+          // hors dossiers refusés ou désinscrits.
+          count: applications.filter(
+            (application) =>
+              application.status !== "rejected" &&
+              application.status !== "cancelled" &&
+              getApplicationDisciplineIds(application).includes(discipline.id),
           ).length,
         }))
         .sort((a, b) => b.count - a.count),

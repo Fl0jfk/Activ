@@ -16,6 +16,7 @@ import {
   type MemberContactValues,
 } from "@/lib/member-contact";
 import { syncContactToClerk } from "@/lib/member-contact-clerk";
+import { readSiteData } from "@/lib/site-data";
 
 export async function PATCH(
   request: NextRequest,
@@ -96,6 +97,28 @@ export async function PATCH(
         }
       }
       applyContactValues(application, contactValues);
+    }
+
+    if (Array.isArray(payload.disciplineIds)) {
+      const siteData = await readSiteData();
+      const knownIds = new Set(siteData.disciplines.map((discipline) => discipline.id));
+      const nextIds = Array.from(
+        new Set(
+          payload.disciplineIds
+            .filter((id): id is string => typeof id === "string")
+            .map((id) => id.trim())
+            .filter((id) => knownIds.has(id)),
+        ),
+      );
+      if (nextIds.length === 0) {
+        return jsonError("Choisissez au moins une activité.", 400);
+      }
+      application.disciplineIds = nextIds;
+      application.disciplineId = nextIds[0]!;
+      application.disciplinesSetByBureau = true;
+      if (application.membershipBulletin) {
+        application.membershipBulletin.selectedDisciplineIds = nextIds;
+      }
     }
 
     if (payload.status) {

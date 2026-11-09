@@ -3,6 +3,11 @@ import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 import type { AppRole } from "@/lib/roles";
 import { normalizeAppRole } from "@/lib/roles";
 import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
+import {
+  buildMembershipActivityCatalog,
+  repairApplicationDisciplines,
+} from "@/lib/membership-activities";
+import { readSiteData } from "@/lib/site-data";
 
 export type PaymentStatus = "unpaid" | "partial" | "paid";
 export type ApplicationStatus = "pending" | "awaiting_document" | "approved" | "rejected" | "cancelled";
@@ -134,6 +139,8 @@ export type RegistrationApplication = {
   membershipBulletin?: MembershipBulletinData | null;
   /** Date de confirmation de l'adresse e-mail lors de l'inscription. */
   emailVerifiedAt?: string | null;
+  /** Activités corrigées à la main par le bureau : ne plus les recalculer depuis le bulletin. */
+  disciplinesSetByBureau?: boolean;
 };
 
 /** Code envoyé par e-mail pour prouver que l'adresse existe avant création du compte. */
@@ -265,10 +272,24 @@ function clubDataKey(): string {
   return process.env.CLUB_DATA_KEY || defaultClubDataKey;
 }
 
+/** Remet les activités de chaque dossier en accord avec son bulletin (voir `repairApplicationDisciplines`). */
+async function repairDisciplines(data: ClubData): Promise<ClubData> {
+  try {
+    const siteData = await readSiteData();
+    const catalog = buildMembershipActivityCatalog(siteData);
+    for (const application of data.applications) {
+      repairApplicationDisciplines(application, catalog);
+    }
+  } catch (error) {
+    console.error("repairDisciplines: unable to read site data", error);
+  }
+  return data;
+}
+
 export async function readClubData(): Promise<ClubData> {
   try {
     const raw = await readJsonFromS3<ClubData>(clubDataKey());
-    return normalizeClubData(raw);
+    return repairDisciplines(normalizeClubData(raw));
   } catch {
     const seedData = normalizeClubData(await readLocalJsonFile<ClubData>(defaultClubDataPath));
     await writeClubData(seedData);

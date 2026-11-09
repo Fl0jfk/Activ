@@ -11,6 +11,8 @@ export type ApplicationUpdatePayload = {
   licenseEndDate?: string | null;
   trialSlotId?: string;
   dossierPhase?: ApplicationDossierPhase;
+  /** Activités du dossier choisies par le bureau (la première devient la principale). */
+  disciplineIds?: string[];
   /** Coordonnées modifiables depuis la fiche du dossier. */
   firstName?: string;
   lastName?: string;

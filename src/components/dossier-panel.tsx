@@ -9,16 +9,21 @@ import {
   PAYMENT_METHOD_OPTIONS,
   PROCESSING_PHASE_DESCRIPTIONS,
   PROCESSING_PHASE_LABELS,
+  getApplicationDisciplineIds,
+  getApplicationDisciplineNames,
   getDossierProcessingPhase,
   paymentMethodLabel,
   type DossierProcessingPhase,
 } from "@/lib/dossier-workflow";
+import type { DisciplineOption } from "@/lib/discipline-options";
 
 export type { ApplicationUpdatePayload as UpdatePayload };
 
 type DossierPanelProps = {
   application: RegistrationApplication;
   disciplineName?: string;
+  /** Disciplines actives, pour modifier les activités du dossier. */
+  disciplines?: DisciplineOption[];
   onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
   onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
   onRequestBulletinRevalidation: (applicationId: string) => Promise<void>;
@@ -193,6 +198,102 @@ function splitFullName(
     return { firstName: parts[0] ?? "", lastName: "" };
   }
   return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
+}
+
+/** Activités du dossier : le bureau peut en cocher plusieurs (ex. Pilates + Yoga). */
+function ActivitiesBlock({
+  application,
+  disciplines,
+  busy,
+  onUpdate,
+}: {
+  application: RegistrationApplication;
+  disciplines: DisciplineOption[];
+  busy: boolean;
+  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
+}) {
+  const currentIds = getApplicationDisciplineIds(application);
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<string[]>(currentIds);
+  const [saving, setSaving] = useState(false);
+
+  const currentNames = getApplicationDisciplineNames(application, disciplines);
+
+  function toggle(id: string) {
+    setSelected((previous) =>
+      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id],
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onUpdate(application.id, { disciplineIds: selected });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p>
+          <strong>Activités :</strong> {currentNames.join(", ") || "Aucune"}
+        </p>
+        {!editing ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setSelected(currentIds);
+              setEditing(true);
+            }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50"
+          >
+            Modifier les activités
+          </button>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-3 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {disciplines.map((discipline) => (
+              <label
+                key={discipline.id}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(discipline.id)}
+                  onChange={() => toggle(discipline.id)}
+                />
+                {discipline.name}
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || saving || selected.length === 0}
+              onClick={() => void save()}
+              className="rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Enregistrer
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setEditing(false)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function ApplicantBlock({
@@ -636,6 +737,7 @@ function TrialBadge({
 export default function DossierPanel({
   application,
   disciplineName,
+  disciplines,
   onUpdate,
   onRequestDocument,
   onRequestBulletinRevalidation,
@@ -679,6 +781,14 @@ export default function DossierPanel({
       <p className="text-sm text-slate-600">{PROCESSING_PHASE_DESCRIPTIONS[phase]}</p>
 
       <ApplicantBlock application={application} busy={busy} onUpdate={onUpdate} />
+      {disciplines && disciplines.length > 0 ? (
+        <ActivitiesBlock
+          application={application}
+          disciplines={disciplines}
+          busy={busy}
+          onUpdate={onUpdate}
+        />
+      ) : null}
       {application.paymentStatus === "paid" ? (
         <PaymentReceiptLink
           applicationId={application.id}
