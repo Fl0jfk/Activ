@@ -10,11 +10,15 @@ export const dynamic = "force-dynamic";
 export default async function BureauDossiersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filtre?: string }>;
+  searchParams: Promise<{ filtre?: string; discipline?: string }>;
 }) {
   const [data, params] = await Promise.all([loadBureauPageData(), searchParams]);
   const initialFilter: QueueFilter =
     params.filtre === "finalized" || params.filtre === "all" ? params.filtre : "en_cours";
+  const initialDisciplineId =
+    data.disciplines.find(
+      (discipline) => discipline.slug === params.discipline || discipline.id === params.discipline,
+    )?.id ?? null;
 
   const enCours = data.applications.filter((application) => {
     const step = getDossierStep(application);
@@ -54,6 +58,7 @@ export default async function BureauDossiersPage({
           disciplines={data.disciplines}
           applications={data.applications}
           initialFilter={initialFilter}
+          initialDisciplineId={initialDisciplineId}
         />
         <div id="adherent-papier" className="anchor-section min-w-0">
           <ManualMemberPanel disciplines={data.disciplines} />
