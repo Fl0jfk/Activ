@@ -18,6 +18,9 @@ export function parseClerkError(error: unknown): { message: string; status: numb
         status: 409,
       };
     }
+    if (code === "form_password_incorrect") {
+      return { message: "Le mot de passe actuel est incorrect.", status: 400 };
+    }
     if (code === "form_password_pwned") {
       return {
         message: "Ce mot de passe n'est pas assez sécurisé. Choisissez-en un autre.",

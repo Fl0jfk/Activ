@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import AccountSettings from "@/components/account-settings";
 import MemberContactSection from "@/components/member-contact-section";
 import MemberRequestsSection from "@/components/member-requests-section";
 import PaymentReceiptLink from "@/components/payment-receipt-link";
@@ -229,6 +230,7 @@ export default function MemberPortal({
     contactApplication ? { href: "#mes-coordonnees", label: "Mes coordonnées" } : null,
     { href: "#demandes", label: "Demandes au bureau" },
     { href: "#mes-dossiers", label: "Mes dossiers" },
+    { href: "#mon-compte", label: "Mon compte" },
   ].filter((item): item is { href: string; label: string } => item !== null);
 
   async function uploadDocument(file: File) {
@@ -591,6 +593,8 @@ export default function MemberPortal({
           </div>
         </section>
       ) : null}
+
+      <AccountSettings hasContactSection={Boolean(contactApplication)} />
 
       <details className="group panel p-6">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xl font-extrabold text-slate-900">

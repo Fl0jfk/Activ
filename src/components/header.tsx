@@ -4,8 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useUser } from "@clerk/nextjs";
-import ClerkUserButton from "@/components/clerk-user-button";
+import { useClerk, useUser } from "@clerk/nextjs";
+import AccountMenu, { ACCOUNT_SETTINGS_HREF } from "@/components/account-menu";
 import CallButton from "@/components/call-button";
 import FacebookButton from "@/components/facebook-button";
 
@@ -36,6 +36,7 @@ function MobileMenu({
   onClose: () => void;
 }) {
   const { isSignedIn } = useUser();
+  const { signOut } = useClerk();
 
   return (
     <>
@@ -52,31 +53,43 @@ function MobileMenu({
               {item.label}
             </Link>
           ))}
-          <div className={`${MOBILE_LIST_ROW} gap-3`}>
-            {isSignedIn ? (
-              <>
-                <ClerkUserButton />
-                <Link
-                  href="/espace"
-                  onClick={onClose}
-                  className="flex-1 text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue"
-                >
-                  Mon espace
-                </Link>
-              </>
-            ) : (
+          {isSignedIn ? (
+            <>
+              <Link
+                href={ACCOUNT_SETTINGS_HREF}
+                onClick={onClose}
+                className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue`}
+              >
+                Mon compte et mot de passe
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  void signOut({ redirectUrl: "/" });
+                }}
+                className={`${MOBILE_LIST_ROW} w-full text-left text-rose-700`}
+              >
+                Se déconnecter
+              </button>
+              <Link href="/espace" onClick={onClose} className="btn btn-primary mt-6 w-full text-lg">
+                Mon espace
+              </Link>
+            </>
+          ) : (
+            <>
               <Link
                 href="/sign-in"
                 onClick={onClose}
-                className="w-full text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue"
+                className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue`}
               >
                 Connexion
               </Link>
-            )}
-          </div>
-          <Link href="/preinscription" onClick={onClose} className="btn btn-primary mt-6 w-full text-lg">
-            Pré-inscription
-          </Link>
+              <Link href="/preinscription" onClick={onClose} className="btn btn-primary mt-6 w-full text-lg">
+                Pré-inscription
+              </Link>
+            </>
+          )}
           <div className="mt-6 flex items-center gap-4">
             <CallButton />
             <FacebookButton href={facebookUrl} onClick={onClose} />
@@ -156,23 +169,27 @@ export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderP
           </nav>
           <div className="flex items-center gap-3">
             {isSignedIn ? (
-              <div className="hidden items-center gap-3 md:flex">
-                <Link href="/espace" className="text-sm font-semibold text-slate-600 transition-colors hover:text-brand-blue">
+              <>
+                <div className="hidden md:block">
+                  <AccountMenu />
+                </div>
+                <Link href="/espace" className="btn btn-primary btn-sm whitespace-nowrap">
                   Mon espace
                 </Link>
-                <ClerkUserButton />
-              </div>
+              </>
             ) : (
-              <Link
-                href="/sign-in"
-                className="hidden text-sm font-semibold text-slate-600 transition-colors hover:text-brand-blue md:inline"
-              >
-                Connexion
-              </Link>
+              <>
+                <Link
+                  href="/sign-in"
+                  className="hidden text-sm font-semibold text-slate-600 transition-colors hover:text-brand-blue md:inline"
+                >
+                  Connexion
+                </Link>
+                <Link href="/preinscription" className="btn btn-primary btn-sm whitespace-nowrap">
+                  Pré-inscription
+                </Link>
+              </>
             )}
-            <Link href="/preinscription" className="btn btn-primary btn-sm whitespace-nowrap">
-              Pré-inscription
-            </Link>
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
