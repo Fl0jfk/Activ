@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { ASSOCIATION_PHONE_DISPLAY, ASSOCIATION_PHONE_TEL } from "@/lib/association-contact";
+import { buildPageMetadata, SITE_LOCALITY, SITE_SHORT_NAME, toMetaDescription } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 import {
   buildWeekSchedule,
@@ -16,6 +19,23 @@ import HomeGallerySlider from "@/components/home-gallery-slider";
 import HomeFeedSlider from "@/components/home-feed-slider";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const data = await readSiteData();
+  const names = data.disciplines
+    .filter((discipline) => discipline.active)
+    .map((discipline) => discipline.name.trim().toLowerCase())
+    .filter(Boolean);
+  const activities = names.length > 0 ? ` : ${names.join(", ")}` : "";
+  return buildPageMetadata({
+    title: `${SITE_SHORT_NAME} – Sport et culture à ${SITE_LOCALITY}`,
+    description: toMetaDescription(
+      `Association sportive et culturelle à ${SITE_LOCALITY}${activities}. Planning des cours, séance d'essai et pré-inscription en ligne.`,
+    ),
+    path: "/",
+    absoluteTitle: true,
+  });
+}
 
 export default async function Home({
   searchParams,
@@ -194,6 +214,12 @@ export default async function Home({
       <footer className="mt-2 w-full border-t border-white/30 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-3 px-4 py-8 text-sm sm:px-8">
           <p className="text-md text-slate-300">© 2026 Sainte-Croix-sur-Buchy</p>
+          {data.association.address ? (
+            <p className="text-md text-slate-300">{data.association.address}</p>
+          ) : null}
+          <a href={ASSOCIATION_PHONE_TEL} className="text-md text-slate-300 hover:underline">
+            {ASSOCIATION_PHONE_DISPLAY}
+          </a>
           <CallButton />
         </div>
       </footer>

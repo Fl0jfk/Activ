@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import JsonLd from "@/components/json-ld";
 import LinkedPollsPanel from "@/components/linked-polls-panel";
 import { RichTextContent } from "@/lib/chat-message-links";
+import { absoluteUrl, buildPageMetadata, newsJsonLd, toMetaDescription } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 import {
   formatEventSchedule,
@@ -15,6 +18,23 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   params: Promise<{ id: string }>;
 };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const data = await readSiteData();
+  const item = data.news.find((entry) => entry.id === id);
+  if (!item) return { title: "Actualité introuvable", robots: { index: false } };
+  const schedule = formatEventSchedule(item);
+  const fallback = [item.title, schedule, item.location].filter(Boolean).join(" – ");
+  return buildPageMetadata({
+    title: item.title,
+    description: toMetaDescription(item.description || fallback),
+    path: `/actualites/${item.id}`,
+    image: item.imageUrl || undefined,
+    imageAlt: item.title,
+    type: "article",
+  });
+}
 
 export default async function ActualitePage({ params }: PageProps) {
   const { id } = await params;
@@ -32,6 +52,7 @@ export default async function ActualitePage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
+      <JsonLd data={newsJsonLd(item, absoluteUrl(`/actualites/${item.id}`))} />
       <Link href="/#actualites" className="text-sm font-semibold text-cyan-700 hover:underline">
         ← Retour aux actualités
       </Link>
@@ -47,7 +68,7 @@ export default async function ActualitePage({ params }: PageProps) {
         {item.imageUrl ? (
           <Image
             src={item.imageUrl}
-            alt=""
+            alt={item.title}
             width={1000}
             height={560}
             unoptimized={item.imageUrl.startsWith("/api/")}
@@ -63,11 +84,11 @@ export default async function ActualitePage({ params }: PageProps) {
           <section className="mt-8">
             <h2 className="text-lg font-bold text-slate-900">Galerie</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {gallery.map((url) => (
+              {gallery.map((url, index) => (
                 <Image
                   key={url}
                   src={url}
-                  alt=""
+                  alt={`${item.title} – photo ${index + 1}`}
                   width={640}
                   height={400}
                   unoptimized={url.startsWith("/api/")}

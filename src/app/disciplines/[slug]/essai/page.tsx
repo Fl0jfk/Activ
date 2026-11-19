@@ -1,12 +1,16 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import TrialBookingForm from "@/components/trial-booking-form";
 import { readClubData } from "@/lib/club-data";
+import { NOINDEX_METADATA } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 import { listUpcomingTrialSlots } from "@/lib/trial-slots";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Réserver une séance d'essai", ...NOINDEX_METADATA };
 
 export default async function DisciplineTrialPage({ params }: PageProps) {
   const { slug } = await params;

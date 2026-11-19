@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.activsaintecroix.fr" }],
+        destination: "https://activsaintecroix.fr/:path*",
+        permanent: true,
+      },
+    ];
+  },
   images: {
     localPatterns: [
       { pathname: "/logo.png" },

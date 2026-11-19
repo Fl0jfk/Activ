@@ -2,6 +2,15 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppClerkProvider from "@/components/clerk-provider";
 import Header from "@/components/header";
+import JsonLd from "@/components/json-ld";
+import {
+  DEFAULT_OG_IMAGE,
+  organizationJsonLd,
+  SITE_LOCALITY,
+  SITE_NAME,
+  SITE_SHORT_NAME,
+  SITE_URL,
+} from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 import "./globals.css";
 
@@ -15,8 +24,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Activ' Sainte-Croix Sport et Culture",
-  description:"Association sportive locale: disciplines, planning et informations pratiques.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_SHORT_NAME} – Sport et culture à ${SITE_LOCALITY}`,
+    template: `%s | ${SITE_SHORT_NAME}`,
+  },
+  description: "Association sportive et culturelle de Sainte-Croix-sur-Buchy : disciplines, planning et pré-inscription.",
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    siteName: SITE_NAME,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  twitter: { card: "summary" },
 };
 
 export default async function RootLayout({ children}: Readonly<{ children: React.ReactNode;}>) {
@@ -31,6 +52,7 @@ export default async function RootLayout({ children}: Readonly<{ children: React
             showGalleryNav={data.homeGallery.slides.length > 0}
           />
           {children}
+          <JsonLd data={organizationJsonLd(data.association)} />
         </body>
       </html>
     </AppClerkProvider>

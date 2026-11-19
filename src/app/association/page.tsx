@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import CallButton from "@/components/call-button";
+import { buildPageMetadata, SITE_LOCALITY } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Organigramme : bureau et équipe enseignante",
+  description: `Le bureau et les enseignants d'Activ' Sainte-Croix, association sportive et culturelle de ${SITE_LOCALITY}.`,
+  path: "/association",
+});
 
 export default async function AssociationPage() {
   const data = await readSiteData();

@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import CallButton from "@/components/call-button";
 import ContactForm from "@/components/contact-form";
+import { buildPageMetadata, SITE_LOCALITY } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: `Contact et séance d'essai à ${SITE_LOCALITY}`,
+  description: `Contactez Activ' Sainte-Croix pour une séance d'essai, un renseignement ou une question sur nos activités à ${SITE_LOCALITY}.`,
+  path: "/contact",
+});
 
 export default async function ContactPage() {
   const data = await readSiteData();

@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CallButton from "@/components/call-button";
 import SiteImage from "@/components/site-image";
+import { buildPageMetadata, SITE_LOCALITY, toMetaDescription } from "@/lib/seo";
 import { readSiteData } from "@/lib/site-data";
 import {
   buildDisciplineWeekSchedule,
@@ -17,6 +19,24 @@ type PageProps = {
 };
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: Pick<PageProps, "params">): Promise<Metadata> {
+  const { slug } = await params;
+  const data = await readSiteData();
+  const discipline = data.disciplines.find((item) => item.slug === slug && item.active);
+  if (!discipline) return { title: "Discipline introuvable", robots: { index: false } };
+  const teachers = discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher].filter(Boolean);
+  const fallback = `Cours de ${discipline.name} à ${SITE_LOCALITY}${
+    teachers.length > 0 ? ` avec ${teachers.join(" et ")}` : ""
+  }. Horaires, tarifs et pré-inscription.`;
+  return buildPageMetadata({
+    title: `${discipline.name} à ${SITE_LOCALITY}`,
+    description: toMetaDescription(discipline.description || fallback),
+    path: `/disciplines/${discipline.slug}`,
+    image: discipline.imageUrl,
+    imageAlt: discipline.name,
+  });
+}
 
 export default async function DisciplinePage({ params, searchParams }: PageProps) {
   const { slug } = await params;
