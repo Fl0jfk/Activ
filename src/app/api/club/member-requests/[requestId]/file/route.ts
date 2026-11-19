@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { clubDocumentResponse } from "@/lib/document-response";
 import { requireUser } from "@/lib/api-auth";
 import { canAccessClubOperations } from "@/lib/clerk";
 import { jsonError } from "@/lib/api-response";
@@ -47,14 +48,7 @@ export async function GET(
       return jsonError("Document introuvable.", 404);
     }
 
-    return new NextResponse(new Uint8Array(file.body), {
-      status: 200,
-      headers: {
-        "Content-Type": file.contentType,
-        "Content-Disposition": `inline; filename="${document.name.replace(/"/g, "")}"`,
-        "Cache-Control": "private, max-age=60",
-      },
-    });
+    return clubDocumentResponse(file, document.name);
   } catch (error) {
     console.error("Failed to read member request attachment", error);
     return jsonError("Document introuvable.", 404);

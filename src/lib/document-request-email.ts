@@ -1,8 +1,18 @@
 import type { DocumentRequestToken } from "@/lib/club-data";
+import { appBaseUrl } from "@/lib/app-url";
+import { EMAIL_COLORS, emailButton, emailLayout, escapeHtml, safeHref, singleLine } from "@/lib/email-html";
 
 export function buildDocumentUploadUrl(token: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${appUrl}/piece-jointe?token=${encodeURIComponent(token)}`;
+  return `${appBaseUrl()}/piece-jointe?token=${encodeURIComponent(token)}`;
+}
+
+function formatExpiry(expiresAt: string): string {
+  return new Date(expiresAt).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/Paris",
+  });
 }
 
 export function buildDocumentRequestEmail(params: {
@@ -11,13 +21,11 @@ export function buildDocumentRequestEmail(params: {
   expiresAt: string;
   memberName?: string;
 }) {
-  const { documentLabel, secureLink, expiresAt, memberName } = params;
-  const greeting = memberName?.trim() ? `Bonjour ${memberName.trim()},` : "Bonjour,";
-  const expiryLabel = new Date(expiresAt).toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const { secureLink, expiresAt } = params;
+  const documentLabel = singleLine(params.documentLabel, 200);
+  const memberName = singleLine(params.memberName, 120);
+  const greeting = memberName ? `Bonjour ${memberName},` : "Bonjour,";
+  const expiryLabel = formatExpiry(expiresAt);
 
   const subject = `[Activ'] Pièce à fournir : ${documentLabel}`;
   const text = `${greeting}
@@ -32,12 +40,15 @@ Ce lien expire le ${expiryLabel}.
 Sportivement,
 L'équipe Activ'`;
 
-  const html = `<p>${greeting}</p>
-<p>Le bureau de l'association vous demande de déposer la pièce suivante&nbsp;: <strong>${documentLabel}</strong>.</p>
-<p><a href="${secureLink}" style="display:inline-block;margin:12px 0;padding:12px 18px;background:#0e7490;color:#fff;text-decoration:none;border-radius:10px;font-weight:600">Déposer ma pièce</a></p>
-<p>Ou copiez ce lien dans votre navigateur&nbsp;:<br/><a href="${secureLink}">${secureLink}</a></p>
-<p style="color:#64748b;font-size:14px">Ce lien expire le ${expiryLabel}.</p>
-<p>Sportivement,<br/>L'équipe Activ'</p>`;
+  const html = emailLayout({
+    title: "Une pièce est à fournir",
+    bodyHtml: `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>
+<p style="margin:0 0 12px">Le bureau de l'association vous demande de déposer la pièce suivante&nbsp;: <strong>${escapeHtml(documentLabel)}</strong>.</p>
+${emailButton(secureLink, "Déposer ma pièce")}
+<p style="margin:0 0 12px">Ou copiez ce lien dans votre navigateur&nbsp;:<br/><a href="${safeHref(secureLink)}" style="color:${EMAIL_COLORS.blue};word-break:break-all">${escapeHtml(secureLink)}</a></p>
+<p style="margin:0 0 12px;color:${EMAIL_COLORS.muted};font-size:14px">Ce lien expire le ${escapeHtml(expiryLabel)}.</p>
+<p style="margin:16px 0 0">Sportivement,<br/>L'équipe Activ'</p>`,
+  });
 
   return { subject, text, html };
 }
@@ -48,16 +59,22 @@ export function buildDocumentReceivedBureauEmail(params: {
   documentLabel: string;
   fileName: string;
 }) {
-  const { memberName, memberEmail, documentLabel, fileName } = params;
+  const memberName = singleLine(params.memberName, 120);
+  const memberEmail = singleLine(params.memberEmail, 200);
+  const documentLabel = singleLine(params.documentLabel, 200);
+  const fileName = singleLine(params.fileName, 200);
   const subject = `[Activ'] Pièce reçue — ${memberName}`;
-  const text = `${memberName} (${memberEmail}) a déposé la pièce demandée « ${documentLabel} » via le lien public.
+  const text = `${memberName} (${memberEmail}) a déposé la pièce demandée « ${documentLabel} » via le lien sécurisé.
 
 Fichier : ${fileName}
 
-Consultez le dossier dans le cockpit bureau.`;
-  const html = `<p><strong>${memberName}</strong> (${memberEmail}) a déposé la pièce demandée « <strong>${documentLabel}</strong> » via le lien public.</p>
-<p>Fichier&nbsp;: ${fileName}</p>
-<p>Consultez le dossier dans le cockpit bureau.</p>`;
+Consultez le dossier dans l'espace bureau.`;
+  const html = emailLayout({
+    title: "Une pièce a été déposée",
+    bodyHtml: `<p style="margin:0 0 12px"><strong>${escapeHtml(memberName)}</strong> (${escapeHtml(memberEmail)}) a déposé la pièce demandée «&nbsp;<strong>${escapeHtml(documentLabel)}</strong>&nbsp;» via le lien sécurisé.</p>
+<p style="margin:0 0 12px">Fichier&nbsp;: ${escapeHtml(fileName)}</p>
+<p style="margin:0">Consultez le dossier dans l'espace bureau.</p>`,
+  });
   return { subject, text, html };
 }
 

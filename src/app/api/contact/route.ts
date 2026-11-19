@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { escapeHtml } from "@/lib/email-html";
+import { resolveBureauRecipient } from "@/lib/bureau-recipient";
+import { escapeHtml, singleLine } from "@/lib/email-html";
+import { cleanLine, cleanMultiline, isValidEmailAddress } from "@/lib/input-validation";
 import { isMailConfigured, sendEmail } from "@/lib/mailer";
-import { readSiteData } from "@/lib/site-data";
+import { HOUR, MINUTE, limitByIp, limitByKey, readJsonBody } from "@/lib/request-guard";
+
+export const dynamic = "force-dynamic";
 
 const SUBJECT_LABELS: Record<string, string> = {
   trial: "Demande de séance d'essai",
@@ -10,74 +14,68 @@ const SUBJECT_LABELS: Record<string, string> = {
   other: "Autre demande",
 };
 
+const UNAVAILABLE_MESSAGE =
+  "Le formulaire de contact est momentanément indisponible. Réessayez plus tard ou écrivez directement à l'association.";
+
+function reply(message: string, status: number) {
+  return NextResponse.json({ message }, { status, headers: { "Cache-Control": "no-store" } });
+}
+
 export async function POST(request: NextRequest) {
+  const limited = limitByIp(request, "contact", { limit: 5, windowMs: 15 * MINUTE });
+  if (limited) return limited;
+
   if (!isMailConfigured()) {
-    return NextResponse.json(
-      {
-        message:
-          "L'envoi d'e-mails n'est pas encore configuré sur le serveur. Réessayez plus tard ou écrivez directement à l'association.",
-      },
-      { status: 503 },
-    );
+    console.error("contact : envoi d'e-mails non configuré");
+    return reply(UNAVAILABLE_MESSAGE, 503);
   }
 
-  let payload: {
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    phone?: string;
-    topic?: string;
-    disciplineName?: string;
-    message?: string;
-    website?: string;
-  };
+  const parsed = await readJsonBody(request, 20_000);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.body;
 
-  try {
-    payload = (await request.json()) as typeof payload;
-  } catch {
-    return NextResponse.json({ message: "Corps de requête invalide." }, { status: 400 });
+  // Champ piège invisible : les robots le remplissent, pas les visiteurs.
+  if (typeof payload.website === "string" && payload.website.trim()) {
+    return reply("Message envoyé.", 201);
   }
 
-  if (payload.website?.trim()) {
-    return NextResponse.json({ message: "Message envoyé." }, { status: 201 });
-  }
-
-  const firstName = payload.firstName?.trim() ?? "";
-  const lastName = payload.lastName?.trim() ?? "";
-  const email = payload.email?.trim().toLowerCase() ?? "";
-  const phone = payload.phone?.trim() ?? "";
-  const topic = payload.topic?.trim() ?? "other";
-  const disciplineName = payload.disciplineName?.trim() ?? "";
-  const message = payload.message?.trim() ?? "";
+  const firstName = cleanLine(payload.firstName, 61);
+  const lastName = cleanLine(payload.lastName, 61);
+  const email = cleanLine(payload.email, 255).toLowerCase();
+  const phone = cleanLine(payload.phone, 31);
+  const topic = cleanLine(payload.topic, 30) || "other";
+  const disciplineName = cleanLine(payload.disciplineName, 121);
+  const message = cleanMultiline(payload.message, 5001);
 
   if (!firstName || !lastName || !email || !message) {
-    return NextResponse.json({ message: "Merci de remplir tous les champs obligatoires." }, { status: 400 });
+    return reply("Merci de remplir tous les champs obligatoires.", 400);
   }
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ message: "Adresse e-mail invalide." }, { status: 400 });
+  if (firstName.length > 60 || lastName.length > 60 || phone.length > 30 || disciplineName.length > 120) {
+    return reply("Un des champs saisis est trop long.", 400);
   }
-
+  if (!isValidEmailAddress(email)) {
+    return reply("Adresse e-mail invalide.", 400);
+  }
   if (message.length < 10) {
-    return NextResponse.json({ message: "Le message doit contenir au moins 10 caractères." }, { status: 400 });
+    return reply("Le message doit contenir au moins 10 caractères.", 400);
   }
-
   if (message.length > 5000) {
-    return NextResponse.json({ message: "Le message est trop long." }, { status: 400 });
+    return reply("Le message est trop long.", 400);
   }
 
-  const siteData = await readSiteData();
-  const to = process.env.CONTACT_TO?.trim() || siteData.association.contactEmail;
-  const topicLabel = SUBJECT_LABELS[topic] ?? SUBJECT_LABELS.other;
-  const fullName = `${firstName} ${lastName}`.trim();
-  const mailSubject = `[Contact Activ'] ${topicLabel} — ${fullName}`;
+  const emailLimited = limitByKey("contact-email", email, { limit: 5, windowMs: HOUR });
+  if (emailLimited) return emailLimited;
 
-  const disciplineLine =
-    topic === "discipline" || topic === "trial"
-      ? disciplineName
-        ? `Discipline concernée : ${disciplineName}\n`
-        : ""
-      : "";
+  const to = await resolveBureauRecipient();
+  if (!to) {
+    console.error("contact : aucune adresse de destination (CONTACT_TO, contact de l'association ou SMTP_USER)");
+    return reply(UNAVAILABLE_MESSAGE, 503);
+  }
+
+  const topicLabel = SUBJECT_LABELS[topic] ?? SUBJECT_LABELS.other!;
+  const fullName = `${firstName} ${lastName}`.trim();
+  const mailSubject = singleLine(`[Contact Activ'] ${topicLabel} — ${fullName}`, 200);
+  const showDiscipline = (topic === "discipline" || topic === "trial") && Boolean(disciplineName);
 
   const text = [
     `Nouveau message depuis le formulaire de contact.`,
@@ -86,12 +84,12 @@ export async function POST(request: NextRequest) {
     `E-mail : ${email}`,
     phone ? `Téléphone : ${phone}` : null,
     `Objet : ${topicLabel}`,
-    disciplineLine ? disciplineLine.trim() : null,
+    showDiscipline ? `Discipline concernée : ${disciplineName}` : null,
     ``,
     `Message :`,
     message,
   ]
-    .filter(Boolean)
+    .filter((line) => line !== null)
     .join("\n");
 
   const html = `
@@ -101,7 +99,7 @@ export async function POST(request: NextRequest) {
       <li><strong>E-mail :</strong> ${escapeHtml(email)}</li>
       ${phone ? `<li><strong>Téléphone :</strong> ${escapeHtml(phone)}</li>` : ""}
       <li><strong>Objet :</strong> ${escapeHtml(topicLabel)}</li>
-      ${disciplineName && (topic === "discipline" || topic === "trial") ? `<li><strong>Discipline :</strong> ${escapeHtml(disciplineName)}</li>` : ""}
+      ${showDiscipline ? `<li><strong>Discipline :</strong> ${escapeHtml(disciplineName)}</li>` : ""}
     </ul>
     <p><strong>Message :</strong></p>
     <p style="white-space:pre-wrap">${escapeHtml(message)}</p>
@@ -116,19 +114,12 @@ export async function POST(request: NextRequest) {
   });
 
   if (!sendResult.sent) {
-    return NextResponse.json(
-      {
-        message:
-          sendResult.reason === "send_failed"
-            ? "L'envoi a échoué. Vérifiez la configuration Gmail (mot de passe d'application) ou réessayez."
-            : "L'envoi d'e-mails n'est pas configuré.",
-      },
-      { status: 502 },
+    console.error("contact : envoi impossible", sendResult.reason);
+    return reply(
+      "Votre message n'a pas pu être envoyé. Réessayez dans quelques minutes ou écrivez directement à l'association.",
+      502,
     );
   }
 
-  return NextResponse.json(
-    { message: "Votre message a bien été envoyé. Nous vous répondrons dès que possible." },
-    { status: 201 },
-  );
+  return reply("Votre message a bien été envoyé. Nous vous répondrons dès que possible.", 201);
 }

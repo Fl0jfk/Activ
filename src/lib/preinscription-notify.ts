@@ -1,14 +1,13 @@
 import type { RegistrationApplication, TrialSlot } from "@/lib/club-data";
-import { escapeHtml } from "@/lib/email-html";
+import { resolveBureauRecipient } from "@/lib/bureau-recipient";
+import { getApplicationDisciplineNames } from "@/lib/dossier-workflow";
+import { emailLayout, escapeHtml, singleLine } from "@/lib/email-html";
 import { sendEmail } from "@/lib/mailer";
+import { paymentPlanLabel } from "@/lib/membership-bulletin";
 import { readSiteData } from "@/lib/site-data";
 import { formatTrialSlotDate } from "@/lib/trial-slots";
 
-function bureauNotifyEmail(): string | null {
-  const smtpUser = process.env.SMTP_USER?.trim();
-  return smtpUser || null;
-}
-
+/** Prévient le bureau d'une nouvelle inscription. Ne lève jamais d'erreur : un échec d'e-mail est seulement journalisé. */
 export async function notifyBureauNewPreinscription(params: {
   application: RegistrationApplication;
   trialSlots?: TrialSlot[];
@@ -18,9 +17,9 @@ export async function notifyBureauNewPreinscription(params: {
   };
 }): Promise<void> {
   try {
-    const to = bureauNotifyEmail();
+    const to = await resolveBureauRecipient();
     if (!to) {
-      console.warn("notifyBureauNewPreinscription skipped: SMTP_USER missing");
+      console.warn("notifyBureauNewPreinscription ignoré : aucune adresse de destination (CONTACT_TO, contact de l'association ou SMTP_USER).");
       return;
     }
 
@@ -28,13 +27,13 @@ export async function notifyBureauNewPreinscription(params: {
     let disciplineName = application.disciplineId;
     try {
       const siteData = await readSiteData();
-      disciplineName =
-        siteData.disciplines.find((entry) => entry.id === application.disciplineId)?.name ??
-        application.disciplineId;
+      const names = getApplicationDisciplineNames(application, siteData.disciplines);
+      if (names.length > 0) disciplineName = names.join(", ");
     } catch (error) {
-      console.error("notifyBureauNewPreinscription: unable to resolve discipline name", error);
+      console.error("notifyBureauNewPreinscription: noms des disciplines indisponibles", error);
     }
 
+    const bulletin = application.membershipBulletin;
     const trialSlot = application.trialSlotId
       ? trialSlots.find((slot) => slot.id === application.trialSlotId)
       : null;
@@ -42,52 +41,43 @@ export async function notifyBureauNewPreinscription(params: {
       ? `${trialSlot.title} — ${formatTrialSlotDate(trialSlot.startsAt)}`
       : application.trialSlotId
         ? "Créneau demandé"
-        : application.membershipBulletin
+        : bulletin
           ? "Bulletin d'adhésion signé"
           : "Aucun (pré-inscription seule)";
 
-    const subject = `[Activ'] Nouvelle pré-inscription — ${application.fullName}`;
+    const rows: [string, string][] = [
+      ["Nom", application.fullName],
+      ["E-mail", application.email],
+      ["Téléphone", application.phone],
+      ["Adresse", `${application.address}, ${application.postalCode} ${application.city}`],
+      ["Activités", bulletin?.selectedActivityLabels?.length ? bulletin.selectedActivityLabels.join(" ; ") : disciplineName],
+      [bulletin ? "Dossier" : "Créneau d'essai", trialLabel],
+    ];
+    if (bulletin) {
+      rows.push(["Total à régler", `${bulletin.grandTotal} €`]);
+      rows.push(["Modalité de paiement", paymentPlanLabel(bulletin.paymentPlan)]);
+    }
+    if (application.motivation) rows.push(["Motivation", application.motivation]);
+    if (!bulletin) rows.push(["Documents joints", String(application.documents.length)]);
+    if (pdfAttachment) rows.push(["Bulletin d'adhésion", "PDF en pièce jointe"]);
+
+    const subject = `[Activ'] Nouvelle pré-inscription — ${singleLine(application.fullName, 120)}`;
     const text = [
       "Nouvelle demande de pré-inscription reçue.",
       "",
-      `Nom : ${application.fullName}`,
-      `E-mail : ${application.email}`,
-      `Téléphone : ${application.phone}`,
-      `Adresse : ${application.address}, ${application.postalCode} ${application.city}`,
-      `Discipline : ${disciplineName}`,
-      `Créneau d'essai : ${trialLabel}`,
-      application.motivation ? `Motivation : ${application.motivation}` : null,
-      `Documents joints : ${application.documents.length}`,
-      pdfAttachment ? "Bulletin d'adhésion PDF : voir pièce jointe." : null,
+      ...rows.map(([label, value]) => `${label} : ${value}`),
       "",
       "Connectez-vous à l'espace bureau pour traiter la demande.",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    ].join("\n");
 
-    const html = `
-    <p><strong>Nouvelle demande de pré-inscription</strong> reçue sur le site.</p>
-    <ul>
-      <li><strong>Nom :</strong> ${escapeHtml(application.fullName)}</li>
-      <li><strong>E-mail :</strong> ${escapeHtml(application.email)}</li>
-      <li><strong>Téléphone :</strong> ${escapeHtml(application.phone)}</li>
-      <li><strong>Adresse :</strong> ${escapeHtml(`${application.address}, ${application.postalCode} ${application.city}`)}</li>
-      <li><strong>Discipline :</strong> ${escapeHtml(disciplineName)}</li>
-      <li><strong>Créneau d'essai :</strong> ${escapeHtml(trialLabel)}</li>
-      ${
-        application.motivation
-          ? `<li><strong>Motivation :</strong> ${escapeHtml(application.motivation)}</li>`
-          : ""
-      }
-      <li><strong>Documents joints :</strong> ${application.documents.length}</li>
-      ${
-        pdfAttachment
-          ? "<li><strong>Bulletin d'adhésion :</strong> PDF en pièce jointe</li>"
-          : ""
-      }
-    </ul>
-    <p>Connectez-vous à l'espace bureau pour traiter la demande.</p>
-  `;
+    const html = emailLayout({
+      title: "Nouvelle pré-inscription",
+      bodyHtml: `<p style="margin:0 0 12px">Une nouvelle demande vient d'être reçue sur le site.</p>
+<ul style="margin:0 0 12px;padding-left:20px">
+${rows.map(([label, value]) => `<li><strong>${escapeHtml(label)}&nbsp;:</strong> ${escapeHtml(value)}</li>`).join("\n")}
+</ul>
+<p style="margin:0">Connectez-vous à l'espace bureau pour traiter la demande.</p>`,
+    });
 
     const result = await sendEmail({
       to,
@@ -107,9 +97,9 @@ export async function notifyBureauNewPreinscription(params: {
     });
 
     if (!result.sent) {
-      console.error("notifyBureauNewPreinscription failed", result.reason);
+      console.error("notifyBureauNewPreinscription: envoi impossible", result.reason);
     }
   } catch (error) {
-    console.error("notifyBureauNewPreinscription unexpected error", error);
+    console.error("notifyBureauNewPreinscription: erreur inattendue", error);
   }
 }

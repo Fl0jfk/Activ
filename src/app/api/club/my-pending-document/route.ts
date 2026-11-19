@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserContext } from "@/lib/clerk";
 import { readClubData } from "@/lib/club-data";
+import { buildDocumentUploadUrl } from "@/lib/document-request-email";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +27,11 @@ export async function GET() {
     return NextResponse.json({ pending: null });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
   return NextResponse.json({
     pending: {
       applicationId: awaitingApp.id,
       label: token.requestedDocumentLabel,
-      uploadUrl: `${baseUrl}/piece-jointe?token=${token.token}`,
+      uploadUrl: buildDocumentUploadUrl(token.token),
     },
   });
 }

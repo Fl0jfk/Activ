@@ -11,8 +11,11 @@ import {
 } from "@/lib/clerk";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { readRoleFromClerkUser } from "@/lib/clerk-role";
+import { toMemberApplicationView } from "@/lib/application-route-utils";
 import { readClubData } from "@/lib/club-data";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
+import { buildDocumentUploadUrl } from "@/lib/document-request-email";
+import { isClosedApplication } from "@/lib/dossier-transitions";
 import { listApplicationsNeedingLicenseRenewal } from "@/lib/license-renewal";
 import { readSiteData } from "@/lib/site-data";
 import { buildDisciplineColors } from "@/lib/discipline-colors";
@@ -41,29 +44,35 @@ export default async function EspacePage({
   const coachPortal = isCoach(currentUser);
   const approveAbsences = canApproveCoachAbsences(currentUser);
 
-  const myApplications = clubData.applications.filter(
-    (application) => application.clerkUserId === currentUser.userId
-  );
+  // Les dossiers sont transmis au navigateur : sans les notes internes ni l'historique du bureau.
+  const myApplications = clubData.applications
+    .filter((application) => application.clerkUserId === currentUser.userId)
+    .map(toMemberApplicationView);
 
+  // Accès : compte validé (Clerk) ou bureau/coach. Tolérance à une désynchronisation du compte :
+  // un dossier non clos qui a dépassé l'étape « Valider l'espace » donne aussi accès.
+  // Jamais pour un dossier refusé ou désinscrit.
   let memberSpace = canAccessMemberSpace(currentUser);
   if (!memberSpace && currentUser.role === "member") {
-    const legacyEspaceOk = myApplications.some((application) => {
+    memberSpace = myApplications.some((application) => {
       const phase = application.dossierPhase;
       return (
-        phase === "documents" ||
-        phase === "payment" ||
-        phase === "finalized" ||
-        (application.clerkUserId !== null &&
-          !phase &&
-          (application.status === "pending" || application.status === "awaiting_document"))
+        !isClosedApplication(application) &&
+        (phase === "documents" || phase === "payment" || phase === "finalized")
       );
     });
-    if (legacyEspaceOk) {
-      memberSpace = true;
-    }
   }
 
-  if (!memberSpace && !clubOps && !coachPortal) {
+  // Personne désinscrite (tous ses dossiers sont clos) : accès réduit au portail pour pouvoir
+  // déposer une nouvelle pré-inscription avec le même compte. Aucun planning ni événement n'y
+  // est visible tant qu'aucune inscription n'est finalisée.
+  const reRegistrationOnly =
+    !memberSpace &&
+    currentUser.role === "member" &&
+    myApplications.length > 0 &&
+    myApplications.every((application) => application.status === "cancelled");
+
+  if (!memberSpace && !reRegistrationOnly && !clubOps && !coachPortal) {
     const { userId } = await auth();
     let roleResolution = readRoleFromClerkUser({});
     if (userId) {
@@ -136,15 +145,16 @@ export default async function EspacePage({
 
   const awaitingApp = myApplications.find((a) => a.status === "awaiting_document");
   if (awaitingApp) {
-    const token = clubData.documentRequestTokens.find(
-      (t) => t.applicationId === awaitingApp.id && !t.usedAt && new Date(t.expiresAt) > new Date()
-    );
+    const token = clubData.documentRequestTokens
+      .filter(
+        (t) => t.applicationId === awaitingApp.id && !t.usedAt && new Date(t.expiresAt) > new Date()
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     if (token) {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       pendingDocument = {
         applicationId: awaitingApp.id,
         label: token.requestedDocumentLabel,
-        uploadUrl: `${baseUrl}/piece-jointe?token=${token.token}`,
+        uploadUrl: buildDocumentUploadUrl(token.token),
       };
     }
   }

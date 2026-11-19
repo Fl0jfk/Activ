@@ -63,15 +63,11 @@ export function useClubApplicationActions() {
       });
       return false;
     }
-    if (result.data?.warning || /clerk/i.test(result.message)) {
+    // `warning` : message français prêt à afficher (compte de connexion, attestation non envoyée…).
+    if (result.data?.warning) {
       notify(applicationId, {
         tone: "info",
-        text: `${successMessage} Attention : le compte de connexion de l’adhérent n’a pas pu être mis à jour automatiquement. Vérifiez-le ou prévenez l’administrateur du site.`,
-      });
-    } else if (payload.paymentStatus === "paid" && /n'a pas pu/i.test(result.message)) {
-      notify(applicationId, {
-        tone: "info",
-        text: `${successMessage} L’attestation n’a pas pu être envoyée par e-mail (adresse manquante ou messagerie indisponible) : téléchargez-la depuis le dossier.`,
+        text: `${successMessage} Attention : ${result.data.warning}`,
       });
     } else {
       notify(applicationId, { tone: "success", text: successMessage });
@@ -80,35 +76,66 @@ export function useClubApplicationActions() {
     return true;
   }
 
+  /** Renvoie l’attestation de paiement à l’adhérent. */
+  async function resendReceipt(applicationId: string): Promise<boolean> {
+    notify(applicationId, null);
+    const result = await fetchJson(`/api/club/applications/${applicationId}/receipt`, { method: "POST" });
+    if (!result.ok) {
+      notify(applicationId, {
+        tone: "error",
+        text: errorText(result, "L’attestation n’a pas pu être renvoyée. Réessayez dans un instant."),
+      });
+      return false;
+    }
+    notify(applicationId, { tone: "success", text: result.message || "Attestation envoyée." });
+    refresh();
+    return true;
+  }
+
   async function validateEspace(applicationId: string, successMessage?: string): Promise<boolean> {
     notify(applicationId, null);
-    const result = await fetchJson(`/api/club/applications/${applicationId}/validate-espace`, {
-      method: "POST",
-    });
+    const result = await fetchJson<{ warning?: string }>(
+      `/api/club/applications/${applicationId}/validate-espace`,
+      { method: "POST" },
+    );
     if (!result.ok) {
       notify(applicationId, {
         tone: "error",
         text: errorText(
           result,
-          "Impossible de valider l’espace adhérent : aucun compte de connexion n’est lié à ce dossier.",
+          "Impossible de valider l’espace adhérent. Réessayez dans un instant.",
         ),
       });
       return false;
     }
-    notify(applicationId, {
-      tone: "success",
-      text: successMessage ?? "Espace adhérent validé : l’adhérent peut maintenant se connecter.",
-    });
+    if (result.data?.warning) {
+      notify(applicationId, {
+        tone: "info",
+        text: `${successMessage ?? "Espace adhérent validé."} Attention : ${result.data.warning}`,
+      });
+    } else {
+      notify(applicationId, {
+        tone: "success",
+        text: successMessage ?? "Espace adhérent validé : l’adhérent peut maintenant se connecter.",
+      });
+    }
     refresh();
     return true;
   }
 
-  /** `hadAccount` : le dossier avait un compte de connexion (supprimé en même temps que le refus). */
-  async function rejectApplication(applicationId: string, hadAccount = false): Promise<boolean> {
+  /**
+   * `hadAccount` : le dossier avait un compte de connexion (supprimé en même temps que le refus).
+   * `options.reason` : motif transmis à l’adhérent ; `options.force` : refus d’un dossier finalisé (président).
+   */
+  async function rejectApplication(
+    applicationId: string,
+    hadAccount = false,
+    options: { reason?: string; force?: boolean } = {},
+  ): Promise<boolean> {
     notify(applicationId, null);
-    const result = await fetchJson<{ clerkDeleted?: boolean }>(
+    const result = await fetchJson<{ clerkDeleted?: boolean; warning?: string }>(
       `/api/club/applications/${applicationId}/reject`,
-      { method: "POST" },
+      jsonInit("POST", { reason: options.reason?.trim() || undefined, force: options.force === true }),
     );
     if (!result.ok) {
       notify(applicationId, {
@@ -117,17 +144,14 @@ export function useClubApplicationActions() {
       });
       return false;
     }
-    if (hadAccount && !result.data?.clerkDeleted) {
-      notify(applicationId, {
-        tone: "info",
-        text: "Dossier refusé, mais le compte de connexion de l’adhérent n’a pas pu être supprimé. Prévenez l’administrateur du site.",
-      });
+    if (result.data?.warning) {
+      notify(applicationId, { tone: "info", text: result.message || `Dossier refusé. ${result.data.warning}` });
     } else {
       notify(applicationId, {
         tone: "success",
-        text: hadAccount
-          ? "Dossier refusé. L’accès de l’adhérent à son espace a été supprimé."
-          : "Dossier refusé.",
+        text:
+          result.message ||
+          (hadAccount ? "Dossier refusé. L’accès de l’adhérent à son espace a été supprimé." : "Dossier refusé."),
       });
     }
     refresh();
@@ -137,7 +161,7 @@ export function useClubApplicationActions() {
   async function requestDocument(applicationId: string, documentLabel: string): Promise<boolean> {
     notify(applicationId, null);
     setSecureLink(null);
-    const result = await fetchJson<{ secureLink?: string; emailSent?: boolean }>(
+    const result = await fetchJson<{ secureLink?: string; emailSent?: boolean; warning?: string }>(
       `/api/club/applications/${applicationId}/request-document`,
       jsonInit("POST", { documentLabel }),
     );
@@ -153,6 +177,11 @@ export function useClubApplicationActions() {
       notify(applicationId, {
         tone: "info",
         text: "La demande est enregistrée, mais l’e-mail n’a pas pu partir (messagerie non configurée). Copiez le lien ci-dessous et transmettez-le vous-même à l’adhérent.",
+      });
+    } else if (result.data?.warning) {
+      notify(applicationId, {
+        tone: "info",
+        text: `Demande envoyée : l’adhérent a reçu un e-mail avec un lien pour déposer sa pièce. Attention : ${result.data.warning}`,
       });
     } else {
       notify(applicationId, {
@@ -224,6 +253,7 @@ export function useClubApplicationActions() {
     secureLinkFor,
     dismissSecureLink: () => setSecureLink(null),
     updateApplication,
+    resendReceipt,
     validateEspace,
     rejectApplication,
     requestDocument,

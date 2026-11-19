@@ -12,10 +12,11 @@ import {
   paymentMethodLabel,
 } from "@/lib/dossier-workflow";
 import {
-  addOneYearLicenseDate,
+  daysUntilLicenseEnd,
   formatLicenseEndDateFr,
   isLicenseExpired,
   listApplicationsNeedingLicenseRenewal,
+  nextLicenseEndDate,
 } from "@/lib/license-renewal";
 
 type LicenseRenewalPanelProps = {
@@ -24,26 +25,6 @@ type LicenseRenewalPanelProps = {
 };
 
 type PendingAction = { kind: "renew" | "cancel"; application: RegistrationApplication } | null;
-
-/** Midi local : évite qu’un changement de fuseau fasse glisser la date d’un jour. */
-function localNoon(date: Date): Date {
-  const copy = new Date(date);
-  copy.setHours(12, 0, 0, 0);
-  return copy;
-}
-
-/** Nouvelle fin de licence : un an après la fin actuelle si elle est à venir, sinon un an après aujourd’hui. */
-function nextLicenseEndDate(application: RegistrationApplication): string {
-  const today = localNoon(new Date());
-  const currentEnd = application.licenseEndDate ? new Date(`${application.licenseEndDate}T12:00:00`) : null;
-  const base = currentEnd && !Number.isNaN(currentEnd.getTime()) && currentEnd > today ? currentEnd : today;
-  return addOneYearLicenseDate(base);
-}
-
-function daysUntil(licenseEndDate: string): number {
-  const end = new Date(`${licenseEndDate}T12:00:00`).getTime();
-  return Math.max(0, Math.ceil((end - localNoon(new Date()).getTime()) / 86_400_000));
-}
 
 export default function LicenseRenewalPanel({ disciplines, applications }: LicenseRenewalPanelProps) {
   const router = useRouter();
@@ -57,16 +38,16 @@ export default function LicenseRenewalPanel({ disciplines, applications }: Licen
 
   const alerts = useMemo(() => listApplicationsNeedingLicenseRenewal(applications), [applications]);
 
-  async function patchApplication(
+  async function sendUpdate(
     application: RegistrationApplication,
-    body: Record<string, unknown>,
+    request: { url: string; method: "POST" | "PATCH"; body: Record<string, unknown> },
     successText: string,
   ) {
     setBusyId(application.id);
     setErrorFor(null);
     setDoneFeedback(null);
     try {
-      const result = await fetchJson(`/api/club/applications/${application.id}`, jsonInit("PATCH", body));
+      const result = await fetchJson<{ warning?: string }>(request.url, jsonInit(request.method, request.body));
       if (!result.ok) {
         setErrorFor({
           id: application.id,
@@ -74,7 +55,11 @@ export default function LicenseRenewalPanel({ disciplines, applications }: Licen
         });
         return;
       }
-      setDoneFeedback({ tone: "success", text: successText });
+      setDoneFeedback(
+        result.data?.warning
+          ? { tone: "info", text: result.message || successText }
+          : { tone: "success", text: result.message || successText },
+      );
       startRefresh(() => router.refresh());
     } finally {
       setBusyId(null);
@@ -97,17 +82,26 @@ export default function LicenseRenewalPanel({ disciplines, applications }: Licen
         setMethodError("Choisissez le mode de paiement reçu.");
         return;
       }
-      const licenseEndDate = nextLicenseEndDate(application);
-      void patchApplication(
+      // Le serveur calcule la nouvelle date et refuse un second envoi du même renouvellement
+      // (`expectedLicenseEndDate` ne correspondrait plus) : jamais deux renouvellements ni deux attestations.
+      void sendUpdate(
         application,
-        { status: "approved", paymentStatus: "paid", paymentMethod, licenseEndDate },
-        `Licence de ${name} renouvelée jusqu’au ${formatLicenseEndDateFr(licenseEndDate)}.`,
+        {
+          url: `/api/club/applications/${application.id}/renew-license`,
+          method: "POST",
+          body: { paymentMethod, expectedLicenseEndDate: application.licenseEndDate ?? null },
+        },
+        `Licence de ${name} renouvelée jusqu’au ${formatLicenseEndDateFr(nextLicenseEndDate(application.licenseEndDate))}.`,
       );
       return;
     }
-    void patchApplication(
+    void sendUpdate(
       application,
-      { status: "cancelled", licenseEndDate: null },
+      {
+        url: `/api/club/applications/${application.id}`,
+        method: "PATCH",
+        body: { status: "cancelled", licenseEndDate: null },
+      },
       `${name} a été désinscrit(e).`,
     );
   }
@@ -134,7 +128,7 @@ export default function LicenseRenewalPanel({ disciplines, applications }: Licen
                 getApplicationDisciplineNames(app, disciplines).join(", ") || "Activité non précisée";
               const expired = isLicenseExpired(app.licenseEndDate);
               const busy = busyId === app.id;
-              const days = app.licenseEndDate ? daysUntil(app.licenseEndDate) : 0;
+              const days = app.licenseEndDate ? daysUntilLicenseEnd(app.licenseEndDate) : 0;
               return (
                 <li
                   key={app.id}
@@ -197,7 +191,7 @@ export default function LicenseRenewalPanel({ disciplines, applications }: Licen
           pending ? (
             <p>
               La licence de {pendingName} sera prolongée jusqu’au{" "}
-              <strong>{formatLicenseEndDateFr(nextLicenseEndDate(pending.application))}</strong>, et le paiement
+              <strong>{formatLicenseEndDateFr(nextLicenseEndDate(pending.application.licenseEndDate))}</strong>, et le paiement
               sera enregistré comme reçu.
             </p>
           ) : null

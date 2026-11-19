@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, requireBucketConfig } from "@/lib/s3-client";
 import { randomId } from "@/lib/ids";
 
@@ -25,14 +25,124 @@ export type UploadDocumentOptions = {
   userSegment?: string;
 };
 
+export type DocumentKind = {
+  contentType: string;
+  ext: string;
+  /** Peut être affiché dans le navigateur (PDF, images) ; sinon téléchargement forcé. */
+  inline: boolean;
+};
+
+const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs"]);
+const HEIF_BRANDS = new Set(["mif1", "msf1", "heif"]);
+
+function asciiAt(bytes: Uint8Array, start: number, length: number): string {
+  let text = "";
+  for (let index = start; index < start + length && index < bytes.length; index += 1) {
+    text += String.fromCharCode(bytes[index]!);
+  }
+  return text;
+}
+
+/** Type réel d'un document d'après ses premiers octets (jamais d'après le type annoncé par le navigateur). */
+export function detectDocumentKind(bytes: Uint8Array): DocumentKind | null {
+  if (bytes.length < 12) return null;
+  if (asciiAt(bytes, 0, 5) === "%PDF-") {
+    return { contentType: "application/pdf", ext: "pdf", inline: true };
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { contentType: "image/jpeg", ext: "jpg", inline: true };
+  }
+  if (
+    bytes[0] === 0x89 &&
+    asciiAt(bytes, 1, 3) === "PNG" &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return { contentType: "image/png", ext: "png", inline: true };
+  }
+  if (asciiAt(bytes, 0, 4) === "RIFF" && asciiAt(bytes, 8, 4) === "WEBP") {
+    return { contentType: "image/webp", ext: "webp", inline: true };
+  }
+  if (asciiAt(bytes, 4, 4) === "ftyp") {
+    const brand = asciiAt(bytes, 8, 4).toLowerCase();
+    if (HEIC_BRANDS.has(brand)) return { contentType: "image/heic", ext: "heic", inline: false };
+    if (HEIF_BRANDS.has(brand)) return { contentType: "image/heif", ext: "heif", inline: false };
+  }
+  return null;
+}
+
+export const DOCUMENT_FORMAT_MESSAGE =
+  "Format de fichier non accepté. Envoyez un PDF ou une photo (JPEG, PNG, WebP ou HEIC).";
+
+export class InvalidDocumentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidDocumentError";
+  }
+}
+
+export function isInvalidDocumentError(error: unknown): error is InvalidDocumentError {
+  return error instanceof InvalidDocumentError;
+}
+
+/** Contrôle rapide (présence, taille). Le type réel est vérifié à l'envoi par `inspectDocumentFile` / `uploadDocumentFile`. */
 export function validateDocumentFile(file: File | null): { ok: true; file: File } | { ok: false; message: string } {
   if (!(file instanceof File)) {
     return { ok: false, message: "Fichier manquant." };
+  }
+  if (file.size === 0) {
+    return { ok: false, message: "Le fichier est vide." };
   }
   if (file.size > MAX_DOCUMENT_FILE_SIZE) {
     return { ok: false, message: "Fichier trop volumineux (max 5 Mo)." };
   }
   return { ok: true, file };
+}
+
+export type InspectedDocument = {
+  bytes: Uint8Array;
+  kind: DocumentKind;
+  /** Nom d'affichage assaini, avec l'extension correspondant au vrai format. */
+  displayName: string;
+};
+
+/** Nom de fichier sans chemin ni caractères douteux, dont l'extension correspond au format détecté. */
+export function safeDisplayName(rawName: string | undefined, ext: string): string {
+  const base = (rawName ?? "").split(/[\\/]/).pop() ?? "";
+  const withoutExt = base.replace(/\.[A-Za-z0-9]{1,6}$/, "");
+  const cleaned = withoutExt
+    .replace(/[^\p{L}\p{N} ._()'’+-]+/gu, "_")
+    .replace(/\s+/g, " ")
+    .replace(/^[. _-]+/, "")
+    .trim()
+    .slice(0, 100);
+  return `${cleaned || "document"}.${ext}`;
+}
+
+/** Lit le fichier et contrôle son vrai format (liste blanche) ; le Content-Type du client est ignoré. */
+export async function inspectDocumentFile(
+  file: File | null,
+): Promise<({ ok: true } & InspectedDocument) | { ok: false; message: string }> {
+  const validated = validateDocumentFile(file);
+  if (!validated.ok) return validated;
+  const bytes = new Uint8Array(await validated.file.arrayBuffer());
+  if (bytes.length > MAX_DOCUMENT_FILE_SIZE) {
+    return { ok: false, message: "Fichier trop volumineux (max 5 Mo)." };
+  }
+  const kind = detectDocumentKind(bytes);
+  if (!kind) return { ok: false, message: DOCUMENT_FORMAT_MESSAGE };
+  return {
+    ok: true,
+    bytes,
+    kind,
+    displayName: safeDisplayName(validated.file.name, kind.ext),
+  };
+}
+
+function safePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80) || "public";
 }
 
 function extensionForImageType(contentType: string): string {
@@ -111,26 +221,41 @@ export async function uploadDocumentFile(
   options: UploadDocumentOptions,
 ): Promise<UploadedDocument> {
   const { bucketName } = requireBucketConfig();
-  const bytes = await file.arrayBuffer();
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
-  const segment = options.userSegment ?? "public";
-  const key = `${options.keyPrefix}/${segment}/${Date.now()}-${randomId("doc").slice(4)}.${ext}`;
+  const inspected = await inspectDocumentFile(file);
+  if (!inspected.ok) {
+    throw new InvalidDocumentError(inspected.message);
+  }
+  const segment = safePathSegment(options.userSegment ?? "public");
+  const key = `${options.keyPrefix}/${segment}/${Date.now()}-${randomId("doc").slice(4)}.${inspected.kind.ext}`;
   const s3 = createS3Client();
 
   await s3.send(
     new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
-      Body: Buffer.from(bytes),
-      ContentType: file.type || "application/octet-stream",
+      Body: Buffer.from(inspected.bytes),
+      ContentType: inspected.kind.contentType,
+      ContentDisposition: "attachment",
     }),
   );
 
   return {
-    name: file.name,
+    name: inspected.displayName,
     url: `s3://${bucketName}/${key}`,
     uploadedAt: new Date().toISOString(),
   };
+}
+
+/** Supprime un document déjà envoyé (annulation d'une opération échouée). N'échoue jamais. */
+export async function deleteStoredDocument(url: string): Promise<void> {
+  try {
+    const parsed = parseS3Url(url);
+    if (!parsed || !isAllowedClubDocumentKey(parsed.key)) return;
+    const s3 = createS3Client();
+    await s3.send(new DeleteObjectCommand({ Bucket: parsed.bucketName, Key: parsed.key }));
+  } catch (error) {
+    console.error("deleteStoredDocument failed", error);
+  }
 }
 
 export async function uploadSiteImageFile(file: File): Promise<{ url: string; key: string }> {
@@ -213,8 +338,8 @@ export async function uploadBytesToS3(params: {
   userSegment?: string;
 }): Promise<UploadedDocument> {
   const { bucketName } = requireBucketConfig();
-  const segment = params.userSegment ?? "public";
-  const safeName = params.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-");
+  const segment = safePathSegment(params.userSegment ?? "public");
+  const safeName = params.fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120);
   const key = `${params.keyPrefix}/${segment}/${Date.now()}-${randomId("doc").slice(4)}-${safeName}`;
   const s3 = createS3Client();
 
@@ -224,6 +349,7 @@ export async function uploadBytesToS3(params: {
       Key: key,
       Body: params.body,
       ContentType: params.contentType,
+      ContentDisposition: "attachment",
     }),
   );
 
@@ -234,9 +360,14 @@ export async function uploadBytesToS3(params: {
   };
 }
 
+/**
+ * Lit un document du club. Le type renvoyé est celui détecté dans le contenu (jamais celui enregistré
+ * à l'envoi) : un fichier de type inconnu ressort en `application/octet-stream`, `inline` à faux.
+ */
 export async function readClubDocumentObject(objectKey: string): Promise<{
   body: Buffer;
   contentType: string;
+  inline: boolean;
 } | null> {
   if (!isAllowedClubDocumentKey(objectKey)) {
     return null;
@@ -256,8 +387,10 @@ export async function readClubDocumentObject(objectKey: string): Promise<{
   }
 
   const bytes = await object.Body.transformToByteArray();
+  const kind = detectDocumentKind(bytes);
   return {
     body: Buffer.from(bytes),
-    contentType: object.ContentType || "application/octet-stream",
+    contentType: kind?.contentType ?? "application/octet-stream",
+    inline: kind?.inline ?? false,
   };
 }

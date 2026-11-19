@@ -1,69 +1,102 @@
-import { NextRequest, NextResponse } from "next/server";
-import { canAccessClubOperations, getCurrentUserContext } from "@/lib/clerk";
-import { readClubData, writeClubData } from "@/lib/club-data";
+import { jsonError, jsonOk } from "@/lib/api-response";
+import { requireClubOps } from "@/lib/api-auth";
+import { rejectionResponse } from "@/lib/application-route-utils";
 import {
   buildBulletinRevalidationEmail,
   buildBulletinRevalidationUrl,
 } from "@/lib/bulletin-revalidation-email";
+import { updateClubData } from "@/lib/club-data";
+import type { BulletinRevalidationToken, RegistrationApplication } from "@/lib/club-data";
+import { TransitionRejection, isClosedApplication } from "@/lib/dossier-transitions";
+import { secureToken } from "@/lib/ids";
 import { sendEmail } from "@/lib/mailer";
+import { checkRateLimit } from "@/lib/rate-limit";
 
-function randomToken() {
-  return `bulletin_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
+const TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
+/** Envoie à l'adhérent un lien neuf pour relire et signer de nouveau son bulletin (anciens liens invalidés). */
 export async function POST(
-  _request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ applicationId: string }> },
 ) {
-  const currentUser = await getCurrentUserContext();
-  if (!currentUser || !canAccessClubOperations(currentUser)) {
-    return NextResponse.json({ message: "Non autorise." }, { status: 401 });
+  const auth = await requireClubOps();
+  if (!auth.ok) {
+    return auth.response;
   }
 
-  const { applicationId } = await context.params;
-  const data = await readClubData();
-  const application = data.applications.find((entry) => entry.id === applicationId);
-  if (!application) {
-    return NextResponse.json({ message: "Demande introuvable." }, { status: 404 });
-  }
-  if (!application.email?.trim()) {
-    return NextResponse.json({ message: "Aucune adresse e-mail sur ce dossier." }, { status: 400 });
-  }
+  try {
+    const { applicationId } = await context.params;
 
-  for (const entry of data.bulletinRevalidationTokens) {
-    if (entry.applicationId === applicationId && !entry.usedAt) {
-      entry.usedAt = new Date().toISOString();
+    const limit = checkRateLimit(`bulletin-revalidation:${applicationId}`, {
+      limit: 5,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!limit.allowed) {
+      return jsonError(
+        "Trop de demandes pour ce dossier. Patientez quelques minutes avant d’en envoyer une nouvelle.",
+        429,
+      );
     }
+
+    const { application, token } = await updateClubData<{
+      application: RegistrationApplication;
+      token: BulletinRevalidationToken;
+    }>((data) => {
+      const found = data.applications.find((entry) => entry.id === applicationId);
+      if (!found) {
+        throw new TransitionRejection("Demande introuvable.", 404);
+      }
+      if (isClosedApplication(found)) {
+        throw new TransitionRejection(
+          "Ce dossier est clos (refusé ou désinscrit) : le bulletin ne peut plus être renvoyé.",
+          409,
+          "dossier_closed",
+        );
+      }
+      if (!found.email?.trim()) {
+        throw new TransitionRejection("Aucune adresse e-mail sur ce dossier.", 400);
+      }
+
+      const now = new Date();
+      for (const entry of data.bulletinRevalidationTokens) {
+        if (entry.applicationId === applicationId && !entry.usedAt) {
+          entry.usedAt = now.toISOString();
+        }
+      }
+      const created: BulletinRevalidationToken = {
+        token: `bulletin_${secureToken()}`,
+        applicationId,
+        email: found.email.trim(),
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + TOKEN_TTL_MS).toISOString(),
+        usedAt: null,
+      };
+      data.bulletinRevalidationTokens.push(created);
+      return { application: structuredClone(found), token: created };
+    });
+
+    const to = application.email.trim();
+    const secureLink = buildBulletinRevalidationUrl(token.token);
+    const emailContent = buildBulletinRevalidationEmail({
+      secureLink,
+      expiresAt: token.expiresAt,
+      memberName: application.fullName,
+    });
+    const sendResult = await sendEmail({ to, ...emailContent });
+
+    return jsonOk({
+      message: sendResult.sent
+        ? `E-mail envoyé à ${to} pour revalider le bulletin.`
+        : "La demande est enregistrée, mais l’e-mail n’a pas pu être envoyé. Copiez le lien et transmettez-le à l’adhérent.",
+      secureLink,
+      emailSent: sendResult.sent,
+    });
+  } catch (error) {
+    const rejection = rejectionResponse(error);
+    if (rejection) {
+      return rejection;
+    }
+    console.error("Failed to request bulletin revalidation", error);
+    return jsonError("Impossible d’envoyer la demande. Réessayez dans un instant.", 500);
   }
-
-  const token = randomToken();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
-  data.bulletinRevalidationTokens.push({
-    token,
-    applicationId,
-    email: application.email.trim(),
-    createdAt: new Date().toISOString(),
-    expiresAt,
-    usedAt: null,
-  });
-  await writeClubData(data);
-
-  const secureLink = buildBulletinRevalidationUrl(token);
-  const emailContent = buildBulletinRevalidationEmail({
-    secureLink,
-    expiresAt,
-    memberName: application.fullName,
-  });
-  const sendResult = await sendEmail({
-    to: application.email.trim(),
-    ...emailContent,
-  });
-
-  return NextResponse.json({
-    message: sendResult.sent
-      ? `E-mail envoyé à ${application.email.trim()} pour revalider le bulletin.`
-      : "Lien généré (SMTP non configuré). Copiez-le et transmettez-le à l'adhérent.",
-    secureLink,
-    emailSent: sendResult.sent,
-  });
 }

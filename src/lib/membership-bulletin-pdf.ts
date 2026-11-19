@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import type { MembershipBulletinFormPayload } from "@/lib/membership-bulletin";
 import {
   MEMBERSHIP_ADHESION_FEE,
@@ -9,34 +9,56 @@ import {
   paymentPlanLabel,
 } from "@/lib/membership-bulletin";
 
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars) {
-      if (current) lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
+/** Erreur dont le message peut être montré tel quel à la personne qui remplit le bulletin. */
+export class BulletinPdfError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BulletinPdfError";
   }
-  if (current) lines.push(current);
-  return lines.length > 0 ? lines : [""];
 }
 
-async function embedSignature(pdfDoc: PDFDocument, dataUrl: string) {
-  const match = /^data:(image\/(?:png|jpeg|jpg));base64,(.+)$/i.exec(dataUrl);
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const MARGIN = 40;
+const TOP = 800;
+const BOTTOM = 50;
+const TEXT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+
+/**
+ * Les polices standard du PDF ne savent écrire que le jeu WinAnsi : tout autre caractère ferait échouer
+ * la génération. On conserve les lettres accentuées usuelles, on retire les accents des autres lettres
+ * quand c'est possible et on remplace le reste par « ? ».
+ */
+function makePdfText(font: PDFFont): (text: string) => string {
+  const supported = new Set(font.getCharacterSet());
+  return (text) => {
+    let out = "";
+    for (const char of text.normalize("NFC")) {
+      const codePoint = char.codePointAt(0) ?? 0;
+      if (/\s/u.test(char)) {
+        out += " ";
+      } else if (supported.has(codePoint)) {
+        out += char;
+      } else {
+        const base = char.normalize("NFD").charAt(0);
+        out += base && supported.has(base.codePointAt(0) ?? 0) ? base : "?";
+      }
+    }
+    return out;
+  };
+}
+
+async function embedSignature(pdfDoc: PDFDocument, dataUrl: string): Promise<PDFImage> {
+  const match = /^data:(image\/(?:png|jpeg|jpg));base64,([A-Za-z0-9+/]+={0,2})$/i.exec(dataUrl);
   if (!match) {
-    throw new Error("Signature image invalide.");
+    throw new BulletinPdfError("Signature manquante ou invalide. Signez à nouveau dans l'encadré.");
   }
-  const mime = match[1].toLowerCase();
-  const bytes = Buffer.from(match[2], "base64");
-  if (mime.includes("png")) {
-    return pdfDoc.embedPng(bytes);
+  const bytes = Buffer.from(match[2]!, "base64");
+  try {
+    return match[1]!.toLowerCase().includes("png") ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+  } catch {
+    throw new BulletinPdfError("Signature manquante ou invalide. Signez à nouveau dans l'encadré.");
   }
-  return pdfDoc.embedJpg(bytes);
 }
 
 type PdfActivityOption = {
@@ -51,31 +73,59 @@ export async function buildMembershipBulletinPdf(
   options?: { activityOptions?: PdfActivityOption[] },
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]);
+  pdfDoc.setTitle("Bulletin d'adhésion");
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const margin = 40;
-  let y = 800;
-  const maxWidthChars = 92;
+  const pdfText = makePdfText(font);
+  const ink = rgb(0.1, 0.12, 0.16);
 
-  const draw = (text: string, options?: { bold?: boolean; size?: number; gap?: number }) => {
-    const size = options?.size ?? 9;
-    const usedFont = options?.bold ? fontBold : font;
-    page.drawText(text, {
-      x: margin,
-      y,
-      size,
-      font: usedFont,
-      color: rgb(0.1, 0.12, 0.16),
-    });
-    y -= options?.gap ?? size + 4;
+  let page: PDFPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let y = TOP;
+
+  const startNewPage = () => {
+    page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    y = TOP;
   };
 
-  const drawWrapped = (text: string, options?: { bold?: boolean; size?: number }) => {
-    const size = options?.size ?? 8.5;
-    for (const line of wrapText(text, maxWidthChars)) {
-      draw(line, { bold: options?.bold, size, gap: size + 3 });
+  const wrap = (text: string, usedFont: PDFFont, size: number): string[] => {
+    const lines: string[] = [];
+    let current = "";
+    const fits = (candidate: string) => usedFont.widthOfTextAtSize(candidate, size) <= TEXT_WIDTH;
+    for (const word of text.split(" ").filter(Boolean)) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (fits(candidate)) {
+        current = candidate;
+        continue;
+      }
+      if (current) lines.push(current);
+      current = "";
+      let rest = word;
+      while (!fits(rest)) {
+        let cut = rest.length - 1;
+        while (cut > 1 && !fits(rest.slice(0, cut))) cut -= 1;
+        lines.push(rest.slice(0, cut));
+        rest = rest.slice(cut);
+      }
+      current = rest;
     }
+    if (current) lines.push(current);
+    return lines.length > 0 ? lines : [""];
+  };
+
+  const draw = (text: string, drawOptions?: { bold?: boolean; size?: number; gap?: number }) => {
+    const size = drawOptions?.size ?? 9;
+    const usedFont = drawOptions?.bold ? fontBold : font;
+    const lines = wrap(pdfText(text), usedFont, size);
+    lines.forEach((line, index) => {
+      if (y < BOTTOM + size) startNewPage();
+      page.drawText(line, { x: MARGIN, y, size, font: usedFont, color: ink });
+      y -= index === lines.length - 1 ? (drawOptions?.gap ?? size + 4) : size + 3;
+    });
+  };
+
+  const drawWrapped = (text: string, drawOptions?: { bold?: boolean; size?: number }) => {
+    const size = drawOptions?.size ?? 8.5;
+    draw(text, { bold: drawOptions?.bold, size, gap: size + 3 });
   };
 
   const totals = computeMembershipTotals(payload.selectedSlots);
@@ -147,31 +197,26 @@ export async function buildMembershipBulletinPdf(
   draw("Signature :", { gap: 10 });
 
   const signature = await embedSignature(pdfDoc, payload.signatureDataUrl);
-  const sigWidth = 180;
-  const sigHeight = (signature.height / signature.width) * sigWidth;
+  const scale = Math.min(180 / signature.width, 120 / signature.height);
+  const sigWidth = signature.width * scale;
+  const sigHeight = signature.height * scale;
   if (y - sigHeight < 40) {
-    const page2 = pdfDoc.addPage([595.28, 841.89]);
-    page2.drawText("Signature de l'adhérent(e) :", {
-      x: margin,
-      y: 800,
+    startNewPage();
+    page.drawText(pdfText("Signature de l'adhérent(e) :"), {
+      x: MARGIN,
+      y: TOP,
       size: 10,
       font: fontBold,
-      color: rgb(0.1, 0.12, 0.16),
+      color: ink,
     });
-    page2.drawImage(signature, {
-      x: margin,
-      y: 800 - 14 - sigHeight,
-      width: sigWidth,
-      height: sigHeight,
-    });
-  } else {
-    page.drawImage(signature, {
-      x: margin,
-      y: y - sigHeight,
-      width: sigWidth,
-      height: sigHeight,
-    });
+    y = TOP - 14;
   }
+  page.drawImage(signature, {
+    x: MARGIN,
+    y: y - sigHeight,
+    width: sigWidth,
+    height: sigHeight,
+  });
 
   return pdfDoc.save();
 }

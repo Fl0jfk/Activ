@@ -110,6 +110,35 @@ export type TrialSlot = {
   active: boolean;
 };
 
+/** E-mails de suivi envoyés à l'adhérent au fil du dossier (un seul envoi par type). */
+export type LifecycleEmailKind =
+  | "espace_activated"
+  | "payment_expected"
+  | "finalized"
+  | "rejected"
+  | "cancelled";
+
+/** Trace d'une opération sensible sur un dossier (étapes, annulation d'un paiement…). */
+export type DossierHistoryEntry = {
+  at: string;
+  by: string;
+  action: string;
+  from?: string;
+  to?: string;
+  note?: string;
+};
+
+/** Reçu annulé (retour en arrière, renouvellement, refus forcé) : le numéro n'est jamais réutilisé. */
+export type ReceiptHistoryEntry = {
+  number: string | null;
+  paidAt: string | null;
+  amountPaid: number | null;
+  paymentMethod: PaymentMethod;
+  licenseEndDate: string | null;
+  closedAt: string;
+  reason: "unfinalized" | "renewed" | "rejected";
+};
+
 export type RegistrationApplication = {
   id: string;
   clerkUserId: string | null;
@@ -147,6 +176,20 @@ export type RegistrationApplication = {
   emailVerifiedAt?: string | null;
   /** Activités corrigées à la main par le bureau : ne plus les recalculer depuis le bulletin. */
   disciplinesSetByBureau?: boolean;
+  /** Date (ISO) de l'enregistrement du paiement, fixée à la finalisation. */
+  paidAt?: string | null;
+  /** Numéro d'attestation stable (AAAA-NNNN), attribué à la finalisation. */
+  receiptNumber?: string | null;
+  /** Date (ISO) d'envoi réussi de l'attestation à l'adhérent. */
+  receiptSentAt?: string | null;
+  receiptHistory?: ReceiptHistoryEntry[];
+  /** Message du bureau destiné à l'adhérent (les `notes` restent internes au bureau). */
+  memberMessage?: string;
+  /** Motif du refus, saisi par le bureau et communiqué à l'adhérent. */
+  rejectionReason?: string;
+  /** Date d'envoi des e-mails de suivi, pour ne jamais les envoyer deux fois. */
+  lifecycleNotified?: Partial<Record<LifecycleEmailKind, string>>;
+  history?: DossierHistoryEntry[];
 };
 
 /** Code envoyé par e-mail pour prouver que l'adresse existe avant création du compte. */
@@ -169,6 +212,12 @@ export type DocumentRequestToken = {
   createdAt: string;
   expiresAt: string;
   usedAt: string | null;
+  /** Jeton remplacé ou annulé par le bureau (il est alors aussi marqué comme utilisé). */
+  revokedAt?: string | null;
+  /**
+   * État à restaurer après le dépôt. `paymentStatus` est conservé pour compatibilité mais ne doit
+   * plus être réappliqué : le paiement n'est jamais modifié par un dépôt de pièce.
+   */
   resumeAfterUpload?: {
     status: ApplicationStatus;
     dossierPhase: ApplicationDossierPhase;
@@ -236,6 +285,9 @@ function normalizeClubData(data: ClubData): ClubData {
       dossierPhase: getApplicationDossierPhase(application),
       membershipBulletin: application.membershipBulletin ?? null,
       emailVerifiedAt: application.emailVerifiedAt ?? null,
+      paidAt: application.paidAt ?? null,
+      receiptNumber: application.receiptNumber ?? null,
+      receiptSentAt: application.receiptSentAt ?? null,
     })),
     documentRequestTokens: data.documentRequestTokens ?? [],
     bulletinRevalidationTokens: data.bulletinRevalidationTokens ?? [],

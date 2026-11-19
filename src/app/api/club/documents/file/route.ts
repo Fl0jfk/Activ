@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { requireClubOps } from "@/lib/api-auth";
 import { jsonError } from "@/lib/api-response";
+import { clubDocumentResponse } from "@/lib/document-response";
 import { isAllowedClubDocumentKey, parseS3Url, readClubDocumentObject } from "@/lib/s3-upload";
 
 export async function GET(request: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   if (!objectKey && urlParam) {
     const parsed = parseS3Url(urlParam);
     if (!parsed) {
-      return jsonError("URL de document invalide.", 400);
+      return jsonError("Adresse du document invalide.", 400);
     }
     objectKey = parsed.key;
   }
@@ -32,13 +33,8 @@ export async function GET(request: NextRequest) {
     }
 
     const fileName = objectKey.split("/").pop() || "document";
-    return new NextResponse(new Uint8Array(document.body), {
-      status: 200,
-      headers: {
-        "Content-Type": document.contentType,
-        "Content-Disposition": `inline; filename="${fileName}"`,
-        "Cache-Control": "private, max-age=60",
-      },
+    return clubDocumentResponse(document, fileName, {
+      forceDownload: request.nextUrl.searchParams.get("download") === "1",
     });
   } catch (error) {
     console.error("Failed to read club document", error);

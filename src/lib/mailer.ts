@@ -140,8 +140,15 @@ export async function sendEmail(params: {
     });
     return { sent: true as const };
   } catch (error) {
-    console.error("sendEmail failed", error);
-    return { sent: false as const, ...describeMailError(error) };
+    const described = describeMailError(error);
+    const mailError = error as { code?: string; responseCode?: number } | null;
+    // Pas d'adresse ni de réponse complète du serveur dans les journaux : uniquement les codes techniques.
+    console.error("sendEmail failed", {
+      reason: described.reason,
+      code: mailError?.code,
+      responseCode: mailError?.responseCode,
+    });
+    return { sent: false as const, ...described };
   }
 }
 
