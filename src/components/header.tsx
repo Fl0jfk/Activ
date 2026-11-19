@@ -150,13 +150,14 @@ export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderP
     <>
       <header className="fixed left-0 right-0 top-0 z-[100] flex h-[68px] w-full items-center border-b border-brand-line bg-brand-cream/92 backdrop-blur-xl">
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8">
-          <Link href="/" onClick={close} className="shrink-0">
+          {/* Le PNG a des marges transparentes : on l'agrandit en le laissant déborder sans changer la hauteur du header. */}
+          <Link href="/" onClick={close} className="relative block h-[68px] w-[78px] shrink-0" aria-label="Activ' Sainte-Croix, accueil">
             <Image
               src="/logo.png"
               alt="Activ' Sainte-Croix Sport et Culture"
               width={561}
               height={445}
-              className="h-[54px] w-auto"
+              className="pointer-events-none absolute -left-4 -top-[9px] h-[88px] w-auto max-w-none"
               priority
             />
           </Link>
