@@ -190,7 +190,7 @@ export default async function EspacePage({
       disciplines={disciplines}
       slots={clubData.trialSlots.filter((slot) => slot.active)}
       myApplications={myApplications}
-      allApplications={clubData.applications}
+      allApplications={clubOps ? clubData.applications : []}
       weekSchedule={weekSchedule}
       plannerWeeks={plannerWeeks}
       plannerDisciplines={plannerDisciplines}
