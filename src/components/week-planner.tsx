@@ -25,6 +25,8 @@ type WeekPlannerProps = {
   weeks: PlannerWeek[];
   disciplines: PlannerDiscipline[];
   todayIso: string;
+  /** Affiche le bouton de pré-inscription dans la fiche d'une séance (inutile pour un adhérent). */
+  showEnrollCta?: boolean;
 };
 
 const DAY_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -41,7 +43,7 @@ function dayNumber(isoDate: string): string {
   return String(Number(isoDate.slice(8, 10)));
 }
 
-export default function WeekPlanner({ weeks, disciplines, todayIso }: WeekPlannerProps) {
+export default function WeekPlanner({ weeks, disciplines, todayIso, showEnrollCta = true }: WeekPlannerProps) {
   const [weekIndex, setWeekIndex] = useState(0);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [activeIds, setActiveIds] = useState<string[]>([]);
@@ -413,9 +415,11 @@ export default function WeekPlanner({ weeks, disciplines, todayIso }: WeekPlanne
                   <Link href={`/disciplines/${selectedDiscipline.slug}`} className="btn btn-outline btn-sm">
                     Découvrir la discipline
                   </Link>
-                  <Link href={`/preinscription?discipline=${selectedDiscipline.slug}`} className="btn btn-primary btn-sm">
-                    Je me pré-inscris
-                  </Link>
+                  {showEnrollCta ? (
+                    <Link href={`/preinscription?discipline=${selectedDiscipline.slug}`} className="btn btn-primary btn-sm">
+                      Je me pré-inscris
+                    </Link>
+                  ) : null}
                 </>
               ) : null}
               <button

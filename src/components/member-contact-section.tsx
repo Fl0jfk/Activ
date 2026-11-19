@@ -94,14 +94,13 @@ export default function MemberContactSection({
     }
   }
 
-  const fieldClass =
-    "mt-1 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 disabled:bg-slate-100";
+  const fieldClass = "field";
 
   return (
-    <section id="mes-coordonnees" className="panel p-6">
+    <section id="mes-coordonnees" className="anchor-section panel p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Mes coordonnées</h2>
+          <h2 className="text-xl font-extrabold text-slate-900">Mes coordonnées</h2>
           <p className="mt-1 text-sm text-slate-600">
             Signalez une correction au bureau. Les nouvelles coordonnées ne sont appliquées
             qu&apos;après sa validation, y compris pour l&apos;adresse de connexion.
@@ -111,7 +110,7 @@ export default function MemberContactSection({
           <button
             type="button"
             onClick={startEdit}
-            className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary btn-sm"
           >
             {pendingRequest ? "Modifier ma demande" : "Demander une modification"}
           </button>
@@ -148,7 +147,7 @@ export default function MemberContactSection({
       {editing ? (
         <div className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               Prénom
               <input
                 value={values.firstName}
@@ -158,7 +157,7 @@ export default function MemberContactSection({
                 autoComplete="given-name"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               Nom
               <input
                 value={values.lastName}
@@ -168,7 +167,7 @@ export default function MemberContactSection({
                 autoComplete="family-name"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               E-mail
               <input
                 type="email"
@@ -179,7 +178,7 @@ export default function MemberContactSection({
                 autoComplete="email"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               Téléphone
               <input
                 type="tel"
@@ -190,7 +189,7 @@ export default function MemberContactSection({
                 autoComplete="tel"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+            <label className="field-label sm:col-span-2">
               Adresse
               <input
                 value={values.address}
@@ -200,7 +199,7 @@ export default function MemberContactSection({
                 autoComplete="street-address"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               Code postal
               <input
                 value={values.postalCode}
@@ -210,7 +209,7 @@ export default function MemberContactSection({
                 autoComplete="postal-code"
               />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="field-label">
               Ville
               <input
                 value={values.city}
@@ -231,7 +230,7 @@ export default function MemberContactSection({
               type="button"
               onClick={() => void submit()}
               disabled={saving}
-              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="btn btn-primary btn-sm"
             >
               {saving ? "Envoi…" : "Envoyer au bureau"}
             </button>
@@ -242,14 +241,14 @@ export default function MemberContactSection({
                 setError("");
               }}
               disabled={saving}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              className="btn btn-ghost btn-sm"
             >
               Annuler
             </button>
           </div>
         </div>
       ) : (
-        <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+        <dl className="mt-4 grid gap-x-6 gap-y-3 rounded-2xl bg-brand-cream/60 p-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-slate-500">Nom</dt>
             <dd className="font-medium text-slate-900">

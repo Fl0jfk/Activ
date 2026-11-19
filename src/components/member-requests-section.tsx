@@ -90,31 +90,31 @@ export default function MemberRequestsSection() {
   }
 
   return (
-    <section className="panel p-6">
-      <h2 className="text-xl font-bold text-slate-900">Demandes au bureau</h2>
+    <section id="demandes" className="anchor-section panel p-6">
+      <h2 className="text-xl font-extrabold text-slate-900">Demandes au bureau</h2>
       <p className="mt-1 text-sm text-slate-600">
         Posez une question ou une demande au bureau. Vous serez notifié quand elle sera traitée.
       </p>
 
       <form onSubmit={(event) => void handleSubmit(event)} className="mt-4 space-y-3">
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="field-label">
           Objet
           <input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+            className="field"
             placeholder="Ex. Attestation, question licence…"
             maxLength={120}
             required
             disabled={isSaving}
           />
         </label>
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="field-label">
           Message
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+            className="field"
             rows={4}
             placeholder="Décrivez votre demande…"
             required
@@ -122,13 +122,13 @@ export default function MemberRequestsSection() {
           />
         </label>
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <label className="field-label">
             Pièce jointe (optionnel)
             <input
               type="file"
               onChange={(event) => void handleFileChange(event)}
               disabled={isSaving || isUploading}
-              className="mt-1 block w-full text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+              className="mt-1 block w-full text-sm font-normal text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-brand-blue file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
             />
           </label>
           {attachment ? (
@@ -148,7 +148,7 @@ export default function MemberRequestsSection() {
         <button
           type="submit"
           disabled={isSaving || isUploading}
-          className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="btn btn-primary btn-sm"
         >
           {isSaving ? "Envoi…" : "Envoyer la demande"}
         </button>
@@ -167,7 +167,7 @@ export default function MemberRequestsSection() {
           <p className="text-sm text-slate-600">Aucune demande pour le moment.</p>
         ) : null}
         {requests.map((request) => (
-          <article key={request.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <article key={request.id} className="rounded-2xl border border-brand-line bg-brand-cream/60 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-semibold text-slate-900">{request.subject}</p>
               <span
@@ -191,7 +191,7 @@ export default function MemberRequestsSection() {
                   href={`/api/club/member-requests/${request.id}/file?which=member`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-semibold text-cyan-800 underline"
+                  className="font-semibold text-brand-blue underline"
                 >
                   Voir ma pièce jointe ({request.attachment.name})
                 </a>
