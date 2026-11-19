@@ -123,10 +123,9 @@ export function readRoleFromClerkUser(user: ClerkUserLike): RoleResolution {
     candidates.push({ role: fromPublic, source: "publicMetadata" });
   }
 
-  const fromUnsafe = readRoleFromBag(unsafeBag);
-  if (fromUnsafe) {
-    candidates.push({ role: fromUnsafe, source: "unsafeMetadata" });
-  }
+  // `unsafeMetadata` est modifiable par l'utilisateur depuis son navigateur : il ne doit JAMAIS
+  // accorder de rôle (sinon n'importe quel compte pourrait se déclarer président). Sa valeur
+  // reste exposée dans `unsafeRoleRaw` pour le diagnostic uniquement.
 
   const picked =
     candidates.length > 0

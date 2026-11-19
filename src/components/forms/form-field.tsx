@@ -9,14 +9,17 @@ type FormFieldProps = {
   className?: string;
   /** Aide courte affichée sous le champ. */
   hint?: string;
+  /** Message d'erreur affiché sous le champ (facultatif). */
+  error?: string;
 };
 
-export function FormField({ label, children, className, hint }: FormFieldProps) {
+export function FormField({ label, children, className, hint, error }: FormFieldProps) {
   return (
     <label className={`${formLabelClass}${className ? ` ${className}` : ""}`}>
       <span className="field-label">{label}</span>
       {children}
       {hint ? <span className="mt-1 block text-xs text-slate-600">{hint}</span> : null}
+      {error ? <span className="mt-1 block text-sm font-semibold text-rose-700">{error}</span> : null}
     </label>
   );
 }

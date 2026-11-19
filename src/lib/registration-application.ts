@@ -4,6 +4,8 @@ import type { CurrentUserContext } from "@/lib/clerk";
 import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 
 export type RegistrationApplicantInput = {
+  /** Identifiant imposé (permet d'envoyer les fichiers avant de créer le dossier). */
+  id?: string;
   disciplineId: string;
   disciplineIds?: string[];
   trialSlotId?: string | null;
@@ -33,7 +35,7 @@ export function buildRegistrationApplication(
   const email = input.email.trim().toLowerCase();
 
   return {
-    id: randomId("app"),
+    id: input.id ?? randomId("app"),
     clerkUserId: input.clerkUserId,
     fullName: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
     email,
@@ -66,6 +68,26 @@ export function buildRegistrationApplication(
     membershipBulletin: input.membershipBulletin ?? null,
     emailVerifiedAt: input.emailVerifiedAt ?? null,
   };
+}
+
+/** Un dossier refusé ou arrêté ne bloque pas une nouvelle inscription. */
+export function isActiveApplicationStatus(status: RegistrationApplication["status"]): boolean {
+  return status !== "rejected" && status !== "cancelled";
+}
+
+export function findActiveApplicationByEmail(
+  applications: RegistrationApplication[],
+  email: string,
+): RegistrationApplication | null {
+  const normalized = email.trim().toLowerCase();
+  return (
+    applications.find(
+      (entry) =>
+        isActiveApplicationStatus(entry.status) &&
+        typeof entry.email === "string" &&
+        entry.email.trim().toLowerCase() === normalized,
+    ) ?? null
+  );
 }
 
 export function buildClubMemberRecord(params: {

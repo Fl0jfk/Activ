@@ -191,6 +191,44 @@ export async function updateUserMetadata(
   });
 }
 
+/** Comme `updateUserMetadata`, sans exception : l'appelant garde ses données et signale l'échec. */
+export async function tryUpdateUserMetadata(
+  userId: string,
+  privateMetadata: AppPrivateMetadata,
+  publicMetadata: Record<string, unknown> = {},
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    await updateUserMetadata(userId, privateMetadata, publicMetadata);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("tryUpdateUserMetadata failed", { userId, error });
+    return { ok: false, message: message || "Mise à jour Clerk impossible." };
+  }
+}
+
+/** Rôle réel d'un compte Clerk (`exists: false` si le compte a déjà disparu). */
+export async function readClerkAccountRole(
+  userId: string,
+): Promise<{ ok: true; exists: boolean; role: AppRole } | { ok: false; message: string }> {
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    return { ok: true, exists: true, role: readRoleFromClerkUser(user).role };
+  } catch (error) {
+    const status =
+      error && typeof error === "object" && "status" in error
+        ? Number((error as { status: unknown }).status)
+        : NaN;
+    if (status === 404) {
+      return { ok: true, exists: false, role: "member" };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("readClerkAccountRole failed", { userId, error });
+    return { ok: false, message: message || "Lecture du compte Clerk impossible." };
+  }
+}
+
 export async function deleteClerkUser(userId: string): Promise<void> {
   const client = await clerkClient();
   await client.users.deleteUser(userId);

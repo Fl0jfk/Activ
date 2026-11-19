@@ -420,6 +420,74 @@ export function BulletinSection({
   );
 }
 
+/** Message affiché à l’adhérent dans son espace (les notes internes ne lui sont jamais montrées). */
+export function MemberMessageSection({
+  application,
+  disabled,
+  onUpdate,
+}: {
+  application: RegistrationApplication;
+  disabled: boolean;
+  onUpdate: DossierUpdate;
+}) {
+  const saved = application.memberMessage ?? "";
+  const [draft, setDraft] = useState(saved);
+  const [saving, setSaving] = useState(false);
+
+  async function save(value: string) {
+    setSaving(true);
+    try {
+      const done = await onUpdate(
+        { memberMessage: value.trim() },
+        value.trim() ? "Message enregistré : l’adhérent le voit dans son espace." : "Message retiré.",
+      );
+      if (done) setDraft(value.trim());
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="field-label">
+        Message visible par l’adhérent
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          disabled={disabled || saving}
+          maxLength={1000}
+          rows={3}
+          className="field"
+          placeholder="Ex. Merci d’apporter votre certificat médical lors de votre premier cours."
+        />
+      </label>
+      <p className="text-sm text-slate-600">
+        Ce texte est affiché à l’adhérent dans son espace. Il ne doit contenir aucune information interne.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={disabled || saving || draft.trim() === saved.trim()}
+          onClick={() => void save(draft)}
+          className="btn btn-primary btn-sm"
+        >
+          {saving ? "Enregistrement…" : "Enregistrer le message"}
+        </button>
+        {saved.trim() ? (
+          <button
+            type="button"
+            disabled={disabled || saving}
+            onClick={() => void save("")}
+            className="btn btn-ghost btn-sm"
+          >
+            Retirer le message
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function TrialSection({
   trialAttended,
   disabled,

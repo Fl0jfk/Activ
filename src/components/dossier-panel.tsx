@@ -9,6 +9,7 @@ import {
   BulletinSection,
   ContactSection,
   DossierSection,
+  MemberMessageSection,
   TrialSection,
   bulletinSummary,
   contactSummary,
@@ -86,9 +87,14 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
   const step = getDossierStep(application);
   const isPaper = application.origin === "paper";
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(application.paymentMethod || "");
+  const [amountInput, setAmountInput] = useState(() => {
+    const known = application.amountPaid ?? application.membershipBulletin?.grandTotal;
+    return typeof known === "number" && known > 0 ? String(known).replace(".", ",") : "";
+  });
   const [methodError, setMethodError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<PendingConfirm>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const disabled = busy || actions.refreshing;
   const id = application.id;
@@ -112,7 +118,9 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
         return;
       }
       const payload: ApplicationUpdatePayload | undefined =
-        action.kind === "finalize" ? { ...action.payload, paymentMethod } : action.payload;
+        action.kind === "finalize"
+          ? { ...action.payload, paymentMethod, ...(parsedAmount() !== null ? { amountPaid: parsedAmount() } : {}) }
+          : action.payload;
       if (payload) {
         await actions.updateApplication(id, payload, action.successMessage);
       }
@@ -120,9 +128,19 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
     setConfirm(null);
   }
 
+  /** Montant saisi en euros (virgule acceptée), `null` si vide ou invalide. */
+  function parsedAmount(): number | null {
+    const value = Number(amountInput.trim().replace(/\s/g, "").replace(",", "."));
+    return amountInput.trim() && Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
   function requestStep(action: DossierPhaseAction) {
     if (action.kind === "finalize" && !paymentMethod) {
       setMethodError("Choisissez le mode de paiement reçu avant de finaliser.");
+      return;
+    }
+    if (action.kind === "finalize" && amountInput.trim() && parsedAmount() === null) {
+      setMethodError("Le montant reçu n’est pas valide. Exemple : 190 ou 190,50.");
       return;
     }
     setMethodError("");
@@ -134,15 +152,39 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
   }
 
   async function executeReject() {
-    await withBusy(() => actions.rejectApplication(id, Boolean(application.clerkUserId)));
+    await withBusy(() =>
+      actions.rejectApplication(id, Boolean(application.clerkUserId), {
+        reason: rejectReason,
+        force: phase === 5,
+      }),
+    );
     setConfirm(null);
+    setRejectReason("");
   }
 
   if (application.status === "rejected") {
     return (
-      <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
-        Ce dossier a été refusé. Il n’apparaît plus dans les dossiers en cours.
-      </p>
+      <div className="space-y-3">
+        <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
+          Ce dossier a été refusé. Il n’apparaît plus dans les dossiers en cours.
+        </p>
+        {application.clerkUserId ? (
+          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>
+              Le compte de connexion de cette personne existe encore : elle ne pourra pas se réinscrire avec la même
+              adresse e-mail tant qu’il n’est pas supprimé.
+            </p>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void withBusy(() => actions.rejectApplication(id, true))}
+              className="btn btn-outline btn-sm mt-2"
+            >
+              Supprimer le compte de connexion
+            </button>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -194,6 +236,23 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
                   ))}
                 </select>
               </label>
+              <label className="field-label mt-3">
+                Montant reçu en € (facultatif)
+                <input
+                  value={amountInput}
+                  onChange={(event) => {
+                    setAmountInput(event.target.value);
+                    setMethodError("");
+                  }}
+                  disabled={disabled}
+                  inputMode="decimal"
+                  placeholder="Ex. 190"
+                  className="field"
+                />
+              </label>
+              <p className="mt-1 text-sm text-slate-600">
+                Ce montant figure sur l’attestation. Laissez vide pour utiliser le total du bulletin.
+              </p>
               {methodError ? (
                 <p role="alert" className="mt-1 text-sm font-semibold text-rose-700">
                   {methodError}
@@ -223,9 +282,36 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
             {licenseEnd ? ` Licence valable jusqu’au ${licenseEnd}.` : ""}{" "}
             {isPaper ? "Dossier papier traité." : "L’adhésion est active."}
           </p>
-          <PaymentReceiptLink applicationId={id} className="btn btn-primary btn-sm mt-3">
-            Télécharger l’attestation de paiement
-          </PaymentReceiptLink>
+          {application.receiptNumber ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Attestation n° {application.receiptNumber}
+              {application.paidAt ? ` du ${formatDateFr(application.paidAt, "long")}` : ""}.
+            </p>
+          ) : null}
+          {application.paidAt || application.receiptSentAt ? (
+            <p
+              className={`mt-1 text-sm font-semibold ${application.receiptSentAt ? "text-brand-green-dark" : "text-amber-800"}`}
+            >
+              {application.receiptSentAt
+                ? `Attestation envoyée à l’adhérent le ${formatDateFr(application.receiptSentAt, "long")}.`
+                : application.email?.trim()
+                  ? "L’attestation n’a pas encore été envoyée à l’adhérent."
+                  : "Aucune adresse e-mail : l’attestation n’a pas pu être envoyée."}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <PaymentReceiptLink applicationId={id} className="btn btn-primary btn-sm">
+              Télécharger l’attestation de paiement
+            </PaymentReceiptLink>
+            <button
+              type="button"
+              disabled={disabled || !application.email?.trim()}
+              onClick={() => void withBusy(() => actions.resendReceipt(id))}
+              className="btn btn-outline btn-sm"
+            >
+              Renvoyer l’attestation
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -273,6 +359,16 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
           />
         </DossierSection>
         <DossierSection
+          title="Message à l’adhérent"
+          summary={application.memberMessage?.trim() ? "Un message est affiché à l’adhérent" : "Aucun message"}
+        >
+          <MemberMessageSection
+            application={application}
+            disabled={disabled}
+            onUpdate={(payload, message) => actions.updateApplication(id, payload, message)}
+          />
+        </DossierSection>
+        <DossierSection
           title="Essai"
           summary={application.trialAttended ? "Essai réalisé" : "Essai pas encore réalisé"}
         >
@@ -294,7 +390,7 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
 
       <DossierOtherActions
         backAction={backAction}
-        canRequestDocument={phase >= 3}
+        canRequestDocument={phase >= 3 && phase < 5}
         hasEmail={Boolean(application.email?.trim())}
         busy={disabled}
         onBack={() => {
@@ -338,11 +434,22 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
               Le dossier de {application.fullName} sera marqué comme refusé et ne sera plus dans les dossiers en
               cours (onglet « Refusés et désinscrits »).
             </p>
+            {phase === 5 ? (
+              <p className="mt-2 font-semibold text-rose-700">
+                Ce dossier est finalisé et payé : seul le président peut le refuser. Le paiement enregistré et
+                l’attestation seront annulés (un remboursement éventuel se traite hors de l’application).
+              </p>
+            ) : null}
             <p className="mt-2 font-semibold">
               {application.clerkUserId
                 ? "Son accès à l’espace adhérent sera supprimé. Cette action est définitive depuis cet écran."
                 : "Cette action est définitive depuis cet écran."}
             </p>
+            {application.email?.trim() ? (
+              <p className="mt-2 text-sm text-slate-600">
+                Un e-mail l’informera que son dossier n’a pas pu être accepté.
+              </p>
+            ) : null}
           </>
         }
         confirmLabel="Refuser le dossier"
@@ -350,7 +457,18 @@ export default function DossierPanel({ application, disciplines, actions }: Doss
         busy={busy}
         onConfirm={() => void executeReject()}
         onCancel={() => setConfirm(null)}
-      />
+      >
+        <label className="field-label">
+          Motif (facultatif, communiqué à l’adhérent)
+          <textarea
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            className="field"
+          />
+        </label>
+      </ConfirmDialog>
     </div>
   );
 }

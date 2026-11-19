@@ -24,16 +24,13 @@ const MUTED = rgb(0.39, 0.45, 0.55);
 const LINE = rgb(0.84, 0.88, 0.92);
 const ACCENT = rgb(0.03, 0.45, 0.53);
 
-function formatDateFr(isoDate?: string): string {
-  const date = isoDate ? new Date(isoDate) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    return new Intl.DateTimeFormat("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(new Date());
-  }
+/** Date en toutes lettres à l'heure de Paris ; « — » si la date est absente ou invalide. */
+function formatDateFr(isoDate?: string | null): string {
+  if (!isoDate) return "—";
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -41,7 +38,52 @@ function formatDateFr(isoDate?: string): string {
 }
 
 function formatEuro(amount: number): string {
-  return `${amount.toFixed(2).replace(".", ",")} EUR`;
+  return `${amount.toFixed(2).replace(".", ",")}\u00A0€`;
+}
+
+/** Équivalents lisibles des caractères que la police Helvetica (WinAnsi) ne sait pas écrire. */
+const TEXT_FALLBACKS: Record<string, string> = {
+  "\u202F": " ",
+  "\u2009": " ",
+  "\u2007": " ",
+  "\u2002": " ",
+  "\u2003": " ",
+  "\u200B": "",
+  "\u2192": "->",
+  "\u2190": "<-",
+  "\u2212": "-",
+  "\u2011": "-",
+  "\u0152": "OE",
+  "\u0153": "oe",
+  "\u1E9E": "SS",
+};
+
+/**
+ * Rend un texte écrivable avec la police standard : apostrophes et guillemets typographiques, œ, €
+ * et accents sont conservés ; les autres caractères sont remplacés par leur équivalent ou retirés
+ * (un seul caractère non pris en charge ferait sinon échouer toute l'attestation).
+ */
+function createTextSanitizer(font: PDFFont): (value: string) => string {
+  const supported = new Set(font.getCharacterSet());
+  return (value: string) => {
+    let output = "";
+    for (const char of value.normalize("NFC")) {
+      const codePoint = char.codePointAt(0) ?? 0;
+      if (codePoint < 0x20 || codePoint === 0x7f) {
+        output += " ";
+      } else if (supported.has(codePoint)) {
+        output += char;
+      } else if (char in TEXT_FALLBACKS) {
+        output += TEXT_FALLBACKS[char];
+      } else {
+        const base = char.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+        output += Array.from(base)
+          .filter((entry) => supported.has(entry.codePointAt(0) ?? 0))
+          .join("");
+      }
+    }
+    return output;
+  };
 }
 
 function siteImageKeyFromUrl(url: string): string | null {
@@ -73,7 +115,8 @@ function splitLongWord(word: string, font: PDFFont, size: number, maxWidth: numb
   return chunks.length > 0 ? chunks : [word];
 }
 
-function wrapText(
+/** `text` doit déjà être nettoyé (voir `createTextSanitizer`). */
+function wrapTextClean(
   text: string,
   font: PDFFont,
   size: number,
@@ -202,13 +245,13 @@ export async function buildPaymentReceiptPdf(params: {
 }): Promise<Uint8Array> {
   const { application, siteData } = params;
   const association = siteData.association;
-  const paidAtLabel = formatDateFr(params.paidAt);
+  // Date et numéro sont ceux enregistrés à la finalisation : l'attestation ne change pas d'un
+  // téléchargement à l'autre. Un dossier ancien non encore complété s'affiche sans les inventer.
+  const paidAtIso = params.paidAt ?? application.paidAt ?? null;
+  const paidAtLabel = formatDateFr(paidAtIso);
   const memberName =
     application.fullName.trim() || `${application.firstName} ${application.lastName}`.trim();
-  const receiptNumber = `A-${application.id.slice(-8).toUpperCase()}-${new Date()
-    .toISOString()
-    .slice(0, 10)
-    .replace(/-/g, "")}`;
+  const receiptNumber = application.receiptNumber?.trim() || "—";
   const addressLine =
     [application.address, application.postalCode, application.city].filter(Boolean).join(", ") || "-";
 
@@ -233,6 +276,9 @@ export async function buildPaymentReceiptPdf(params: {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const logo = await embedAssociationLogo(pdfDoc);
+  const clean = createTextSanitizer(font);
+  const wrapText = (text: string, usedFont: PDFFont, size: number, maxWidth: number): string[] =>
+    wrapTextClean(clean(text), usedFont, size, maxWidth);
 
   const left = MARGIN;
   const right = PAGE_WIDTH - MARGIN;
@@ -243,7 +289,7 @@ export async function buildPaymentReceiptPdf(params: {
     y: number,
     options: { bold?: boolean; size?: number; color?: ReturnType<typeof rgb> } = {},
   ) => {
-    page.drawText(text, {
+    page.drawText(clean(text), {
       x,
       y,
       size: options.size ?? 9,
@@ -259,8 +305,9 @@ export async function buildPaymentReceiptPdf(params: {
   ) => {
     const size = options.size ?? 9;
     const usedFont = options.bold ? fontBold : font;
-    page.drawText(text, {
-      x: right - usedFont.widthOfTextAtSize(text, size),
+    const safeText = clean(text);
+    page.drawText(safeText, {
+      x: right - usedFont.widthOfTextAtSize(safeText, size),
       y,
       size,
       font: usedFont,
@@ -334,7 +381,8 @@ export async function buildPaymentReceiptPdf(params: {
       borderWidth: 1.4,
     });
     const size = 18;
-    draw(initials, left + 30 - fontBold.widthOfTextAtSize(initials, size) / 2, headerTop - 34, {
+    const safeInitials = clean(initials);
+    draw(safeInitials, left + 30 - fontBold.widthOfTextAtSize(safeInitials, size) / 2, headerTop - 34, {
       bold: true,
       size,
       color: ACCENT,
@@ -376,7 +424,7 @@ export async function buildPaymentReceiptPdf(params: {
   titleY -= 17;
   drawRight(`N° ${receiptNumber}`, titleY, { size: 8.5, color: MUTED });
   titleY -= 12;
-  drawRight(`Émise le ${formatDateFr()}`, titleY, { size: 8.5, color: MUTED });
+  drawRight(`Émise le ${paidAtLabel}`, titleY, { size: 8.5, color: MUTED });
 
   const headerBottom = Math.min(infoY, titleY) - 16;
   page.drawLine({
@@ -455,7 +503,7 @@ export async function buildPaymentReceiptPdf(params: {
   if (application.licenseEndDate) {
     summaryRows.push({
       label: "Licence valable jusqu'au",
-      value: formatDateFr(`${application.licenseEndDate}T12:00:00`),
+      value: formatDateFr(`${application.licenseEndDate}T12:00:00Z`),
     });
   }
 

@@ -54,7 +54,8 @@ const STEP_MESSAGES: Record<DossierStep, string> = {
   awaiting_payment: "Vos pièces sont conformes. Il reste à régler votre cotisation auprès du bureau.",
   finalized: "Bienvenue ! Votre inscription est finalisée, vous retrouvez ci-dessous vos séances et vos événements.",
   rejected: "Votre dossier n'a pas pu être accepté. Contactez le bureau pour en savoir plus.",
-  cancelled: "Vous êtes désinscrit(e). Contactez le bureau si vous souhaitez reprendre une activité.",
+  cancelled:
+    "Vous êtes désinscrit(e). Pour reprendre une activité, déposez une nouvelle pré-inscription ci-dessous ou contactez le bureau.",
 };
 
 function timeRange(entry: Pick<WeekScheduleEntry, "startTime" | "endTime">): string {
@@ -175,16 +176,33 @@ export default function MemberPortal({
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRequestingLink, setIsRequestingLink] = useState(false);
+  const [linkMessage, setLinkMessage] = useState("");
+  const [freshUploadUrl, setFreshUploadUrl] = useState("");
 
   const disciplineSlots = useMemo(
     () => slots.filter((slot) => slot.disciplineId === disciplineId),
     [disciplineId, slots]
   );
 
-  const latestApplication = applications[0] ?? null;
+  // Dossier mis en avant : l'inscription finalisée si elle existe (une nouvelle demande ne la masque pas),
+  // sinon le dossier ouvert le plus récent, sinon le plus récent.
+  const sortedApplications = useMemo(
+    () => [...applications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [applications],
+  );
+  const latestApplication =
+    sortedApplications.find((application) => getMemberInscriptionStep(application) === "finalized") ??
+    sortedApplications.find(
+      (application) => application.status !== "rejected" && application.status !== "cancelled",
+    ) ??
+    sortedApplications[0] ??
+    null;
+  const awaitingDocumentApplication =
+    sortedApplications.find((application) => application.status === "awaiting_document") ?? null;
   const inscriptionStep = latestApplication ? getMemberInscriptionStep(latestApplication) : null;
   const contactApplication =
-    applications.find(
+    sortedApplications.find(
       (application) =>
         application.status !== "rejected" && application.status !== "cancelled",
     ) ?? null;
@@ -294,6 +312,31 @@ export default function MemberPortal({
     }
   }
 
+  async function requestNewDocumentLink(applicationId: string) {
+    setIsRequestingLink(true);
+    setLinkMessage("");
+    try {
+      const response = await fetch("/api/me/resend-document-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        uploadUrl?: string;
+      };
+      setLinkMessage(
+        payload.message ??
+          (response.ok ? "Un nouveau lien vous a été envoyé." : "Impossible d'obtenir un nouveau lien pour le moment."),
+      );
+      if (response.ok && payload.uploadUrl) setFreshUploadUrl(payload.uploadUrl);
+    } catch {
+      setLinkMessage("Connexion impossible. Vérifiez votre réseau puis réessayez.");
+    } finally {
+      setIsRequestingLink(false);
+    }
+  }
+
   async function addTrialRequest(applicationId: string, selectedTrialSlotId: string) {
     if (!selectedTrialSlotId) {
       setMessage("Sélectionnez un créneau d'essai.");
@@ -338,8 +381,8 @@ export default function MemberPortal({
           <div>
             <h2 className="text-lg font-extrabold text-rose-900">Pièce manquante</h2>
             <p className="mt-1 text-sm text-rose-800">
-              Le bureau vous demande : <strong>{pendingDocument.label}</strong>. Un e-mail vous a été envoyé avec un
-              lien sécurisé.
+              Le bureau vous a demandé : <strong>{pendingDocument.label}</strong>. Utilisez le lien envoyé par e-mail
+              ou le bouton ci-contre, ou contactez-nous.
             </p>
           </div>
           <Link
@@ -348,6 +391,37 @@ export default function MemberPortal({
           >
             Déposer le document
           </Link>
+        </section>
+      ) : awaitingDocumentApplication ? (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-rose-900">Pièce manquante</h2>
+              <p className="mt-1 text-sm text-rose-800">
+                Le bureau vous a demandé une pièce, mais votre lien de dépôt n&apos;est plus valable. Recevez-en un
+                nouveau par e-mail, ou contactez-nous.
+              </p>
+            </div>
+            {freshUploadUrl ? (
+              <Link href={freshUploadUrl} className="btn btn-sm bg-rose-600 text-white hover:bg-rose-700">
+                Déposer le document
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled={isRequestingLink}
+                onClick={() => void requestNewDocumentLink(awaitingDocumentApplication.id)}
+                className="btn btn-sm bg-rose-600 text-white hover:bg-rose-700"
+              >
+                {isRequestingLink ? "Un instant…" : "Recevoir un nouveau lien"}
+              </button>
+            )}
+          </div>
+          {linkMessage ? (
+            <p role="status" className="mt-3 text-sm font-semibold text-rose-900">
+              {linkMessage}
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -552,9 +626,9 @@ export default function MemberPortal({
                       Télécharger l&apos;attestation de paiement
                     </PaymentReceiptLink>
                   ) : null}
-                  {application.notes ? (
+                  {application.memberMessage?.trim() ? (
                     <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
-                      <span className="font-bold">Message du bureau :</span> {application.notes}
+                      <span className="font-bold">Message du bureau :</span> {application.memberMessage}
                     </p>
                   ) : null}
                 </article>

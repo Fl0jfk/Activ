@@ -1,3 +1,12 @@
+import {
+  cleanLine,
+  isValidEmailAddress,
+  isValidFrenchPostalCode,
+  normalizePhoneNumber,
+  validateBirthDate,
+  validatePasswordRules,
+} from "@/lib/input-validation";
+
 export const MEMBERSHIP_SEASON_LABEL = "Saison 2026 - 2027";
 export const MEMBERSHIP_ADHESION_FEE = 10;
 
@@ -111,12 +120,6 @@ export function computeMembershipTotals(selectedSlots: string[]): {
   };
 }
 
-export function getSelectedSlotLabels(selectedSlots: string[]): string[] {
-  return MEMBERSHIP_ACTIVITY_SLOTS.filter((slot) => selectedSlots.includes(slot.id)).map(
-    (slot) => `${slot.day} ${slot.time} — ${slot.activity}`,
-  );
-}
-
 export function paymentPlanLabel(plan: MembershipPaymentPlan): string {
   if (plan === "three_times") {
     return "Paiement en 3 fois (chèques encaissés le 10 septembre 2026, le 10 janvier 2027 et le 10 avril 2027)";
@@ -128,31 +131,6 @@ export function imageRightsLabel(value: MembershipImageRights): string {
   return value === "authorize"
     ? "J'autorise l'utilisation de mon image"
     : "Je n'autorise pas l'utilisation de mon image";
-}
-
-export function resolvePrimaryDisciplineId(
-  selectedSlots: string[],
-  disciplines: { id: string; name: string; slug: string }[],
-): string | null {
-  for (const slotId of selectedSlots) {
-    const slot = MEMBERSHIP_ACTIVITY_SLOTS.find((entry) => entry.id === slotId);
-    if (!slot) continue;
-    const matched = disciplines.find((discipline) => {
-      const haystack = `${discipline.name} ${discipline.slug}`.toLowerCase();
-      return slot.matchKeywords.every((keyword) => haystack.includes(keyword.toLowerCase()));
-    });
-    if (matched) return matched.id;
-  }
-  for (const slotId of selectedSlots) {
-    const slot = MEMBERSHIP_ACTIVITY_SLOTS.find((entry) => entry.id === slotId);
-    if (!slot) continue;
-    const matched = disciplines.find((discipline) => {
-      const haystack = `${discipline.name} ${discipline.slug}`.toLowerCase();
-      return slot.matchKeywords.some((keyword) => haystack.includes(keyword.toLowerCase()));
-    });
-    if (matched) return matched.id;
-  }
-  return disciplines[0]?.id ?? null;
 }
 
 function fallbackActivityLabel(activityId: string): string {
@@ -189,58 +167,213 @@ export function membershipActivityDetails(
   return { labels, disciplineIds };
 }
 
-export function validateMembershipBulletinPayload(
-  payload: MembershipBulletinFormPayload,
-  options?: { requirePassword?: boolean; activityOptions?: MembershipActivityLookup[] },
-): { ok: true } | { ok: false; message: string } {
-  const requirePassword = options?.requirePassword ?? true;
-  if (
-    !payload.firstName?.trim() ||
-    !payload.lastName?.trim() ||
-    !payload.phone?.trim() ||
-    !payload.address?.trim() ||
-    !payload.postalCode?.trim() ||
-    !payload.city?.trim() ||
-    !payload.email?.trim() ||
-    !payload.birthDate?.trim() ||
-    !payload.emergencyContactName?.trim() ||
-    !payload.emergencyContactPhone?.trim()
-  ) {
-    return { ok: false, message: "Merci de remplir toutes les coordonnées obligatoires." };
-  }
-  if (requirePassword && (!payload.password || payload.password.length < 8)) {
-    return { ok: false, message: "Le mot de passe doit contenir au moins 8 caractères." };
-  }
-  if (!Array.isArray(payload.selectedSlots) || payload.selectedSlots.length === 0) {
-    return { ok: false, message: "Veuillez cocher au moins une activité." };
-  }
-  const allowedActivityIds = new Set(
-    (options?.activityOptions?.length
-      ? options.activityOptions.map((option) => option.id)
-      : MEMBERSHIP_ACTIVITY_SLOTS.map((slot) => slot.id)),
-  );
-  const unknownSlot = payload.selectedSlots.some((id) => !allowedActivityIds.has(id));
-  if (unknownSlot) {
-    return { ok: false, message: "Créneau d'activité invalide." };
-  }
-  if (payload.paymentPlan !== "once" && payload.paymentPlan !== "three_times") {
-    return { ok: false, message: "Modalité de paiement invalide." };
-  }
-  if (payload.imageRights !== "authorize" && payload.imageRights !== "refuse") {
-    return { ok: false, message: "Choix du droit à l'image invalide." };
-  }
-  if (!payload.commitmentsAccepted) {
-    return { ok: false, message: "Vous devez accepter les engagements du bulletin." };
-  }
-  if (!payload.signatureDataUrl?.startsWith("data:image/")) {
-    return { ok: false, message: "Signature manquante ou invalide." };
-  }
-  if (!payload.signedAt?.trim()) {
-    return { ok: false, message: "Date de signature manquante." };
-  }
-  return { ok: true };
+export type BulletinFieldName =
+  | "firstName"
+  | "lastName"
+  | "birthDate"
+  | "phone"
+  | "address"
+  | "postalCode"
+  | "city"
+  | "email"
+  | "password"
+  | "emergencyContactName"
+  | "emergencyContactPhone"
+  | "selectedSlots"
+  | "signature"
+  | "commitments";
+
+export type BulletinFieldErrors = Partial<Record<BulletinFieldName, string>>;
+
+export type BulletinValidationResult =
+  | { ok: true; payload: MembershipBulletinFormPayload }
+  | { ok: false; message: string; fieldErrors: BulletinFieldErrors };
+
+export const BULLETIN_LIMITS = {
+  name: 60,
+  address: 160,
+  city: 80,
+  contactName: 100,
+  place: 80,
+  email: 254,
+  slots: 20,
+  signatureDataUrl: 1_000_000,
+} as const;
+
+export const SIGNATURE_DATA_URL_PREFIX = "data:image/png;base64,";
+
+const FIELD_ORDER: BulletinFieldName[] = [
+  "firstName",
+  "lastName",
+  "birthDate",
+  "phone",
+  "address",
+  "postalCode",
+  "city",
+  "email",
+  "password",
+  "emergencyContactName",
+  "emergencyContactPhone",
+  "selectedSlots",
+  "commitments",
+  "signature",
+];
+
+/** Date de signature « jj/mm/aaaa » fixée par le serveur (heure de Paris), jamais celle envoyée par le navigateur. */
+export function serverSignedAt(now: Date = new Date()): string {
+  return now.toLocaleDateString("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
+/**
+ * Contrôle et nettoie les données d'un bulletin reçues d'un navigateur (valeurs inconnues acceptées).
+ * Renvoie les valeurs nettoyées (téléphones normalisés, activités sans doublon, date de signature du serveur).
+ * Le contenu de l'image de signature est contrôlé à part (voir `signature-image.ts`).
+ */
+export function validateMembershipBulletinPayload(
+  raw: unknown,
+  options?: { requirePassword?: boolean; activityOptions?: MembershipActivityLookup[]; now?: Date },
+): BulletinValidationResult {
+  const requirePassword = options?.requirePassword ?? true;
+  const source = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const errors: BulletinFieldErrors = {};
+
+  const text = (key: string, max: number) => cleanLine(source[key], max + 1);
+  const tooLong = (value: string, max: number) => value.length > max;
+
+  const firstName = text("firstName", BULLETIN_LIMITS.name);
+  if (!firstName) errors.firstName = "Indiquez votre prénom.";
+  else if (tooLong(firstName, BULLETIN_LIMITS.name)) errors.firstName = "Prénom trop long.";
+
+  const lastName = text("lastName", BULLETIN_LIMITS.name);
+  if (!lastName) errors.lastName = "Indiquez votre nom.";
+  else if (tooLong(lastName, BULLETIN_LIMITS.name)) errors.lastName = "Nom trop long.";
+
+  const birth = validateBirthDate(source.birthDate, options?.now);
+  if (!birth.ok) errors.birthDate = birth.message;
+
+  const phone = normalizePhoneNumber(source.phone);
+  if (!phone) errors.phone = "Numéro de téléphone invalide (exemple : 06 12 34 56 78).";
+
+  const address = text("address", BULLETIN_LIMITS.address);
+  if (!address) errors.address = "Indiquez votre adresse.";
+  else if (tooLong(address, BULLETIN_LIMITS.address)) errors.address = "Adresse trop longue.";
+
+  const postalCode = typeof source.postalCode === "string" ? source.postalCode.trim() : "";
+  if (!isValidFrenchPostalCode(postalCode)) errors.postalCode = "Code postal invalide (5 chiffres).";
+
+  const city = text("city", BULLETIN_LIMITS.city);
+  if (!city) errors.city = "Indiquez votre ville.";
+  else if (tooLong(city, BULLETIN_LIMITS.city)) errors.city = "Nom de ville trop long.";
+
+  const email = typeof source.email === "string" ? source.email.trim().toLowerCase() : "";
+  if (!isValidEmailAddress(email)) errors.email = "Adresse e-mail invalide.";
+
+  let password = "";
+  if (requirePassword) {
+    const passwordCheck = validatePasswordRules(source.password);
+    if (!passwordCheck.ok) errors.password = passwordCheck.message;
+    else password = source.password as string;
+  }
+
+  const emergencyContactName = text("emergencyContactName", BULLETIN_LIMITS.contactName);
+  if (!emergencyContactName) {
+    errors.emergencyContactName = "Indiquez le nom de la personne à prévenir en cas d'urgence.";
+  } else if (tooLong(emergencyContactName, BULLETIN_LIMITS.contactName)) {
+    errors.emergencyContactName = "Nom trop long.";
+  }
+
+  const emergencyContactPhone = normalizePhoneNumber(source.emergencyContactPhone);
+  if (!emergencyContactPhone) {
+    errors.emergencyContactPhone = "Téléphone du contact d'urgence invalide (exemple : 06 12 34 56 78).";
+  }
+
+  const allowedActivities = new Map<string, MembershipActivityLookup>(
+    options?.activityOptions?.length
+      ? options.activityOptions.map((option) => [option.id, option])
+      : MEMBERSHIP_ACTIVITY_SLOTS.map((slot) => [slot.id, { id: slot.id }]),
+  );
+  const rawSlots = source.selectedSlots;
+  const selectedSlots: string[] = [];
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) {
+    errors.selectedSlots = "Veuillez cocher au moins une activité.";
+  } else if (rawSlots.length > BULLETIN_LIMITS.slots * 2) {
+    errors.selectedSlots = "Trop d'activités sélectionnées.";
+  } else {
+    for (const slot of rawSlots) {
+      if (typeof slot !== "string" || !allowedActivities.has(slot)) {
+        errors.selectedSlots = "Une activité choisie n'est plus proposée. Rechargez la page et choisissez à nouveau.";
+        break;
+      }
+      if (!selectedSlots.includes(slot)) selectedSlots.push(slot);
+    }
+    if (!errors.selectedSlots && selectedSlots.length > BULLETIN_LIMITS.slots) {
+      errors.selectedSlots = "Trop d'activités sélectionnées.";
+    }
+  }
+
+  const paymentPlan = source.paymentPlan;
+  if (paymentPlan !== "once" && paymentPlan !== "three_times") {
+    errors.selectedSlots = errors.selectedSlots ?? "Choisissez une modalité de paiement.";
+  }
+  const imageRights = source.imageRights;
+  if (imageRights !== "authorize" && imageRights !== "refuse") {
+    errors.selectedSlots = errors.selectedSlots ?? "Choisissez votre réponse pour le droit à l'image.";
+  }
+
+  if (source.commitmentsAccepted !== true) {
+    errors.commitments = "Vous devez accepter les engagements du bulletin.";
+  }
+
+  const signatureDataUrl = typeof source.signatureDataUrl === "string" ? source.signatureDataUrl : "";
+  if (
+    !signatureDataUrl.startsWith(SIGNATURE_DATA_URL_PREFIX) ||
+    signatureDataUrl.length > BULLETIN_LIMITS.signatureDataUrl ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(signatureDataUrl.slice(SIGNATURE_DATA_URL_PREFIX.length))
+  ) {
+    errors.signature = "Signature manquante ou invalide. Signez à nouveau dans l'encadré.";
+  }
+
+  const failed = FIELD_ORDER.filter((field) => errors[field]);
+  if (failed.length > 0) {
+    return {
+      ok: false,
+      message:
+        failed.length === 1
+          ? errors[failed[0]!]!
+          : "Certaines informations sont manquantes ou invalides. Vérifiez les champs signalés.",
+      fieldErrors: errors,
+    };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      firstName,
+      lastName,
+      phone: phone!,
+      address,
+      postalCode,
+      city,
+      email,
+      password: password || undefined,
+      birthDate: (birth as { ok: true; value: string }).value,
+      emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone!,
+      selectedSlots,
+      paymentPlan: paymentPlan as MembershipPaymentPlan,
+      imageRights: imageRights as MembershipImageRights,
+      commitmentsAccepted: true,
+      signedPlace: cleanLine(source.signedPlace, BULLETIN_LIMITS.place) || "Sainte-Croix",
+      signedAt: serverSignedAt(options?.now),
+      signatureDataUrl,
+    },
+  };
+}
 export function buildMembershipBulletinRecord(
   payload: MembershipBulletinFormPayload,
   options?: { activityOptions?: MembershipActivityLookup[] },
