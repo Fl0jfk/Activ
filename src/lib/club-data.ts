@@ -2,7 +2,13 @@ import { getApplicationDossierPhase } from "@/lib/dossier-workflow";
 import type { MembershipBulletinData } from "@/lib/membership-bulletin";
 import type { AppRole } from "@/lib/roles";
 import { normalizeAppRole } from "@/lib/roles";
-import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
+import {
+  isS3Configured,
+  isS3NotFoundError,
+  readJsonFromS3,
+  readLocalJsonFile,
+  writeJsonToS3,
+} from "@/lib/s3-client";
 import {
   buildMembershipActivityCatalog,
   repairApplicationDisciplines,
@@ -286,18 +292,47 @@ async function repairDisciplines(data: ClubData): Promise<ClubData> {
   return data;
 }
 
+/**
+ * Lit les données du club. Le fichier d'exemple n'est utilisé (et écrit) que si l'objet S3 n'existe pas
+ * encore : une panne réseau ou un JSON invalide remonte en erreur au lieu d'écraser les vraies données.
+ */
 export async function readClubData(): Promise<ClubData> {
+  if (!isS3Configured()) {
+    return repairDisciplines(normalizeClubData(await readLocalJsonFile<ClubData>(defaultClubDataPath)));
+  }
+  let raw: ClubData;
   try {
-    const raw = await readJsonFromS3<ClubData>(clubDataKey());
-    return repairDisciplines(normalizeClubData(raw));
-  } catch {
+    raw = await readJsonFromS3<ClubData>(clubDataKey());
+  } catch (error) {
+    if (!isS3NotFoundError(error)) throw error;
     const seedData = normalizeClubData(await readLocalJsonFile<ClubData>(defaultClubDataPath));
     await writeClubData(seedData);
     return seedData;
   }
+  return repairDisciplines(normalizeClubData(raw));
 }
 
 export async function writeClubData(data: ClubData): Promise<void> {
   const normalized = normalizeClubData({ ...data, updatedAt: new Date().toISOString() });
   await writeJsonToS3(clubDataKey(), normalized);
+}
+
+let clubDataQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Lecture, modification et écriture sérialisées : les requêtes simultanées d'un même serveur
+ * s'exécutent l'une après l'autre sur des données fraîchement relues, au lieu de s'écraser.
+ * À utiliser pour toute modification des données du club ; faire d'abord les opérations lentes
+ * (Clerk, PDF, envoi de fichiers) puis appeler cette fonction pour la seule mise à jour.
+ * `mutator` modifie l'objet reçu sur place ; lever une erreur annule l'écriture.
+ */
+export function updateClubData<T>(mutator: (data: ClubData) => Promise<T> | T): Promise<T> {
+  const run = clubDataQueue.then(async () => {
+    const data = await readClubData();
+    const result = await mutator(data);
+    await writeClubData(data);
+    return result;
+  });
+  clubDataQueue = run.catch(() => undefined);
+  return run;
 }

@@ -11,6 +11,18 @@ export function createS3Client(): S3Client {
   });
 }
 
+/** Sans bucket configuré (développement local), les lectures retombent sur les fichiers du dépôt. */
+export function isS3Configured(): boolean {
+  return Boolean(process.env.BUCKET_NAME);
+}
+
+/** Vrai uniquement quand l'objet n'existe pas : toute autre erreur (réseau, droits, JSON invalide) doit remonter. */
+export function isS3NotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; Code?: string };
+  return candidate.name === "NoSuchKey" || candidate.Code === "NoSuchKey";
+}
+
 export function requireBucketConfig(): { bucketName: string } {
   const bucketName = process.env.BUCKET_NAME;
   if (!bucketName) {

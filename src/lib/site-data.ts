@@ -1,5 +1,11 @@
 import { dayLabelFromOfWeek, parseDayOfWeek } from "@/lib/schedule-constants";
-import { readJsonFromS3, readLocalJsonFile, writeJsonToS3 } from "@/lib/s3-client";
+import {
+  isS3Configured,
+  isS3NotFoundError,
+  readJsonFromS3,
+  readLocalJsonFile,
+  writeJsonToS3,
+} from "@/lib/s3-client";
 import { slugify } from "@/lib/slug";
 import { normalizeNewsDisciplineId } from "@/lib/site-news";
 import { FALLBACK_SITE_IMAGE, resolveSiteImageSrc } from "@/lib/site-image";
@@ -305,19 +311,28 @@ export function normalizeSiteData(data: AssociationData | RawAssociationData): A
   };
 }
 
+/**
+ * Lit le contenu du site. Le fichier d'exemple n'est écrit sur S3 que si l'objet n'existe pas encore :
+ * une panne réseau ou un JSON invalide remonte en erreur au lieu d'écraser le vrai contenu.
+ */
 export async function readSiteData(): Promise<AssociationData> {
+  if (!isS3Configured()) {
+    return readDefaultLocalData();
+  }
+  let raw: AssociationData;
   try {
-    const raw = await readJsonFromS3<AssociationData>(siteDataKey());
-    return normalizeSiteData(raw);
-  } catch {
+    raw = await readJsonFromS3<AssociationData>(siteDataKey());
+  } catch (error) {
+    if (!isS3NotFoundError(error)) throw error;
     const seedData = await readDefaultLocalData();
     try {
       await writeSiteData(seedData);
     } catch {
-      // S3 may be unavailable in build/deploy environments; keep local fallback.
+      // S3 peut être indisponible pendant un déploiement : on garde le fichier local en mémoire.
     }
     return seedData;
   }
+  return normalizeSiteData(raw);
 }
 
 const PUBLIC_CACHE_TTL_MS = 30_000;
@@ -336,6 +351,11 @@ export async function readPublicSiteData(): Promise<AssociationData> {
       .then((value) => {
         publicCache = { value, expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS };
         return value;
+      })
+      .catch(async (error: unknown) => {
+        // Le site public reste en ligne : dernière version connue, sinon contenu d'exemple (sans l'écrire).
+        console.error("readPublicSiteData: lecture impossible", error);
+        return publicCache?.value ?? (await readDefaultLocalData());
       })
       .finally(() => {
         publicInflight = null;
