@@ -9,7 +9,7 @@ function initialsOf(firstName?: string | null, lastName?: string | null, email?:
   return (letters || email?.trim().charAt(0) || "?").toUpperCase();
 }
 
-export const ACCOUNT_SETTINGS_HREF = "/espace?tab=member#mon-compte";
+export const ACCOUNT_SETTINGS_HREF = "/espace/compte";
 
 export default function AccountMenu() {
   const { user } = useUser();

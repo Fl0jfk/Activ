@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import BureauCockpit from "@/components/bureau-cockpit";
 import CoachPortal from "@/components/coach-portal";
 import MemberPortal from "@/components/member-portal";
@@ -83,10 +83,31 @@ export default function EspaceHub({
   contactChangeRequest,
   defaultTab,
 }: EspaceHubProps) {
-  const [activeTab, setActiveTab] = useState<EspaceTab>(() =>
-    initialTab(canAccessClubOperations, canAccessCoachPortal, defaultTab),
-  );
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const isAllowedTab =
+    requestedTab === "member" ||
+    (requestedTab === "cockpit" && canAccessClubOperations) ||
+    (requestedTab === "coach" && canAccessCoachPortal);
+  const activeTab: EspaceTab = isAllowedTab
+    ? (requestedTab as EspaceTab)
+    : initialTab(canAccessClubOperations, canAccessCoachPortal, defaultTab);
+
+  /** L'onglet vit dans l'adresse (?tab=…) : les liens du menu compte peuvent donc le changer. */
+  function selectTab(tab: EspaceTab) {
+    window.history.replaceState(null, "", `/espace?tab=${tab}`);
+  }
+
+  useEffect(() => {
+    if (activeTab !== "member") return;
+    // Next met l'adresse (et son #ancre) à jour après ce rendu : on attend un instant avant de lire le hash.
+    const timer = window.setTimeout(() => {
+      const anchor = window.location.hash.slice(1);
+      if (anchor) document.getElementById(anchor)?.scrollIntoView();
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [activeTab]);
 
   const pendingCount = useMemo(
     () => allApplications.filter(isDossierEnCours).length + memberRequestPendingCount,
@@ -104,7 +125,7 @@ export default function EspaceHub({
         <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-brand-line bg-white p-1 shadow-[0_10px_30px_-24px_rgba(20,64,127,0.5)]">
           <button
             type="button"
-            onClick={() => setActiveTab("member")}
+            onClick={() => selectTab("member")}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
               activeTab === "member"
                 ? "bg-brand-blue text-white shadow-sm"
@@ -116,7 +137,7 @@ export default function EspaceHub({
           {canAccessClubOperations ? (
             <button
               type="button"
-              onClick={() => setActiveTab("cockpit")}
+              onClick={() => selectTab("cockpit")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 activeTab === "cockpit"
                   ? "bg-brand-blue text-white shadow-sm"
@@ -130,7 +151,7 @@ export default function EspaceHub({
           {canAccessCoachPortal ? (
             <button
               type="button"
-              onClick={() => setActiveTab("coach")}
+              onClick={() => selectTab("coach")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 activeTab === "coach"
                   ? "bg-brand-blue text-white shadow-sm"

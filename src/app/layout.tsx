@@ -44,7 +44,7 @@ export default async function RootLayout({ children}: Readonly<{ children: React
   const data = await readPublicSiteData();
   return (
     <AppClerkProvider>
-      <html lang="fr" className={`${jakarta.variable} h-full antialiased`}>
+      <html lang="fr" data-scroll-behavior="smooth" className={`${jakarta.variable} h-full antialiased`}>
         <body className="min-h-full flex flex-col bg-brand-cream text-slate-900">
           <Header
             facebookUrl={data.association.facebookUrl}

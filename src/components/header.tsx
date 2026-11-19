@@ -56,6 +56,13 @@ function MobileMenu({
           {isSignedIn ? (
             <>
               <Link
+                href="/espace"
+                onClick={onClose}
+                className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue`}
+              >
+                Mon espace
+              </Link>
+              <Link
                 href={ACCOUNT_SETTINGS_HREF}
                 onClick={onClose}
                 className={`${MOBILE_LIST_ROW} text-slate-900 transition-colors hover:text-brand-blue active:text-brand-blue`}
@@ -72,9 +79,6 @@ function MobileMenu({
               >
                 Se déconnecter
               </button>
-              <Link href="/espace" onClick={onClose} className="btn btn-primary mt-6 w-full text-lg">
-                Mon espace
-              </Link>
             </>
           ) : (
             <>
@@ -169,14 +173,7 @@ export default function Header({ facebookUrl, showNewsNav = false }: SiteHeaderP
           </nav>
           <div className="flex items-center gap-3">
             {isSignedIn ? (
-              <>
-                <div className="hidden md:block">
-                  <AccountMenu />
-                </div>
-                <Link href="/espace" className="btn btn-primary btn-sm whitespace-nowrap">
-                  Mon espace
-                </Link>
-              </>
+              <AccountMenu />
             ) : (
               <>
                 <Link

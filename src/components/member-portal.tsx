@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
-import AccountSettings from "@/components/account-settings";
 import MemberContactSection from "@/components/member-contact-section";
 import MemberRequestsSection from "@/components/member-requests-section";
 import PaymentReceiptLink from "@/components/payment-receipt-link";
@@ -230,7 +229,7 @@ export default function MemberPortal({
     contactApplication ? { href: "#mes-coordonnees", label: "Mes coordonnées" } : null,
     { href: "#demandes", label: "Demandes au bureau" },
     { href: "#mes-dossiers", label: "Mes dossiers" },
-    { href: "#mon-compte", label: "Mon compte" },
+    { href: "/espace/compte", label: "Mon compte" },
   ].filter((item): item is { href: string; label: string } => item !== null);
 
   async function uploadDocument(file: File) {
@@ -323,13 +322,13 @@ export default function MemberPortal({
         <p className="mt-2 text-slate-600">Suivez votre inscription, vos séances et vos demandes.</p>
         <nav className="mt-4 flex flex-wrap gap-2" aria-label="Aller à">
           {navLinks.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               className="rounded-full border border-brand-line bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-brand-blue hover:text-brand-blue"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
       </header>
@@ -594,7 +593,15 @@ export default function MemberPortal({
         </section>
       ) : null}
 
-      <AccountSettings hasContactSection={Boolean(contactApplication)} />
+      <section id="mon-compte" className="anchor-section panel flex flex-wrap items-center justify-between gap-4 p-6">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-900">Mon compte</h2>
+          <p className="mt-1 text-sm text-slate-600">Changer mon mot de passe ou me déconnecter de mes appareils.</p>
+        </div>
+        <Link href="/espace/compte" className="btn btn-outline btn-sm">
+          Gérer mon compte
+        </Link>
+      </section>
 
       <details className="group panel p-6">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xl font-extrabold text-slate-900">

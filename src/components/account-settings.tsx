@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useClerk, useReverification, useSession, useUser } from "@clerk/nextjs";
 import { isReverificationCancelledError } from "@clerk/nextjs/errors";
@@ -108,7 +109,7 @@ export default function AccountSettings({ hasContactSection }: AccountSettingsPr
 
   return (
     <section id="mon-compte" className="anchor-section panel p-6">
-      <h2 className="text-xl font-extrabold text-slate-900">Mon compte</h2>
+      <h2 className="text-xl font-extrabold text-slate-900">Connexion et mot de passe</h2>
       <p className="mt-1 text-sm text-slate-600">Votre identifiant de connexion et votre mot de passe.</p>
 
       {!isLoaded ? (
@@ -137,9 +138,9 @@ export default function AccountSettings({ hasContactSection }: AccountSettingsPr
                 <>
                   {" "}
                   dans{" "}
-                  <a href="#mes-coordonnees" className="font-bold text-brand-blue hover:underline">
+                  <Link href="/espace?tab=member#mes-coordonnees" className="font-bold text-brand-blue hover:underline">
                     Mes coordonnées
-                  </a>
+                  </Link>
                 </>
               ) : null}
               . Le bureau la valide, puis met à jour votre fiche et votre compte.

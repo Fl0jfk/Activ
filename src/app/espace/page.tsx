@@ -169,8 +169,9 @@ export default async function EspacePage({
   const newsCount = siteData.news.length;
   const galleryCount = siteData.homeGallery.slides.length;
 
-  const defaultTab =
-    tab === "member" ? "member" : clubOps ? "cockpit" : coachPortal ? "coach" : "member";
+  const requestedTab =
+    tab === "member" || (tab === "cockpit" && clubOps) || (tab === "coach" && coachPortal) ? tab : null;
+  const defaultTab = requestedTab ?? (clubOps ? "cockpit" : coachPortal ? "coach" : "member");
 
   return (
     <EspaceHub
