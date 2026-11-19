@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import {
   BarChart,
   DonutChart,
@@ -17,8 +17,9 @@ import {
   getApplicationDisciplineIds,
   getDossierStep,
   type DossierStep,
-  type QueueFilter,
 } from "@/lib/dossier-workflow";
+import type { DisciplineColor } from "@/lib/discipline-colors";
+import { formatHourLabel } from "@/lib/public-site";
 import type { WeekScheduleEntry } from "@/lib/schedule-week";
 
 type BureauCockpitProps = {
@@ -34,6 +35,8 @@ type BureauCockpitProps = {
   slots: TrialSlotSummary[];
   applications: RegistrationApplication[];
   weekSchedule: WeekScheduleEntry[];
+  disciplineColors: Record<string, DisciplineColor>;
+  upcomingSessions: WeekScheduleEntry[];
 };
 
 const ICON_PATHS = {
@@ -45,7 +48,6 @@ const ICON_PATHS = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </>
   ),
-  check: <path d="M20 6 9 17l-5-5" />,
   calendar: (
     <>
       <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -72,12 +74,6 @@ const ICON_PATHS = {
       <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
     </>
   ),
-  chart: (
-    <>
-      <path d="M3 3v18h18" />
-      <path d="M18 17V9M13 17V5M8 17v-3" />
-    </>
-  ),
   arrow: (
     <>
       <path d="M7 17 17 7" />
@@ -96,57 +92,35 @@ const ICON_PATHS = {
       <path d="M5 19v-2M4 18h2M19 5V3M18 4h2" />
     </>
   ),
+  file: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6M16 13H8M16 17H8" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </>
+  ),
+  chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
 } as const;
 
 type IconName = keyof typeof ICON_PATHS;
 
 const TONE_STYLES = {
-  cyan: {
-    icon: "bg-cyan-50 text-cyan-700",
-    solid: "bg-cyan-500",
-    soft: "bg-cyan-50 text-cyan-700 ring-cyan-100",
-  },
-  emerald: {
-    icon: "bg-emerald-50 text-emerald-700",
-    solid: "bg-emerald-500",
-    soft: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  },
-  amber: {
-    icon: "bg-amber-50 text-amber-700",
-    solid: "bg-amber-500",
-    soft: "bg-amber-50 text-amber-700 ring-amber-100",
-  },
-  violet: {
-    icon: "bg-violet-50 text-violet-700",
-    solid: "bg-violet-500",
-    soft: "bg-violet-50 text-violet-700 ring-violet-100",
-  },
-  rose: {
-    icon: "bg-rose-50 text-rose-700",
-    solid: "bg-rose-500",
-    soft: "bg-rose-50 text-rose-700 ring-rose-100",
-  },
-  slate: {
-    icon: "bg-slate-100 text-slate-600",
-    solid: "bg-slate-500",
-    soft: "bg-slate-100 text-slate-700 ring-slate-200",
-  },
+  blue: { icon: "bg-brand-blue/12 text-brand-blue", pill: "bg-brand-blue text-white" },
+  green: { icon: "bg-brand-green/15 text-brand-green-dark", pill: "bg-brand-green text-white" },
+  orange: { icon: "bg-amber-100 text-amber-800", pill: "bg-brand-orange text-amber-950" },
+  rose: { icon: "bg-rose-100 text-rose-700", pill: "bg-rose-600 text-white" },
+  violet: { icon: "bg-violet-100 text-violet-700", pill: "bg-violet-600 text-white" },
+  slate: { icon: "bg-slate-100 text-slate-600", pill: "bg-slate-600 text-white" },
 } as const;
 
 type Tone = keyof typeof TONE_STYLES;
-
-const DISCIPLINE_COLORS = [
-  "#0891b2",
-  "#0ea5e9",
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#64748b",
-];
-
-const TEACHING_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"] as const;
 
 function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   return (
@@ -165,97 +139,23 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
   );
 }
 
-function SectionHeading({
-  id,
-  eyebrow,
-  title,
-  description,
-  action,
-}: {
-  id?: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div
-      id={id}
-      className="anchor-section flex flex-wrap items-end justify-between gap-3 pt-2"
-    >
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-700">
-          {eyebrow}
-        </p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{title}</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
+const TEACHING_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"] as const;
 
-function MetricCard({
-  eyebrow,
-  label,
-  value,
-  caption,
-  icon,
-  tone,
-  progress,
-  sparkline,
-}: {
-  eyebrow: string;
-  label: string;
-  value: number;
-  caption: string;
-  icon: IconName;
-  tone: Tone;
-  progress?: number;
-  sparkline?: number[];
-}) {
+function EmptyState({ children }: { children: string }) {
   return (
-    <article className="bento-card group relative overflow-hidden p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_26px_60px_-34px_rgba(15,23,42,0.45)]">
-      <div className="flex items-start justify-between gap-3">
-        <span
-          className={`flex h-9 w-9 items-center justify-center rounded-2xl ${TONE_STYLES[tone].icon}`}
-        >
-          <Icon name={icon} className="h-4 w-4" />
-        </span>
-        <span className="text-right text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          {eyebrow}
-        </span>
-      </div>
-      <p className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950">{value}</p>
-      <p className="mt-1 text-sm font-medium text-slate-700">{label}</p>
-      <p className="mt-0.5 text-xs leading-5 text-slate-500">{caption}</p>
-      {sparkline ? (
-        <div className="mt-3">
-          <Sparkline
-            values={sparkline}
-            height={38}
-            color={tone === "violet" ? "#8b5cf6" : "#0891b2"}
-            ariaLabel={`${label} sur la semaine`}
-          />
-        </div>
-      ) : null}
-      {progress !== undefined ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={`h-full rounded-full ${TONE_STYLES[tone].solid}`}
-            style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-          />
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function EmptyState({ children }: { children: ReactNode }) {
-  return (
-    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-sm text-slate-500">
+    <p className="rounded-2xl border border-dashed border-slate-300 bg-brand-cream/60 px-4 py-6 text-sm text-slate-600">
       {children}
     </p>
+  );
+}
+
+function CardTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
+  return (
+    <div className="min-w-0">
+      <span className="eyebrow">{eyebrow}</span>
+      <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">{title}</h2>
+      {description ? <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p> : null}
+    </div>
   );
 }
 
@@ -266,12 +166,11 @@ export default function BureauCockpit({
   memberRequestPendingCount,
   contactChangePendingCount,
   renewalCount,
-  newsCount,
-  galleryCount,
   disciplines,
-  slots,
   applications,
   weekSchedule,
+  disciplineColors,
+  upcomingSessions,
 }: BureauCockpitProps) {
   const metrics = useMemo(() => {
     const steps: Record<DossierStep, number> = {
@@ -299,18 +198,10 @@ export default function BureauCockpit({
       }
     }
 
-    return {
-      enCours,
-      finalises,
-      exclus,
-      tous: applications.length,
-      steps,
-    };
+    return { enCours, finalises, exclus, tous: applications.length, steps };
   }, [applications]);
 
-  const completionRate = Math.round(
-    (metrics.finalises / Math.max(1, metrics.tous)) * 100,
-  );
+  const completionRate = Math.round((metrics.finalises / Math.max(1, metrics.tous)) * 100);
 
   const countsByDiscipline = useMemo(
     () =>
@@ -337,11 +228,7 @@ export default function BureauCockpit({
       const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
       const rawLabel = new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(date);
       const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1).replace(".", "");
-      return {
-        key: `${date.getFullYear()}-${date.getMonth()}`,
-        label,
-        value: 0,
-      };
+      return { key: `${date.getFullYear()}-${date.getMonth()}`, label, value: 0 };
     });
     const byKey = new Map(series.map((item) => [item.key, item]));
 
@@ -356,391 +243,324 @@ export default function BureauCockpit({
   }, [applications]);
 
   const monthlyTotal = monthlySeries.reduce((sum, item) => sum + item.value, 0);
+  const thisMonth = monthlySeries[monthlySeries.length - 1]?.value ?? 0;
+  const lastMonth = monthlySeries[monthlySeries.length - 2]?.value ?? 0;
 
   const weekSeries = useMemo(
     () =>
       TEACHING_DAYS.map((label, index) => {
         const entries = weekSchedule.filter((entry) => entry.dayOfWeek === index + 1);
-        const cancelled = entries.filter((entry) => entry.cancelled).length;
-        return {
-          label,
-          normal: entries.length - cancelled,
-          cancelled,
-          total: entries.length,
-        };
+        return entries.filter((entry) => !entry.cancelled).length;
       }),
     [weekSchedule],
   );
-
-  const weekCancelled = weekSeries.reduce((sum, item) => sum + item.cancelled, 0);
-  const weekActive = weekSchedule.filter((entry) => !entry.cancelled).length;
-  const weekDisciplineCount = new Set(weekSchedule.map((entry) => entry.disciplineId)).size;
-
-  const nextSessions = useMemo(
-    () => weekSchedule.filter((entry) => !entry.cancelled).slice(0, 4),
-    [weekSchedule],
-  );
-
-  const filterOptions: {
-    id: QueueFilter;
-    label: string;
-    value: number;
-  }[] = [
-    { id: "en_cours", label: "En cours", value: metrics.enCours },
-    { id: "finalized", label: "Finalisés", value: metrics.finalises },
-    { id: "all", label: "Tous les dossiers", value: metrics.tous },
-  ];
+  const weekCancelled = weekSchedule.filter((entry) => entry.cancelled).length;
 
   const statusSegments = [
-    { label: "En cours", value: metrics.enCours, color: "#f59e0b" },
-    { label: "Finalisés", value: metrics.finalises, color: "#10b981" },
-    { label: "Refusés / annulés", value: metrics.exclus, color: "#64748b" },
+    { label: "En cours", value: metrics.enCours, color: "#f5a524", href: "/espace/bureau/dossiers?filtre=en_cours" },
+    { label: "Finalisés", value: metrics.finalises, color: "#2e9e4f", href: "/espace/bureau/dossiers?filtre=finalized" },
+    { label: "Refusés ou désinscrits", value: metrics.exclus, color: "#94a3b8", href: "/espace/bureau/dossiers?filtre=refuses" },
   ];
 
   const disciplineChartData = countsByDiscipline.map((item, index) => ({
     label: item.name,
     value: item.count,
-    color: DISCIPLINE_COLORS[index % DISCIPLINE_COLORS.length],
+    color: disciplineColors[item.id]?.bg ?? ["#1f6fd0", "#2e9e4f", "#e23d86", "#f5a524", "#0e8f8a", "#7c5cc4"][index % 6],
   }));
 
-  const priorityItems: {
-    label: string;
-    value: number;
-    tone: Tone;
-    icon: IconName;
-    href: string;
-  }[] = [
+  const priorityItems: { label: string; value: number; tone: Tone; icon: IconName; href: string }[] = [
     {
-      label: "À examiner",
+      label: "Dossiers à examiner",
       value: metrics.steps.new_request + metrics.steps.awaiting_espace,
-      tone: "cyan",
+      tone: "blue",
       icon: "sparkles",
-      href: "/espace/bureau/dossiers?filtre=en_cours",
+      href: "/espace/bureau/dossiers?etape=a_examiner",
     },
     {
       label: "Pièces manquantes",
       value: metrics.steps.missing_document,
       tone: "rose",
-      icon: "users",
-      href: "/espace/bureau/dossiers?filtre=en_cours",
+      icon: "file",
+      href: "/espace/bureau/dossiers?etape=pieces",
     },
     {
       label: "Paiements en attente",
       value: metrics.steps.awaiting_payment,
-      tone: "amber",
+      tone: "orange",
       icon: "clock",
-      href: "/espace/bureau/dossiers?filtre=en_cours",
+      href: "/espace/bureau/dossiers?etape=paiement",
+    },
+    {
+      label: "Coordonnées à valider",
+      value: contactChangePendingCount,
+      tone: "blue",
+      icon: "users",
+      href: "/espace/bureau/dossiers",
+    },
+    {
+      label: "Demandes des adhérents",
+      value: memberRequestPendingCount,
+      tone: "violet",
+      icon: "chat",
+      href: "/espace/bureau/adherents#demandes",
+    },
+    {
+      label: "Licences à renouveler",
+      value: renewalCount,
+      tone: "orange",
+      icon: "refresh",
+      href: "/espace/bureau/adherents#renouvellements",
     },
     ...(canApproveCoachAbsences
       ? [
           {
-            label: "Absences coach",
+            label: "Absences de coach à valider",
             value: coachAbsencePendingCount,
             tone: "violet" as Tone,
             icon: "shield" as IconName,
-            href: "/espace/bureau/planning#absences-coach",
+            href: "/espace/bureau/planning?onglet=absences",
           },
         ]
       : []),
   ];
+  const nothingToDo = priorityItems.every((item) => item.value === 0);
 
-  const toolCards: {
-    eyebrow: string;
+  const tools: {
     title: string;
     description: string;
     href: string;
     icon: IconName;
     tone: Tone;
-    stats: { label: string; value: number; alert?: boolean }[];
+    badge?: number;
+    badgeLabel?: string;
   }[] = [
     {
-      eyebrow: "Inscriptions",
       title: "Dossiers",
-      description:
-        "File de traitement, validation des pièces et adhésions papier reçues au bureau.",
+      description: "Inscriptions, pièces, paiements, adhérents papier.",
       href: "/espace/bureau/dossiers",
       icon: "users",
-      tone: "cyan",
-      stats: [
-        { label: "À traiter", value: metrics.enCours, alert: metrics.enCours > 0 },
-        { label: "Finalisés", value: metrics.finalises },
-        {
-          label: "Coordonnées",
-          value: contactChangePendingCount,
-          alert: contactChangePendingCount > 0,
-        },
-      ],
+      tone: "blue",
+      badge: metrics.enCours,
+      badgeLabel: "à traiter",
     },
     {
-      eyebrow: "Semaine",
-      title: "Essais & planning",
-      description:
-        "Créneaux d’essai, ajustements de séances et validation des absences coach.",
+      title: "Planning",
+      description: "Séances, annulations, essais et absences de coach.",
       href: "/espace/bureau/planning",
       icon: "calendar",
       tone: "violet",
-      stats: [
-        { label: "Créneaux d’essai", value: slots.length },
-        {
-          label: canApproveCoachAbsences ? "Absences à valider" : "Séances cette semaine",
-          value: canApproveCoachAbsences ? coachAbsencePendingCount : weekSchedule.length,
-          alert: canApproveCoachAbsences && coachAbsencePendingCount > 0,
-        },
-      ],
+      badge: canApproveCoachAbsences ? coachAbsencePendingCount : 0,
+      badgeLabel: "absence(s)",
     },
     {
-      eyebrow: "Échanges",
       title: "Communication",
-      description: "Envoyez un e-mail à tous les adhérents, à une activité ou à une personne.",
+      description: "Envoyer un e-mail à tous, à une activité ou à une personne.",
       href: "/espace/bureau/communication",
       icon: "mail",
-      tone: "emerald",
-      stats: [
-        { label: "Adhérents à jour", value: metrics.finalises },
-        { label: "Activités", value: disciplines.length },
-      ],
+      tone: "green",
     },
     {
-      eyebrow: "Support",
-      title: "Adhérents",
-      description: "Demandes envoyées depuis l’espace personnel et licences à renouveler.",
+      title: "Demandes",
+      description: "Demandes des adhérents et licences à renouveler.",
       href: "/espace/bureau/adherents",
-      icon: "shield",
-      tone: "amber",
-      stats: [
-        {
-          label: "Demandes",
-          value: memberRequestPendingCount,
-          alert: memberRequestPendingCount > 0,
-        },
-        { label: "À renouveler", value: renewalCount, alert: renewalCount > 0 },
-      ],
+      icon: "chat",
+      tone: "orange",
+      badge: memberRequestPendingCount + renewalCount,
+      badgeLabel: "à voir",
     },
     ...(canManageSite
       ? [
           {
-            eyebrow: "Publication",
             title: "Contenu du site",
-            description:
-              "Actualités, galerie d’accueil et informations de l’association. Les anciennes actualités sont archivées.",
+            description: "Actualités, photos de l’accueil, informations de l’association.",
             href: "/espace/bureau/contenu",
             icon: "image" as IconName,
             tone: "slate" as Tone,
-            stats: [
-              { label: "Actualités", value: newsCount },
-              { label: "Photos", value: galleryCount },
-            ],
           },
         ]
       : []),
   ];
 
   return (
-    <div className="mx-auto mt-6 min-w-0 w-full max-w-6xl space-y-6 overflow-x-hidden px-4 pb-16 sm:px-8">
+    <div className="mx-auto mt-6 w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden px-4 pb-16 sm:px-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-cyan-700">
-            Espace bureau
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-            Cockpit bureau
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            {canManageSite
-              ? "Vue d’ensemble des inscriptions, du planning et de la communication. Chaque outil s’ouvre sur sa propre page."
-              : "Vue d’ensemble des pré-inscriptions, des essais et des e-mails. Chaque outil s’ouvre sur sa propre page."}
+          <span className="eyebrow">Espace bureau</span>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Cockpit bureau</h1>
+          <p className="mt-2 max-w-2xl text-[15px] leading-6 text-slate-600">
+            Ce qui demande votre attention aujourd’hui, et l’essentiel de la vie de l’association.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Données à jour
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
-            <Icon name="clock" className="h-3.5 w-3.5" />
-            {metrics.enCours} à traiter
-          </span>
+          <Link href="/espace/bureau/dossiers#adherent-papier" className="btn btn-outline btn-sm">
+            <Icon name="plus" className="h-4 w-4" />
+            Adhérent papier
+          </Link>
+          <Link href="/espace/bureau/communication" className="btn btn-primary btn-sm">
+            <Icon name="mail" className="h-4 w-4" />
+            Écrire un e-mail
+          </Link>
         </div>
       </header>
 
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12">
-        <section className="relative overflow-hidden rounded-[2rem] border border-slate-800/60 bg-slate-950 p-5 text-white shadow-[0_30px_80px_-42px_rgba(2,6,23,0.9)] sm:p-6 lg:col-span-5">
+        <section className="relative overflow-hidden rounded-[2rem] bg-brand-blue-dark p-5 text-white shadow-[0_30px_70px_-40px_rgba(20,64,127,0.9)] sm:p-6 lg:col-span-5">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl"
+            className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-brand-orange/25 blur-3xl"
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl"
+            className="pointer-events-none absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-brand-pink/20 blur-3xl"
           />
           <div className="relative flex h-full flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
-                  Vue d&apos;ensemble
-                </p>
-                <h2 className="mt-2 text-lg font-semibold tracking-tight text-white">
-                  Dossiers d&apos;adhésion
-                </h2>
-              </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/60">
-                Temps réel
-              </span>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/70">Vue d’ensemble</span>
+            <h2 className="mt-1 text-xl font-extrabold tracking-tight">Dossiers d’adhésion</h2>
 
-            <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row">
-              <div className="h-40 w-40 shrink-0 sm:h-44 sm:w-44">
+            <div className="my-auto flex flex-col items-center gap-6 py-6 sm:flex-row lg:flex-col xl:flex-row">
+              <div className="h-44 w-44 shrink-0">
                 <DonutChart
                   segments={statusSegments}
                   centerValue={metrics.enCours}
                   centerLabel="en cours"
-                  ariaLabel={`${metrics.enCours} dossiers en cours, ${metrics.finalises} finalisés, ${metrics.exclus} refusés ou annulés`}
+                  ariaLabel={`${metrics.enCours} dossiers en cours, ${metrics.finalises} finalisés, ${metrics.exclus} refusés ou désinscrits`}
                 />
               </div>
               <div className="w-full space-y-2">
-                {filterOptions.map((option) => (
+                {statusSegments.map((segment) => (
                   <Link
-                    key={option.id}
-                    href={`/espace/bureau/dossiers?filtre=${option.id}`}
-                    className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left transition hover:border-white/20 hover:bg-white/[0.08]"
+                    key={segment.label}
+                    href={segment.href}
+                    className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.07] px-3.5 py-2.5 text-sm transition hover:border-white/30 hover:bg-white/[0.14]"
                   >
-                    <span className="flex items-center gap-2.5 text-sm text-white/75 lg:text-xs xl:text-sm">
-                      {option.label}
+                    <span className="flex items-center gap-2.5 text-white/90">
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                      {segment.label}
                     </span>
-                    <span className="flex items-center gap-2 text-sm font-semibold text-white lg:text-xs xl:text-sm">
-                      {option.value}
-                      <Icon
-                        name="arrow"
-                        className="h-3.5 w-3.5 text-white/30 transition group-hover:text-white/70 lg:h-3 lg:w-3 xl:h-3.5 xl:w-3.5"
-                      />
+                    <span className="flex items-center gap-2 font-extrabold text-white">
+                      {segment.value}
+                      <Icon name="arrow" className="h-3.5 w-3.5 text-white/40 transition group-hover:text-white" />
                     </span>
                   </Link>
                 ))}
+                <Link
+                  href="/espace/bureau/dossiers?filtre=all"
+                  className="block px-1 pt-1 text-sm font-semibold text-white/80 underline-offset-4 hover:text-white hover:underline"
+                >
+                  Voir les {metrics.tous} dossiers →
+                </Link>
               </div>
             </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-medium text-white/60">
-              {statusSegments.map((segment) => (
-                <span key={segment.label} className="flex items-center gap-1.5">
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: segment.color }}
-                  />
-                  {segment.label} · {segment.value}
-                </span>
-              ))}
-            </div>
-
-            <p className="mt-auto pt-4 text-[11px] leading-5 text-white/50">
-              Chaque ligne ouvre la file de traitement correspondante sur la page Dossiers.
-            </p>
           </div>
         </section>
 
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:col-span-7">
-          <MetricCard
-            eyebrow="Dossiers clos"
-            label="Finalisés"
-            value={metrics.finalises}
-            caption={`${completionRate}% des dossiers traités`}
-            icon="check"
-            tone="emerald"
-            progress={completionRate}
-          />
-
-          <article className="bento-card flex items-center gap-4 p-4">
-            <RadialProgress value={completionRate} label="Taux de finalisation" />
-            <div className="min-w-0">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Qualité du suivi
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">Taux de finalisation</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                {metrics.finalises} sur {metrics.tous} dossiers finalisés.
-              </p>
+        <div className="grid min-w-0 gap-4 lg:col-span-7">
+          <section className="panel p-5 sm:p-6">
+            <CardTitle eyebrow="Priorités" title="À traiter maintenant" />
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {priorityItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`group flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 transition hover:border-brand-blue/40 hover:bg-white ${
+                    item.value > 0 ? "border-brand-line bg-brand-cream/70" : "border-brand-line/70 bg-white opacity-70"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${TONE_STYLES[item.tone].icon}`}
+                    >
+                      <Icon name={item.icon} className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800">{item.label}</span>
+                  </span>
+                  <span
+                    className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-extrabold ${
+                      item.value > 0 ? TONE_STYLES[item.tone].pill : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {item.value}
+                  </span>
+                </Link>
+              ))}
             </div>
-          </article>
+            {nothingToDo ? (
+              <p className="mt-3 rounded-2xl bg-brand-green/12 px-4 py-3 text-sm font-semibold text-brand-green-dark">
+                Rien à traiter pour le moment. Bravo !
+              </p>
+            ) : null}
+          </section>
 
-          <MetricCard
-            eyebrow="Cette semaine"
-            label="Séances au planning"
-            value={weekSchedule.length}
-            caption={
-              weekCancelled > 0
-                ? `${weekCancelled} séance(s) annulée(s)`
-                : "Aucune annulation cette semaine"
-            }
-            icon="calendar"
-            tone="cyan"
-            sparkline={weekSeries.map((item) => item.normal)}
-          />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <article className="panel p-4">
+              <p className="text-sm font-bold text-slate-900">Dossiers finalisés</p>
+              <div className="mt-2 flex items-center gap-3">
+                <RadialProgress
+                  value={completionRate}
+                  label="Taux de dossiers finalisés"
+                  size={96}
+                  className="h-[88px] w-[88px] shrink-0"
+                />
+                <p className="text-sm leading-5 text-slate-600">
+                  <span className="block text-2xl font-extrabold text-slate-900">{metrics.finalises}</span>
+                  sur {metrics.tous}
+                </p>
+              </div>
+            </article>
 
-          {canApproveCoachAbsences ? (
-            <MetricCard
-              eyebrow="À valider"
-              label="Absences coach"
-              value={coachAbsencePendingCount}
-              caption={
-                coachAbsencePendingCount > 0
-                  ? "Demandes en attente de validation"
-                  : "Tout est à jour"
-              }
-              icon="shield"
-              tone="violet"
-            />
-          ) : (
-            <MetricCard
-              eyebrow="Catalogue"
-              label="Activités actives"
-              value={disciplines.length}
-              caption="Disciplines proposées par l'association"
-              icon="chart"
-              tone="cyan"
-            />
-          )}
+            <article className="panel p-4">
+              <p className="text-sm font-bold text-slate-900">Séances cette semaine</p>
+              <p className="mt-2 text-4xl font-extrabold tracking-tight text-slate-900">{weekSchedule.length}</p>
+              <p className="text-sm text-slate-600">
+                {weekCancelled > 0 ? `dont ${weekCancelled} annulée${weekCancelled > 1 ? "s" : ""}` : "aucune annulation"}
+              </p>
+              <div className="mt-2">
+                <Sparkline values={weekSeries} height={36} color="#1f6fd0" ariaLabel="Séances par jour sur la semaine" />
+              </div>
+            </article>
+
+            <article className="panel p-4">
+              <p className="text-sm font-bold text-slate-900">Reçus ce mois-ci</p>
+              <p className="mt-2 text-4xl font-extrabold tracking-tight text-slate-900">{thisMonth}</p>
+              <p className="text-sm text-slate-600">
+                {lastMonth} le mois dernier
+              </p>
+              <div className="mt-2">
+                <Sparkline
+                  values={monthlySeries.map((item) => item.value)}
+                  height={36}
+                  color="#2e9e4f"
+                  ariaLabel="Dossiers reçus par mois"
+                />
+              </div>
+            </article>
+          </div>
         </div>
 
-        <section className="bento-card p-5 sm:p-6 lg:col-span-7">
+        <section className="panel p-5 sm:p-6 lg:col-span-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-700">
-                Activités
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-                Répartition des dossiers
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Nombre de demandes par activité, toutes périodes confondues.
-              </p>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            <CardTitle
+              eyebrow="Activités"
+              title="Adhérents par activité"
+              description="Un adhérent compte dans chacune de ses activités (dossiers refusés ou désinscrits exclus)."
+            />
+            <span className="rounded-full bg-brand-blue/10 px-3 py-1 text-sm font-bold text-brand-blue-dark">
               {disciplines.length} activités
             </span>
           </div>
-          <div className="mt-5 max-h-64 overflow-y-auto pr-1">
+          <div className="mt-5">
             {disciplineChartData.length > 0 ? (
-              <HorizontalBars
-                data={disciplineChartData}
-                ariaLabel="Nombre de dossiers par activité"
-              />
+              <HorizontalBars data={disciplineChartData} ariaLabel="Nombre d’adhérents par activité" />
             ) : (
               <EmptyState>Aucune activité configurée pour le moment.</EmptyState>
             )}
           </div>
         </section>
 
-        <section className="bento-card p-5 sm:p-6 lg:col-span-5">
+        <section className="panel p-5 sm:p-6 lg:col-span-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-700">
-                Tendance
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-                Rythme des inscriptions
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">Dossiers reçus sur les 6 derniers mois.</p>
-            </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            <CardTitle eyebrow="Tendance" title="Rythme des inscriptions" description="Dossiers reçus sur les 6 derniers mois." />
+            <span className="rounded-full bg-brand-blue/10 px-3 py-1 text-sm font-bold text-brand-blue-dark">
               {monthlyTotal} sur 6 mois
             </span>
           </div>
@@ -748,7 +568,7 @@ export default function BureauCockpit({
             <BarChart
               data={monthlySeries}
               height={210}
-              color="#0891b2"
+              color="#1f6fd0"
               valueSuffix=" dossier(s)"
               ariaLabel={`Répartition mensuelle des inscriptions : ${monthlySeries
                 .map((item) => `${item.label} ${item.value}`)
@@ -757,228 +577,87 @@ export default function BureauCockpit({
           </div>
         </section>
 
-        <section className="bento-card flex h-full flex-col p-5 sm:p-6 lg:col-span-8">
+        <section className="panel flex flex-col p-5 sm:p-6 lg:col-span-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-700">
-                Planning
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-                Charge de la semaine
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Chaque séance est positionnée selon son horaire réel.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-rose-400" />
-                Annulée
-              </span>
-              <span className="hidden sm:inline">Survolez un bloc pour le détail</span>
-            </div>
+            <CardTitle
+              eyebrow="Planning"
+              title="La semaine en cours"
+              description="Chaque séance est placée selon son horaire réel."
+            />
+            <Link href="/espace/bureau/planning" className="text-sm font-bold text-brand-blue hover:underline">
+              Ouvrir le planning →
+            </Link>
           </div>
 
-          <div className="mt-5 min-w-0 space-y-4">
-            <div className="min-w-0">
-              <WeekCalendar
-                entries={weekSchedule}
-                ariaLabel={`Planning de la semaine : ${weekSchedule
-                  .map(
-                    (entry) =>
-                      `${entry.dayLabel} ${entry.startTime} ${entry.disciplineName}${
-                        entry.cancelled ? " annulée" : ""
-                      }`,
-                  )
-                  .join(", ")}`}
-              />
-              {weekSchedule.length === 0 ? (
-                <p className="mt-2 text-xs text-slate-500">
-                  Aucune séance programmée cette semaine.
-                </p>
-              ) : null}
-            </div>
-
-            <div className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Prochaines séances
-              </p>
-              {nextSessions.length > 0 ? (
-                <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {nextSessions.map((entry) => (
-                    <li key={entry.id} className="flex min-w-0 gap-3">
-                      <span className="w-10 shrink-0 text-xs font-semibold text-cyan-700">
-                        {entry.startTime}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold text-slate-800">
-                          {entry.disciplineName}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[11px] text-slate-500">
-                          {entry.dayLabel}
-                          {entry.location ? ` · ${entry.location}` : ""}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Aucune séance à venir sur la semaine en cours.
-                </p>
-              )}
-            </div>
+          <div className="mt-5 min-w-0">
+            <WeekCalendar
+              entries={weekSchedule}
+              colors={disciplineColors}
+              ariaLabel={`Planning de la semaine : ${weekSchedule
+                .map((entry) => `${entry.dayLabel} ${entry.startTime} ${entry.disciplineName}${entry.cancelled ? " annulée" : ""}`)
+                .join(", ")}`}
+            />
+            {weekSchedule.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-600">Aucune séance programmée cette semaine.</p>
+            ) : null}
           </div>
 
-          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-4">
-            {[
-              { label: "Séances actives", value: weekActive, tone: "text-cyan-700" },
-              { label: "Annulées", value: weekCancelled, tone: "text-rose-600" },
-              { label: "Activités", value: weekDisciplineCount, tone: "text-slate-900" },
-              { label: "Créneaux d'essai", value: slots.length, tone: "text-slate-900" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl bg-slate-50/80 px-3 py-2.5">
-                <p className={`text-lg font-semibold tracking-tight ${item.tone}`}>{item.value}</p>
-                <p className="mt-0.5 text-[11px] font-medium text-slate-500">{item.label}</p>
-              </div>
-            ))}
+          <div className="mt-5 rounded-2xl border border-brand-line bg-brand-cream/60 p-4">
+            <p className="text-sm font-bold text-slate-900">Prochaines séances</p>
+            {upcomingSessions.length > 0 ? (
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                {upcomingSessions.map((entry) => (
+                  <li key={entry.id} className="flex min-w-0 items-center gap-3">
+                    <span
+                      className="h-10 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: disciplineColors[entry.disciplineId]?.bg ?? "#1f6fd0" }}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 text-sm">
+                      <span className="block truncate font-bold text-slate-900">{entry.disciplineName}</span>
+                      <span className="block truncate text-slate-600">
+                        {entry.dayLabel}, {formatHourLabel(entry.startTime)}
+                        {entry.location ? ` · ${entry.location}` : ""}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600">Aucune séance à venir pour le moment.</p>
+            )}
           </div>
         </section>
 
-        <section className="bento-card p-5 sm:p-6 lg:col-span-4">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-700">
-              Priorités
-            </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-              À traiter maintenant
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Les points qui demandent une action rapide.
-            </p>
-          </div>
-
+        <section className="panel p-5 sm:p-6 lg:col-span-4">
+          <CardTitle eyebrow="Raccourcis" title="Outils du bureau" />
           <div className="mt-4 space-y-2">
-            {priorityItems.map((item) => (
+            {tools.map((tool) => (
               <Link
-                key={item.label}
-                href={item.href}
-                className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-left transition hover:border-slate-200 hover:bg-white"
+                key={tool.href}
+                href={tool.href}
+                className="group flex items-center gap-3 rounded-2xl border border-brand-line bg-white px-3.5 py-3 transition hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-[0_14px_30px_-22px_rgba(20,64,127,0.6)]"
               >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${TONE_STYLES[item.tone].icon}`}
-                  >
-                    <Icon name={item.icon} className="h-4 w-4" />
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TONE_STYLES[tool.tone].icon}`}>
+                  <Icon name={tool.icon} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2 font-extrabold text-slate-900">
+                    {tool.title}
+                    {tool.badge ? (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${TONE_STYLES[tool.tone].pill}`}>
+                        {tool.badge} {tool.badgeLabel}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="truncate text-sm font-medium text-slate-700">{item.label}</span>
+                  <span className="block text-sm leading-5 text-slate-600">{tool.description}</span>
                 </span>
-                <span className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-950">{item.value}</span>
-                  <span className="text-slate-300 transition group-hover:text-slate-500">→</span>
-                </span>
+                <Icon name="arrow" className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-blue" />
               </Link>
             ))}
-          </div>
-
-          {priorityItems.every((item) => item.value === 0) ? (
-            <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-700">
-              Rien à traiter pour le moment.
-            </p>
-          ) : null}
-
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Actions rapides
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link
-                href="/espace/bureau/communication"
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
-              >
-                <Icon name="mail" className="h-4 w-4 text-cyan-600" />
-                Écrire un e-mail
-              </Link>
-              <Link
-                href="/espace/bureau/dossiers#adherent-papier"
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
-              >
-                <Icon name="plus" className="h-4 w-4 text-cyan-600" />
-                Adhérent papier
-              </Link>
-              <Link
-                href="/espace/bureau/planning"
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
-              >
-                <Icon name="calendar" className="h-4 w-4 text-cyan-600" />
-                Planning
-              </Link>
-              {canManageSite ? (
-                <Link
-                  href="/espace/bureau/contenu"
-                  className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left text-xs font-semibold text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/60 hover:text-cyan-800"
-                >
-                  <Icon name="image" className="h-4 w-4 text-cyan-600" />
-                  Contenu du site
-                </Link>
-              ) : null}
-            </div>
           </div>
         </section>
       </div>
-      <section className="anchor-section space-y-4 pt-2">
-        <SectionHeading
-          eyebrow="Raccourcis"
-          title="Outils du bureau"
-          description="Chaque outil a sa propre page : le cockpit reste léger et les formulaires lourds sont à portée de clic."
-        />
-
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {toolCards.map((card) => (
-            <Link
-              key={card.href}
-              href={card.href}
-              className="bento-card group flex min-w-0 flex-col p-5 transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_26px_60px_-34px_rgba(15,23,42,0.45)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-2xl ${TONE_STYLES[card.tone].icon}`}
-                >
-                  <Icon name={card.icon} className="h-5 w-5" />
-                </span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition group-hover:border-cyan-200 group-hover:text-cyan-700">
-                  <Icon name="arrow" className="h-3.5 w-3.5" />
-                </span>
-              </div>
-              <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                {card.eyebrow}
-              </p>
-              <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
-                {card.title}
-              </h3>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{card.description}</p>
-              <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
-                {card.stats.map((stat) => (
-                  <div key={stat.label} className="rounded-2xl bg-slate-50/80 px-3 py-2.5">
-                    <p
-                      className={`text-lg font-semibold tracking-tight ${
-                        stat.alert ? "text-amber-600" : "text-slate-900"
-                      }`}
-                    >
-                      {stat.value}
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        <p className="text-xs leading-5 text-slate-500">
-          Astuce : les priorités et les actions rapides ci-dessus ouvrent directement la bonne page.
-        </p>
-      </section>
     </div>
   );
 }

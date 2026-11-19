@@ -1,19 +1,22 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-export const formLabelClass = "flex flex-col gap-1 text-sm font-medium text-slate-700";
-export const formInputClass = "rounded-xl border border-slate-300 px-3 py-2 font-normal";
+export const formLabelClass = "block";
+export const formInputClass = "field";
 
 type FormFieldProps = {
   label: string;
   children: ReactNode;
   className?: string;
+  /** Aide courte affichée sous le champ. */
+  hint?: string;
 };
 
-export function FormField({ label, children, className }: FormFieldProps) {
+export function FormField({ label, children, className, hint }: FormFieldProps) {
   return (
     <label className={`${formLabelClass}${className ? ` ${className}` : ""}`}>
-      {label}
+      <span className="field-label">{label}</span>
       {children}
+      {hint ? <span className="mt-1 block text-xs text-slate-600">{hint}</span> : null}
     </label>
   );
 }

@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
 import { requireClubOps } from "@/lib/api-auth";
 import { jsonError, jsonOk } from "@/lib/api-response";
-import { notifyDisciplineSessionCancelled } from "@/lib/session-cancel-notify";
+import { notifySessionCancelledSafely } from "@/lib/session-cancel-notify";
 import { readSiteData } from "@/lib/site-data";
 
+/**
+ * Renvoie l'e-mail d'annulation pour des séances DÉJÀ annulées (nouvel essai après un échec d'envoi).
+ * Le motif est celui enregistré : on ne peut pas envoyer de texte libre aux adhérents depuis ici.
+ */
 export async function POST(request: NextRequest) {
   const auth = await requireClubOps();
   if (!auth.ok) {
@@ -14,54 +18,67 @@ export async function POST(request: NextRequest) {
     cancellations?: {
       scheduleSlotId?: string;
       date?: string;
-      reason?: string;
-      disciplineId?: string;
     }[];
   };
 
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
-    return jsonError("Corps de requête invalide.", 400);
+    return jsonError("Requête invalide.", 400);
   }
 
   const cancellations = Array.isArray(payload.cancellations) ? payload.cancellations : [];
   if (cancellations.length === 0) {
-    return jsonOk({ message: "Aucune notification à envoyer.", notified: 0 });
+    return jsonOk({ message: "Aucune notification à envoyer.", notified: 0, failed: 0, recipientCount: 0 });
   }
 
-  const siteData = await readSiteData();
-  let notified = 0;
-  let sent = 0;
-  let failed = 0;
+  try {
+    const siteData = await readSiteData();
+    let notified = 0;
+    let failed = 0;
+    let recipientCount = 0;
+    let processed = 0;
+    let notifyError: string | undefined;
 
-  for (const item of cancellations) {
-    const scheduleSlotId = item.scheduleSlotId?.trim() ?? "";
-    const date = item.date?.trim() ?? "";
-    const reason = item.reason?.trim() ?? "";
-    if (!scheduleSlotId || !date) continue;
+    for (const item of cancellations) {
+      const scheduleSlotId = item.scheduleSlotId?.trim() ?? "";
+      const date = item.date?.trim() ?? "";
+      if (!scheduleSlotId || !date) continue;
 
-    const slot = siteData.schedule.find((entry) => entry.id === scheduleSlotId);
-    const disciplineId = item.disciplineId?.trim() || slot?.disciplineId;
-    if (!disciplineId) continue;
+      const slot = siteData.schedule.find((entry) => entry.id === scheduleSlotId);
+      const exception = siteData.scheduleExceptions.find(
+        (entry) => entry.scheduleSlotId === scheduleSlotId && entry.date === date,
+      );
+      if (!slot || !exception) continue;
 
-    const result = await notifyDisciplineSessionCancelled({
-      disciplineId,
-      sessionDate: date,
-      reason,
+      const outcome = await notifySessionCancelledSafely({
+        disciplineId: slot.disciplineId,
+        sessionDate: date,
+        reason: exception.reason,
+      });
+      processed += 1;
+      notified += outcome.notified;
+      failed += outcome.failed;
+      recipientCount += outcome.recipientCount;
+      notifyError = notifyError ?? outcome.notifyError;
+    }
+
+    if (processed === 0) {
+      return jsonError("Cette séance n'est pas annulée : aucun e-mail n'a été envoyé.", 404);
+    }
+
+    return jsonOk({
+      message:
+        recipientCount === 0
+          ? "Aucun adhérent à prévenir pour cette activité."
+          : `${notified} adhérent${notified > 1 ? "s" : ""} prévenu${notified > 1 ? "s" : ""} par e-mail.`,
+      notified,
+      failed,
+      recipientCount,
+      ...(notifyError ? { notifyError } : {}),
     });
-    notified += 1;
-    sent += result.sent;
-    failed += result.failed;
+  } catch (error) {
+    console.error("Failed to notify cancellations", error);
+    return jsonError("Erreur serveur : les e-mails n'ont pas pu être envoyés.", 500);
   }
-
-  return jsonOk({
-    message:
-      notified === 0
-        ? "Aucune notification envoyée."
-        : `Adhérents prévenus pour ${notified} annulation${notified > 1 ? "s" : ""} (${sent} e-mail${sent > 1 ? "s" : ""}).`,
-    notified,
-    sent,
-    failed,
-  });
 }

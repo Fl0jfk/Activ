@@ -1,271 +1,330 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChangeEvent, useCallback, useEffect, useState, useTransition } from "react";
+import { Badge, EmptyState, SectionCard, StatusMessage, type Feedback } from "@/components/bureau-ui";
 import type { MemberRequest, MemberRequestDocument } from "@/lib/club-data";
 import { RichTextContent } from "@/lib/chat-message-links";
-import {
-  MEMBER_REQUEST_STATUS_LABELS,
-  memberRequestStatusBadgeClass,
-} from "@/lib/member-request";
+import { fetchJson, jsonInit, type ApiResult } from "@/lib/fetch-json";
+import { MEMBER_REQUEST_STATUS_LABELS } from "@/lib/member-request";
+
+type Draft = { reply: string; attachment: MemberRequestDocument | null };
+
+type RequestsResult = ApiResult<{ open?: MemberRequest[]; recent?: MemberRequest[] }>;
+
+function fetchRequests(): Promise<RequestsResult> {
+  return fetchJson<{ open?: MemberRequest[]; recent?: MemberRequest[] }>("/api/club/member-requests");
+}
 
 export default function MemberRequestsPanel() {
+  const router = useRouter();
+  const [, startRefresh] = useTransition();
   const [open, setOpen] = useState<MemberRequest[]>([]);
   const [recent, setRecent] = useState<MemberRequest[]>([]);
-  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [treatDrafts, setTreatDrafts] = useState<
-    Record<string, { reply: string; attachment: MemberRequestDocument | null }>
-  >({});
+  const [itemFeedback, setItemFeedback] = useState<Record<string, Feedback>>({});
+  const [doneFeedback, setDoneFeedback] = useState<Feedback>(null);
+  const [treatDrafts, setTreatDrafts] = useState<Record<string, Draft>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const response = await fetch("/api/club/member-requests");
-    if (!response.ok) {
-      setStatusMessage("Impossible de charger les demandes membres.");
-      setLoading(false);
-      return;
+  const applyResult = useCallback((result: RequestsResult) => {
+    if (!result.ok || !result.data) {
+      setLoadError(result.message || "Impossible de charger les demandes des membres.");
+    } else {
+      setLoadError("");
+      setOpen(result.data.open ?? []);
+      setRecent(result.data.recent ?? []);
     }
-    const payload = (await response.json()) as {
-      open?: MemberRequest[];
-      recent?: MemberRequest[];
-    };
-    setOpen(payload.open ?? []);
-    setRecent(payload.recent ?? []);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = useCallback(async () => {
+    applyResult(await fetchRequests());
+  }, [applyResult]);
 
-  function draftFor(id: string) {
+  useEffect(() => {
+    let cancelled = false;
+    void fetchRequests().then((result) => {
+      if (!cancelled) applyResult(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyResult]);
+
+  function retryLoad() {
+    setLoading(true);
+    void load();
+  }
+
+  function draftFor(id: string): Draft {
     return treatDrafts[id] ?? { reply: "", attachment: null };
   }
 
-  function updateDraft(
-    id: string,
-    patch: Partial<{ reply: string; attachment: MemberRequestDocument | null }>,
-  ) {
+  function updateDraft(id: string, patch: Partial<Draft>) {
     setTreatDrafts((previous) => ({
       ...previous,
       [id]: { ...draftFor(id), ...patch },
     }));
   }
 
-  async function uploadDocument(file: File): Promise<MemberRequestDocument> {
-    const body = new FormData();
-    body.append("file", file);
-    const response = await fetch("/api/club/documents", { method: "POST", body });
-    const payload = (await response.json()) as MemberRequestDocument & { message?: string };
-    if (!response.ok || !payload.name || !payload.url || !payload.uploadedAt) {
-      throw new Error(payload.message ?? "Upload impossible.");
-    }
-    return { name: payload.name, url: payload.url, uploadedAt: payload.uploadedAt };
+  function setFeedbackFor(id: string, feedback: Feedback) {
+    setItemFeedback((previous) => ({ ...previous, [id]: feedback }));
   }
 
-  async function handleAttachment(
-    requestId: string,
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
+  async function handleAttachment(requestId: string, event: ChangeEvent<HTMLInputElement>) {
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
     setBusyId(requestId);
-    setStatusMessage("");
+    setFeedbackFor(requestId, null);
     try {
-      const uploaded = await uploadDocument(file);
-      updateDraft(requestId, { attachment: uploaded });
-      setStatusMessage("Pièce jointe ajoutée.");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Erreur d'upload.");
+      const body = new FormData();
+      body.append("file", file);
+      const result = await fetchJson<Partial<MemberRequestDocument>>("/api/club/documents", {
+        method: "POST",
+        body,
+      });
+      const uploaded = result.data;
+      if (!result.ok || !uploaded?.name || !uploaded.url || !uploaded.uploadedAt) {
+        setFeedbackFor(requestId, {
+          tone: "error",
+          text: result.message || "Le fichier n’a pas pu être envoyé. Vérifiez-le puis réessayez.",
+        });
+        return;
+      }
+      updateDraft(requestId, {
+        attachment: { name: uploaded.name, url: uploaded.url, uploadedAt: uploaded.uploadedAt },
+      });
+      setFeedbackFor(requestId, { tone: "success", text: "Pièce jointe ajoutée." });
     } finally {
       setBusyId(null);
-      event.target.value = "";
+      input.value = "";
     }
   }
 
-  async function startRequest(id: string) {
-    setBusyId(id);
-    setStatusMessage("");
-    const response = await fetch(`/api/club/member-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "start" }),
-    });
-    const payload = (await response.json()) as { message?: string };
-    setStatusMessage(payload.message ?? (response.ok ? "OK" : "Erreur."));
-    setBusyId(null);
-    if (response.ok) await load();
+  async function startRequest(request: MemberRequest) {
+    setBusyId(request.id);
+    setFeedbackFor(request.id, null);
+    setDoneFeedback(null);
+    try {
+      const result = await fetchJson(
+        `/api/club/member-requests/${request.id}`,
+        jsonInit("PATCH", { action: "start" }),
+      );
+      if (!result.ok) {
+        setFeedbackFor(request.id, {
+          tone: "error",
+          text: result.message || "La demande n’a pas pu être prise en charge. Réessayez dans un instant.",
+        });
+        return;
+      }
+      setFeedbackFor(request.id, { tone: "success", text: "Vous avez pris cette demande en charge." });
+      await load();
+      startRefresh(() => router.refresh());
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  async function treatRequest(id: string) {
-    const draft = draftFor(id);
+  async function treatRequest(request: MemberRequest) {
+    const draft = draftFor(request.id);
     if (!draft.reply.trim()) {
-      setStatusMessage("Ajoutez un message de réponse avant de clôturer.");
+      setFeedbackFor(request.id, {
+        tone: "error",
+        text: "Écrivez d’abord un message de réponse pour l’adhérent, puis marquez la demande comme traitée.",
+      });
       return;
     }
-    setBusyId(id);
-    setStatusMessage("");
-    const response = await fetch(`/api/club/member-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "treat",
-        bureauReply: draft.reply,
-        bureauAttachment: draft.attachment,
-      }),
-    });
-    const payload = (await response.json()) as { message?: string };
-    setStatusMessage(payload.message ?? (response.ok ? "OK" : "Erreur."));
-    setBusyId(null);
-    if (response.ok) {
+    setBusyId(request.id);
+    setFeedbackFor(request.id, null);
+    setDoneFeedback(null);
+    try {
+      const result = await fetchJson(
+        `/api/club/member-requests/${request.id}`,
+        jsonInit("PATCH", {
+          action: "treat",
+          bureauReply: draft.reply,
+          bureauAttachment: draft.attachment,
+        }),
+      );
+      if (!result.ok) {
+        setFeedbackFor(request.id, {
+          tone: "error",
+          text: result.message || "La réponse n’a pas pu être enregistrée. Réessayez dans un instant.",
+        });
+        return;
+      }
       setTreatDrafts((previous) => {
         const next = { ...previous };
-        delete next[id];
+        delete next[request.id];
         return next;
       });
+      setDoneFeedback({
+        tone: "success",
+        text: `La demande « ${request.subject} » est traitée : ${request.memberName} peut lire votre réponse.`,
+      });
       await load();
+      startRefresh(() => router.refresh());
+    } finally {
+      setBusyId(null);
     }
-  }
-
-  if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des demandes membres…</p>;
   }
 
   return (
-    <div className="space-y-4">
-      {statusMessage ? (
-        <p className="text-sm text-slate-700" role="status">
-          {statusMessage}
-        </p>
-      ) : null}
-
-      {open.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-          Aucune demande en attente.
-        </p>
+    <SectionCard
+      id="demandes"
+      eyebrow="Bureau · Demandes"
+      title="Demandes des membres"
+      description="Demandes envoyées depuis l’espace personnel. Prenez-les en charge, répondez, puis marquez-les comme traitées."
+      action={!loading && open.length > 0 ? <Badge tone="orange">{open.length} en attente</Badge> : null}
+    >
+      {loading ? (
+        <p className="text-sm text-slate-600">Chargement des demandes…</p>
       ) : (
-        <div className="space-y-3">
-          {open.map((request) => {
-            const draft = draftFor(request.id);
-            const busy = busyId === request.id;
-            return (
-              <article
-                key={request.id}
-                className="min-w-0 rounded-xl border border-cyan-200 bg-cyan-50/70 p-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-slate-900">{request.subject}</p>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${memberRequestStatusBadgeClass(request.status)}`}
-                  >
-                    {MEMBER_REQUEST_STATUS_LABELS[request.status]}
-                  </span>
-                </div>
-                <p className="text-break mt-1 text-sm text-slate-700">
-                  {request.memberName} — {request.memberEmail}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Reçue le{" "}
-                  {new Date(request.createdAt).toLocaleString("fr-FR", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-                <RichTextContent content={request.message} className="mt-2 text-sm text-slate-800" />
-                {request.attachment ? (
-                  <a
-                    href={`/api/club/member-requests/${request.id}/file?which=member`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-break mt-2 inline-block max-w-full text-sm font-semibold text-cyan-900 underline"
-                  >
-                    Pièce jointe membre ({request.attachment.name})
-                  </a>
-                ) : null}
+        <div className="space-y-4">
+          <StatusMessage feedback={doneFeedback} />
 
-                <div className="mt-4 space-y-2 rounded-lg border border-white/80 bg-white/80 p-3">
-                  {request.status === "received" ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void startRequest(request.id)}
-                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                    >
-                      Prendre en charge
-                    </button>
-                  ) : null}
+          {loadError ? (
+            <div className="space-y-3">
+              <StatusMessage feedback={{ tone: "error", text: loadError }} />
+              <button type="button" onClick={retryLoad} className="btn btn-outline btn-sm">
+                Réessayer
+              </button>
+            </div>
+          ) : null}
 
-                  <label className="block text-sm font-medium text-slate-700">
-                    Message de réponse
-                    <textarea
-                      value={draft.reply}
-                      onChange={(event) => updateDraft(request.id, { reply: event.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
-                      rows={3}
-                      placeholder="Réponse visible par le membre…"
-                      disabled={busy}
-                    />
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700">
-                    Pièce jointe bureau (optionnel)
-                    <input
-                      type="file"
-                      onChange={(event) => void handleAttachment(request.id, event)}
-                      disabled={busy}
-                      className="mt-1 block w-full text-sm font-normal text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-700 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-                    />
-                  </label>
-                  {draft.attachment ? (
-                    <p className="text-xs text-slate-600">
-                      Fichier : {draft.attachment.name}{" "}
+          {!loadError && open.length === 0 ? <EmptyState>Aucune demande en attente.</EmptyState> : null}
+
+          {open.length > 0 ? (
+            <div className="space-y-3">
+              {open.map((request) => {
+                const draft = draftFor(request.id);
+                const busy = busyId === request.id;
+                return (
+                  <article
+                    key={request.id}
+                    className="min-w-0 rounded-2xl border border-brand-blue/25 bg-brand-blue/5 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-base font-extrabold text-slate-900">{request.subject}</p>
+                      <Badge tone={request.status === "in_progress" ? "orange" : "blue"}>
+                        {MEMBER_REQUEST_STATUS_LABELS[request.status]}
+                      </Badge>
+                    </div>
+                    <p className="text-break mt-1 text-sm text-slate-700">
+                      {request.memberName} — {request.memberEmail}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Reçue le{" "}
+                      {new Date(request.createdAt).toLocaleString("fr-FR", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    <RichTextContent content={request.message} className="mt-2 text-sm text-slate-800" />
+                    {request.attachment ? (
+                      <a
+                        href={`/api/club/member-requests/${request.id}/file?which=member`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-break mt-2 inline-block max-w-full text-sm font-semibold text-brand-blue underline"
+                      >
+                        Pièce jointe de l’adhérent ({request.attachment.name})
+                      </a>
+                    ) : null}
+
+                    <div className="mt-4 space-y-3 rounded-2xl bg-white p-4">
+                      {request.status === "received" ? (
+                        <div>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void startRequest(request)}
+                            className="btn btn-outline btn-sm"
+                          >
+                            Prendre en charge
+                          </button>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Indique aux autres membres du bureau que vous vous en occupez.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <label className="field-label">
+                        Votre réponse à l’adhérent
+                        <textarea
+                          value={draft.reply}
+                          onChange={(event) => updateDraft(request.id, { reply: event.target.value })}
+                          className="field"
+                          rows={3}
+                          placeholder="Cette réponse sera visible par l’adhérent…"
+                          disabled={busy}
+                        />
+                      </label>
+                      <label className="field-label">
+                        Pièce jointe (facultatif)
+                        <input
+                          type="file"
+                          onChange={(event) => void handleAttachment(request.id, event)}
+                          disabled={busy}
+                          className="field"
+                        />
+                      </label>
+                      {draft.attachment ? (
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                          Fichier joint : {draft.attachment.name}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => updateDraft(request.id, { attachment: null })}
+                          >
+                            Retirer
+                          </button>
+                        </p>
+                      ) : null}
                       <button
                         type="button"
-                        className="font-semibold text-rose-700"
-                        onClick={() => updateDraft(request.id, { attachment: null })}
+                        disabled={busy}
+                        onClick={() => void treatRequest(request)}
+                        className="btn btn-primary btn-sm"
                       >
-                        Retirer
+                        {busy ? "Envoi…" : "Marquer comme traitée"}
                       </button>
+                      <StatusMessage feedback={itemFeedback[request.id] ?? null} />
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {recent.length > 0 ? (
+            <details className="rounded-2xl border border-brand-line bg-white p-4">
+              <summary className="cursor-pointer text-[15px] font-bold text-slate-900">
+                Demandes déjà traitées ({recent.length})
+              </summary>
+              <ul className="mt-3 space-y-3 text-sm text-slate-700">
+                {recent.map((request) => (
+                  <li key={request.id} className="rounded-xl border border-brand-line bg-brand-cream/60 p-3">
+                    <p className="font-semibold text-slate-900">
+                      {request.subject}{" "}
+                      <span className="font-normal text-slate-600">— {request.memberName}</span>
                     </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void treatRequest(request.id)}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                  >
-                    Marquer comme traitée
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+                    {request.bureauReply ? (
+                      <RichTextContent content={request.bureauReply} className="mt-1 text-slate-700" />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </div>
       )}
-
-      {recent.length > 0 ? (
-        <details className="rounded-xl border border-slate-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-            Demandes traitées ({recent.length})
-          </summary>
-          <ul className="mt-3 space-y-3 text-sm text-slate-700">
-            {recent.map((request) => (
-              <li key={request.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                <p className="font-semibold text-slate-900">
-                  {request.subject}{" "}
-                  <span className="font-normal text-slate-500">— {request.memberName}</span>
-                </p>
-                {request.bureauReply ? (
-                  <RichTextContent content={request.bureauReply} className="mt-1 text-slate-700" />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-    </div>
+    </SectionCard>
   );
 }

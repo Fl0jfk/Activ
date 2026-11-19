@@ -1,8 +1,7 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import BureauPageHeader from "@/components/bureau-page-header";
-import BureauSiteSettingsPanel from "@/components/bureau-site-settings";
-import HomeGalleryPanel from "@/components/home-gallery-panel";
-import SiteNewsPanel from "@/components/site-news-panel";
+import BureauContentTabs from "@/components/bureau-site-settings";
 import { loadBureauPageData } from "@/lib/bureau-page-data";
 
 export const dynamic = "force-dynamic";
@@ -15,19 +14,16 @@ export default async function BureauContentPage() {
   }
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-6xl space-y-6 px-4 sm:px-8">
+    <div className="mx-auto mt-6 w-full max-w-6xl space-y-6 px-4 pb-10 sm:px-8">
       <BureauPageHeader
         eyebrow="Bureau · Contenu"
         title="Contenu du site"
-        description="Publiez les actualités, gérez le slider d’accueil et les informations de l’association. Les actualités de plus d’un mois sont rangées dans les archives."
+        description="Choisissez un onglet pour modifier les actualités, les photos de l’accueil, les informations de l’association ou les disciplines et horaires. Une modification est visible sur le site dès que vous cliquez sur « Publier » ou « Enregistrer »."
       />
 
-      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2">
-        <SiteNewsPanel />
-        <HomeGalleryPanel />
-      </div>
-
-      <BureauSiteSettingsPanel />
+      <Suspense fallback={<p className="panel p-6 text-sm text-slate-700">Chargement…</p>}>
+        <BureauContentTabs />
+      </Suspense>
     </div>
   );
 }

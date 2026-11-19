@@ -95,7 +95,7 @@ export function DonutChart({
         textAnchor="middle"
         dominantBaseline="middle"
         fill={labelColor}
-        fontSize={size * 0.055}
+        fontSize={size * 0.07}
         fontWeight="500"
       >
         {centerLabel}
@@ -110,14 +110,16 @@ type RadialProgressProps = {
   thickness?: number;
   color?: string;
   label?: string;
+  className?: string;
 };
 
 export function RadialProgress({
   value,
   size = 112,
   thickness = 10,
-  color = "#10b981",
+  color = "#2e9e4f",
   label = "Progression",
+  className = "h-28 w-28 shrink-0",
 }: RadialProgressProps) {
   const clamped = Math.max(0, Math.min(100, value));
   const radius = (size - thickness) / 2;
@@ -127,7 +129,7 @@ export function RadialProgress({
   return (
     <svg
       viewBox={`0 0 ${size} ${size}`}
-      className="h-28 w-28 shrink-0"
+      className={className}
       role="img"
       aria-label={`${label} : ${Math.round(clamped)} %`}
     >
@@ -136,7 +138,7 @@ export function RadialProgress({
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#e2e8f0"
+        stroke="#e8e2d8"
         strokeWidth={thickness}
       />
       <circle
@@ -167,8 +169,8 @@ export function RadialProgress({
         y="62%"
         textAnchor="middle"
         dominantBaseline="middle"
-        fill="#94a3b8"
-        fontSize={size * 0.075}
+        fill="#64748b"
+        fontSize={size * 0.09}
         fontWeight="500"
       >
         finalisés
@@ -194,7 +196,7 @@ type BarChartProps = {
 export function BarChart({
   data,
   height = 170,
-  color = "#0891b2",
+  color = "#1f6fd0",
   ariaLabel,
   valueSuffix = "",
 }: BarChartProps) {
@@ -223,7 +225,7 @@ export function BarChart({
               title={`${datum.label} : ${datum.value}${valueSuffix}`}
             />
           </div>
-          <span className="w-full truncate text-center text-[10px] font-medium text-slate-500">
+          <span className="w-full truncate text-center text-xs font-medium text-slate-600">
             {datum.label}
           </span>
         </div>
@@ -289,7 +291,7 @@ export function StackedBarChart({
                 )}
               </div>
             </div>
-            <span className="w-full truncate text-center text-[10px] font-medium text-slate-500">
+            <span className="w-full truncate text-center text-xs font-medium text-slate-600">
               {datum.label}
             </span>
           </div>
@@ -314,7 +316,7 @@ type HorizontalBarsProps = {
 
 export function HorizontalBars({
   data,
-  color = "#0891b2",
+  color = "#1f6fd0",
   ariaLabel,
 }: HorizontalBarsProps) {
   const max = Math.max(1, ...data.map((datum) => datum.value));
@@ -323,11 +325,11 @@ export function HorizontalBars({
     <div role="img" aria-label={ariaLabel} className="space-y-3.5">
       {data.map((datum) => (
         <div key={datum.label}>
-          <div className="flex items-baseline justify-between gap-3 text-xs">
+          <div className="flex items-baseline justify-between gap-3 text-sm">
             <span className="truncate font-medium text-slate-700">{datum.label}</span>
             <span className="shrink-0 font-semibold text-slate-950">{datum.value}</span>
           </div>
-          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-100">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
@@ -337,7 +339,7 @@ export function HorizontalBars({
             />
           </div>
           {datum.caption ? (
-            <p className="mt-1 text-[11px] text-slate-400">{datum.caption}</p>
+            <p className="mt-1 text-xs text-slate-500">{datum.caption}</p>
           ) : null}
         </div>
       ))}
@@ -355,7 +357,7 @@ type SparklineProps = {
 export function Sparkline({
   values,
   height = 48,
-  color = "#0891b2",
+  color = "#1f6fd0",
   ariaLabel,
 }: SparklineProps) {
   const gradientId = useId().replace(/:/g, "");

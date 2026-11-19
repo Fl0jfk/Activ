@@ -16,7 +16,7 @@ import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { listApplicationsNeedingLicenseRenewal } from "@/lib/license-renewal";
 import { readSiteData } from "@/lib/site-data";
 import { buildDisciplineColors } from "@/lib/discipline-colors";
-import { buildPlannerWeeks, findNextSession } from "@/lib/public-site";
+import { buildPlannerWeeks, findNextSession, listUpcomingSessions } from "@/lib/public-site";
 import { buildWeekSchedule, getPublicScheduleReference, todayParisIso } from "@/lib/schedule-week";
 import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
@@ -121,6 +121,12 @@ export default async function EspacePage({
     entries: week.entries.filter((entry) => memberDisciplineIds.has(entry.disciplineId)),
   }));
   const nextSession = findNextSession(plannerWeeks.flatMap((week) => week.entries));
+  const bureauUpcomingSessions = clubOps
+    ? listUpcomingSessions(
+        buildPlannerWeeks(siteData, scheduleReferenceDate, 2).flatMap((week) => week.entries),
+        4,
+      )
+    : [];
 
   let pendingDocument: {
     applicationId: string;
@@ -197,6 +203,8 @@ export default async function EspacePage({
       nextSession={nextSession}
       todayIso={today}
       bureauWeekSchedule={fullWeekSchedule}
+      disciplineColors={disciplineColors}
+      bureauUpcomingSessions={bureauUpcomingSessions}
       upcomingEvents={upcomingEvents}
       pendingDocument={pendingDocument}
       contactChangeRequest={contactChangeRequest}

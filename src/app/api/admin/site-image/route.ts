@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const validated = await validateSiteImageFile(formData.get("file") as File | null);
+    const file = formData.get("file");
+    const validated = await validateSiteImageFile(file instanceof File ? file : null);
     if (!validated.ok) {
       return NextResponse.json({ message: validated.message }, { status: 400 });
     }
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to upload site image", error);
     if (error instanceof Error && error.message.includes("BUCKET_NAME")) {
-      return NextResponse.json({ message: "Bucket non configuré." }, { status: 500 });
+      return NextResponse.json({ message: "Espace de stockage non configuré." }, { status: 500 });
     }
-    return NextResponse.json({ message: "Impossible d'envoyer l'image." }, { status: 500 });
+    return NextResponse.json({ message: "Impossible d’envoyer l’image." }, { status: 500 });
   }
 }

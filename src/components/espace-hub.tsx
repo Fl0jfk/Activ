@@ -12,6 +12,7 @@ import type { DisciplineOption } from "@/lib/discipline-options";
 import type { PendingDocument, UpcomingEvent } from "@/lib/espace-types";
 import type { WeekScheduleEntry } from "@/lib/schedule-week";
 import type { PlannerDiscipline, PlannerWeek } from "@/components/week-planner";
+import type { DisciplineColor } from "@/lib/discipline-colors";
 
 type EspaceTab = "member" | "cockpit" | "coach";
 
@@ -38,6 +39,8 @@ type EspaceHubProps = {
   nextSession: WeekScheduleEntry | null;
   todayIso: string;
   bureauWeekSchedule: WeekScheduleEntry[];
+  disciplineColors: Record<string, DisciplineColor>;
+  bureauUpcomingSessions: WeekScheduleEntry[];
   upcomingEvents: UpcomingEvent[];
   pendingDocument: PendingDocument;
   contactChangeRequest?: MemberContactChangeRequest | null;
@@ -78,6 +81,8 @@ export default function EspaceHub({
   nextSession,
   todayIso,
   bureauWeekSchedule,
+  disciplineColors,
+  bureauUpcomingSessions,
   upcomingEvents,
   pendingDocument,
   contactChangeRequest,
@@ -196,6 +201,8 @@ export default function EspaceHub({
           slots={slots}
           applications={allApplications}
           weekSchedule={bureauWeekSchedule}
+          disciplineColors={disciplineColors}
+          upcomingSessions={bureauUpcomingSessions}
         />
       ) : null}
 

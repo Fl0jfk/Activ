@@ -1,139 +1,136 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import DossierPanel from "@/components/dossier-panel";
+import { EmptyState } from "@/components/bureau-ui";
+import DossierCard from "@/components/dossier-card";
 import { useClubApplicationActions } from "@/hooks/useClubApplicationActions";
 import type { RegistrationApplication } from "@/lib/club-data";
 import type { DisciplineOption } from "@/lib/discipline-options";
+import { matchesDossierSearch, sortDossiers, type DossierSort } from "@/lib/dossier-format";
 import {
-  DOSSIER_STEP_LABELS,
   filterApplicationsByQueue,
-  getApplicationDisciplineNames,
-  getDossierStep,
-  stepBadgeClass,
+  matchesStepFilter,
   type QueueFilter,
+  type StepFilter,
 } from "@/lib/dossier-workflow";
 
 export type { QueueFilter };
 
+const PAGE_SIZE = 15;
+
 type RegistrationQueueProps = {
   disciplines: DisciplineOption[];
+  /** Dossiers déjà filtrés par activité. */
   applications: RegistrationApplication[];
   queueFilter: QueueFilter;
+  stepFilter: StepFilter | null;
+  query: string;
+  sort: DossierSort;
+  /** Change dès que l’utilisateur modifie un filtre : le dossier ouvert est alors refermé. */
+  filterKey: string;
 };
 
 export default function RegistrationQueue({
   disciplines,
   applications,
   queueFilter,
+  stepFilter,
+  query,
+  sort,
+  filterKey,
 }: RegistrationQueueProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const {
-    message,
-    setMessage,
-    updateApplication,
-    validateEspace,
-    rejectApplication,
-    requestDocument,
-    requestBulletinRevalidation,
-  } = useClubApplicationActions();
+  const [expanded, setExpanded] = useState<{ id: string; key: string } | null>(null);
+  const [pageState, setPageState] = useState<{ count: number; key: string }>({
+    count: PAGE_SIZE,
+    key: filterKey,
+  });
+  const actions = useClubApplicationActions();
 
-  const filtered = useMemo(
-    () => filterApplicationsByQueue(applications, queueFilter),
-    [applications, queueFilter],
+  const expandedId = expanded && expanded.key === filterKey ? expanded.id : null;
+  const visibleCount = pageState.key === filterKey ? pageState.count : PAGE_SIZE;
+
+  const { matching, shown, outsideFilterId } = useMemo(() => {
+    let list = filterApplicationsByQueue(applications, queueFilter);
+    if (stepFilter) list = list.filter((application) => matchesStepFilter(application, stepFilter));
+    if (query.trim()) list = list.filter((application) => matchesDossierSearch(application, query));
+    const matchingList = sortDossiers(list, sort);
+
+    const page = matchingList.slice(0, visibleCount);
+    let outside: string | null = null;
+    if (expandedId && !page.some((application) => application.id === expandedId)) {
+      const open = applications.find((application) => application.id === expandedId);
+      if (open) {
+        page.push(open);
+        if (!matchingList.some((application) => application.id === expandedId)) outside = expandedId;
+      }
+    }
+    return { matching: matchingList, shown: page, outsideFilterId: outside };
+  }, [applications, queueFilter, stepFilter, query, sort, visibleCount, expandedId]);
+
+  function toggle(applicationId: string) {
+    setExpanded((current) =>
+      current && current.key === filterKey && current.id === applicationId
+        ? null
+        : { id: applicationId, key: filterKey },
+    );
+    actions.notify(applicationId, null);
+    actions.dismissSecureLink();
+  }
+
+  const countLine = (
+    <p aria-live="polite" className="text-sm font-semibold text-slate-700">
+      {matching.length === 0
+        ? "Aucun dossier"
+        : matching.length === 1
+          ? "1 dossier"
+          : `${matching.length} dossiers`}
+    </p>
   );
 
-  async function requestMissingDocument(applicationId: string, documentLabel: string) {
-    await requestDocument(applicationId, documentLabel);
-  }
-
-  function toggleExpanded(applicationId: string) {
-    setExpandedId((current) => (current === applicationId ? null : applicationId));
-  }
-
-  if (filtered.length === 0) {
+  if (shown.length === 0) {
     return (
-      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-        Aucun dossier pour ce filtre.
-      </p>
+      <div className="space-y-3">
+        {countLine}
+        <EmptyState>
+          {query.trim()
+            ? "Aucun dossier ne correspond à votre recherche."
+            : "Aucun dossier à afficher dans cet onglet."}
+        </EmptyState>
+      </div>
     );
   }
 
+  const remaining = matching.length - visibleCount;
+
   return (
     <div className="space-y-3">
-      {filtered.map((application) => {
-        const disciplineName =
-          getApplicationDisciplineNames(application, disciplines).join(", ") ||
-          "Discipline";
-        const isExpanded = expandedId === application.id;
-        const step = getDossierStep(application);
+      {countLine}
+      {shown.map((application) => (
+        <DossierCard
+          key={application.id}
+          application={application}
+          disciplines={disciplines}
+          expanded={expandedId === application.id}
+          outsideFilters={outsideFilterId === application.id}
+          feedback={actions.feedbackFor(application.id)}
+          actions={actions}
+          onToggle={() => toggle(application.id)}
+        />
+      ))}
 
-        return (
-          <article
-            key={application.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => toggleExpanded(application.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                toggleExpanded(application.id);
-              }
-            }}
-            className={`w-full min-w-0 cursor-pointer rounded-xl border p-4 text-left transition hover:ring-2 hover:ring-cyan-200 ${
-              isExpanded ? "border-cyan-300 bg-cyan-50/40 ring-2 ring-cyan-300" : "border-slate-200 bg-white"
-            }`}
+      {remaining > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <p className="text-sm text-slate-600">
+            {Math.min(visibleCount, matching.length)} dossiers affichés sur {matching.length}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPageState({ count: visibleCount + PAGE_SIZE, key: filterKey })}
+            className="btn btn-outline btn-sm"
           >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase text-cyan-700">{disciplineName}</p>
-                <p className="font-semibold text-slate-900">
-                  {application.fullName}
-                  {application.origin === "paper" ? (
-                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
-                      Papier
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-break text-sm text-slate-600">
-                  {application.email || "Sans e-mail"}
-                </p>
-              </div>
-              <div className="shrink-0 sm:text-right">
-                <span
-                  className={`inline-block max-w-full rounded-full px-2 py-1 text-xs font-semibold leading-snug sm:max-w-[11rem] ${stepBadgeClass(step)}`}
-                >
-                  {DOSSIER_STEP_LABELS[step]}
-                </span>
-                <p className="mt-1 text-xs text-slate-500">
-                  Essai : {application.trialAttended ? "réalisé" : "non réalisé"}
-                </p>
-              </div>
-            </div>
-
-            {!isExpanded ? (
-              <p className="mt-3 text-xs text-slate-500">Ouvrir le dossier pour traiter</p>
-            ) : (
-              <div className="mt-4" onClick={(e) => e.stopPropagation()}>
-                <DossierPanel
-                  application={application}
-                  disciplineName={disciplineName}
-                  disciplines={disciplines}
-                  onUpdate={updateApplication}
-                  onRequestDocument={requestMissingDocument}
-                  onRequestBulletinRevalidation={requestBulletinRevalidation}
-                  onValidateEspace={validateEspace}
-                  onReject={rejectApplication}
-                  onMessage={setMessage}
-                />
-              </div>
-            )}
-          </article>
-        );
-      })}
-
-      {message ? (
-        <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-700">{message}</p>
+            Afficher {Math.min(PAGE_SIZE, remaining)} dossiers de plus
+          </button>
+        </div>
       ) : null}
     </div>
   );

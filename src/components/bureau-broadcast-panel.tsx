@@ -1,396 +1,491 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import type { RegistrationApplication } from "@/lib/club-data";
+import { useCallback, useEffect, useRef, useState } from "react";
+import BroadcastPersonPicker from "@/components/broadcast-person-picker";
+import BroadcastResult, {
+  BroadcastDeliveryTips,
+  type BroadcastSendSummary,
+} from "@/components/broadcast-result";
+import BroadcastReviewDialog from "@/components/broadcast-review-dialog";
+import { SectionCard, StatusMessage, type Feedback } from "@/components/bureau-ui";
+import {
+  BROADCAST_MESSAGE_MAX,
+  BROADCAST_SUBJECT_MAX,
+  type BroadcastAudienceResponse,
+  type BroadcastRecipient,
+  type BroadcastSendResponse,
+} from "@/lib/broadcast-types";
 import type { DisciplineOption } from "@/lib/discipline-options";
-import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
+import { fetchJson, jsonInit } from "@/lib/fetch-json";
 
 type BureauBroadcastPanelProps = {
   disciplines: DisciplineOption[];
-  applications: RegistrationApplication[];
 };
 
 type AudienceMode = "all" | "discipline" | "person";
 
-type ApprovedMember = {
-  email: string;
-  name: string;
+type Overview = {
+  people: BroadcastRecipient[];
+  disciplineCounts: Record<string, number>;
 };
 
-type SendFailure = {
-  email: string;
-  reason: "invalid_address" | "mailbox_unavailable" | "send_failed";
-  detail: string;
-};
+const ENDPOINT = "/api/club/broadcast-email";
 
-function failureLabel(reason: SendFailure["reason"]): string {
-  switch (reason) {
-    case "mailbox_unavailable":
-      return "Adresse introuvable ou boîte indisponible";
-    case "invalid_address":
-      return "Adresse refusée par le serveur";
-    default:
-      return "Envoi impossible";
-  }
+function peopleLabel(count: number): string {
+  return `${count} personne${count > 1 ? "s" : ""}`;
 }
 
-function normalizeSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+function audienceQuery(mode: AudienceMode | null, disciplineId: string, email: string): string {
+  const params = new URLSearchParams();
+  if (mode === "discipline") params.set("disciplineId", disciplineId);
+  if (mode === "person") params.set("recipientEmail", email);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
-function countPreview(
-  applications: RegistrationApplication[],
-  disciplineId: string,
-): number {
-  const emails = new Set(
-    applications
-      .filter((app) => app.status === "approved" && app.email?.trim())
-      .filter((app) => {
-        if (!disciplineId) return true;
-        return getApplicationDisciplineIds(app).includes(disciplineId);
-      })
-      .map((app) => app.email.trim().toLowerCase()),
+function CharCounter({ value, max }: { value: number; max: number }) {
+  return (
+    <span className={`text-sm ${value > max * 0.9 ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+      {value} / {max} caractères
+    </span>
   );
-  return emails.size;
 }
 
-export default function BureauBroadcastPanel({
-  disciplines,
-  applications,
-}: BureauBroadcastPanelProps) {
-  const [audienceMode, setAudienceMode] = useState<AudienceMode>("all");
+export default function BureauBroadcastPanel({ disciplines }: BureauBroadcastPanelProps) {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [overviewError, setOverviewError] = useState("");
+  const [audienceMode, setAudienceMode] = useState<AudienceMode | null>(null);
   const [disciplineId, setDisciplineId] = useState("");
-  const [recipientQuery, setRecipientQuery] = useState("");
-  const [recipientEmail, setRecipientEmail] = useState("");
+  const [personEmail, setPersonEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [failures, setFailures] = useState<SendFailure[]>([]);
+
+  const [pageFeedback, setPageFeedback] = useState<Feedback>(null);
+  const [reviewFeedback, setReviewFeedback] = useState<Feedback>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [reviewRecipients, setReviewRecipients] = useState<BroadcastRecipient[] | null>(null);
+  const [reviewVersion, setReviewVersion] = useState(0);
+  const [summary, setSummary] = useState<BroadcastSendSummary | null>(null);
 
-  const approvedMembers = useMemo(() => {
-    const byEmail = new Map<string, ApprovedMember>();
-    for (const app of applications) {
-      if (app.status !== "approved" || !app.email?.trim()) continue;
-      const email = app.email.trim().toLowerCase();
-      if (byEmail.has(email)) continue;
-      const name =
-        app.fullName?.trim() ||
-        [app.firstName, app.lastName].filter(Boolean).join(" ").trim() ||
-        email;
-      byEmail.set(email, { email, name });
-    }
-    return [...byEmail.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
-  }, [applications]);
+  const sendingRef = useRef(false);
+  const testingRef = useRef(false);
 
-  const memberMatches = useMemo(() => {
-    const query = normalizeSearch(recipientQuery);
-    if (!query) return approvedMembers;
-    return approvedMembers.filter((member) =>
-      normalizeSearch(member.name).includes(query),
-    );
-  }, [approvedMembers, recipientQuery]);
-
-  const selectedMember = useMemo(
-    () => approvedMembers.find((member) => member.email === recipientEmail) ?? null,
-    [approvedMembers, recipientEmail],
+  const applyOverview = useCallback(
+    (result: Awaited<ReturnType<typeof fetchJson<BroadcastAudienceResponse>>>) => {
+      if (!result.ok || !result.data) {
+        setOverview(null);
+        setOverviewError(result.message || "La liste des adhérents n’a pas pu être chargée.");
+        return;
+      }
+      setOverviewError("");
+      setOverview({
+        people: result.data.recipients,
+        disciplineCounts: result.data.disciplineCounts ?? {},
+      });
+    },
+    [],
   );
 
-  const recipientCount = useMemo(() => {
-    if (audienceMode === "person") {
-      return selectedMember ? 1 : 0;
-    }
-    return countPreview(applications, audienceMode === "discipline" ? disciplineId : "");
-  }, [applications, audienceMode, disciplineId, selectedMember]);
+  const loadOverview = useCallback(async () => {
+    applyOverview(await fetchJson<BroadcastAudienceResponse>(ENDPOINT));
+  }, [applyOverview]);
 
-  const canSend =
-    subject.trim().length > 0 &&
-    message.trim().length > 0 &&
-    (audienceMode !== "discipline" || Boolean(disciplineId)) &&
-    recipientCount > 0;
+  useEffect(() => {
+    let cancelled = false;
+    void fetchJson<BroadcastAudienceResponse>(ENDPOINT).then((result) => {
+      if (!cancelled) applyOverview(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyOverview]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!subject.trim() || !message.trim()) {
-      setStatusMessage("L'objet et le message sont obligatoires.");
+  const totalCount = overview?.people.length ?? 0;
+  const disciplineName = disciplines.find((entry) => entry.id === disciplineId)?.name ?? "";
+  const selectedPerson = overview?.people.find((person) => person.email === personEmail) ?? null;
+
+  let recipientCount = 0;
+  let audienceLabel = "";
+  if (audienceMode === "all") {
+    recipientCount = totalCount;
+    audienceLabel = "Tous les adhérents";
+  } else if (audienceMode === "discipline" && disciplineId) {
+    recipientCount = overview?.disciplineCounts[disciplineId] ?? 0;
+    audienceLabel = `Activité : ${disciplineName}`;
+  } else if (audienceMode === "person" && selectedPerson) {
+    recipientCount = 1;
+    audienceLabel = selectedPerson.name;
+  }
+
+  function validate(kind: "test" | "send"): string | null {
+    if (!subject.trim()) return "Écrivez l’objet de votre message (étape 2).";
+    if (!message.trim()) return "Écrivez votre message (étape 2).";
+    if (kind === "test") return null;
+    if (!overview) return "La liste des adhérents n’est pas encore chargée. Patientez un instant.";
+    if (!audienceMode) return "Choisissez d’abord à qui envoyer le message (étape 1).";
+    if (audienceMode === "discipline" && !disciplineId) return "Choisissez une activité (étape 1).";
+    if (audienceMode === "person" && !selectedPerson) return "Choisissez une personne (étape 1).";
+    if (recipientCount === 0) return "Aucun adhérent ne correspond à cette sélection.";
+    return null;
+  }
+
+  async function handleOpenReview() {
+    const problem = validate("send");
+    if (problem) {
+      setPageFeedback({ tone: "error", text: problem });
       return;
     }
-    if (audienceMode === "discipline" && !disciplineId) {
-      setStatusMessage("Choisissez une activité.");
-      return;
-    }
-    if (audienceMode === "person" && !recipientCount) {
-      setStatusMessage("Choisissez une personne dans la liste.");
-      return;
-    }
-    if (recipientCount === 0) {
-      setStatusMessage("Aucun destinataire pour cette sélection.");
-      return;
-    }
-
-    const destination =
-      audienceMode === "person"
-        ? selectedMember
-          ? `${selectedMember.name} (${selectedMember.email})`
-          : recipientEmail.trim()
-        : `${recipientCount} destinataire${recipientCount > 1 ? "s" : ""}`;
-    const confirmed = window.confirm(`Envoyer cet e-mail à ${destination} ?`);
-    if (!confirmed) return;
-
-    setIsSending(true);
-    setStatusMessage("");
-    setFailures([]);
-
+    setIsPreparing(true);
+    setPageFeedback(null);
     try {
-      const response = await fetch("/api/club/broadcast-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // La liste est relue au moment de la relecture : elle reflète l'état réel du serveur.
+      const result = await fetchJson<BroadcastAudienceResponse>(
+        `${ENDPOINT}${audienceQuery(audienceMode, disciplineId, personEmail)}`,
+      );
+      if (!result.ok || !result.data) {
+        setPageFeedback({
+          tone: "error",
+          text: result.message || "La liste des destinataires n’a pas pu être chargée. Réessayez.",
+        });
+        return;
+      }
+      if (result.data.recipients.length === 0) {
+        setPageFeedback({ tone: "error", text: "Aucun adhérent ne correspond à cette sélection." });
+        return;
+      }
+      setReviewRecipients(result.data.recipients);
+      setReviewFeedback(null);
+      setReviewVersion((version) => version + 1);
+    } finally {
+      setIsPreparing(false);
+    }
+  }
+
+  async function handleSendTest(target: "page" | "dialog") {
+    const setFeedback = target === "page" ? setPageFeedback : setReviewFeedback;
+    const problem = validate("test");
+    if (problem) {
+      setFeedback({ tone: "error", text: problem });
+      return;
+    }
+    if (testingRef.current) return;
+    testingRef.current = true;
+    setIsTesting(true);
+    setFeedback(null);
+    try {
+      const result = await fetchJson<BroadcastSendResponse>(
+        ENDPOINT,
+        jsonInit("POST", { testToSelf: true, subject: subject.trim(), message: message.trim() }),
+      );
+      setFeedback(
+        result.ok
+          ? { tone: "success", text: result.message || "Test envoyé à votre adresse." }
+          : { tone: "error", text: result.message || "Le test n’a pas pu être envoyé." },
+      );
+    } finally {
+      testingRef.current = false;
+      setIsTesting(false);
+    }
+  }
+
+  async function handleSend() {
+    if (sendingRef.current || !reviewRecipients) return;
+    sendingRef.current = true;
+    setIsSending(true);
+    setReviewFeedback(null);
+    try {
+      const result = await fetchJson<BroadcastSendResponse>(
+        ENDPOINT,
+        jsonInit("POST", {
           disciplineId: audienceMode === "discipline" ? disciplineId : null,
-          recipientEmail: audienceMode === "person" ? recipientEmail.trim() : null,
+          recipientEmail: audienceMode === "person" ? personEmail : null,
           subject: subject.trim(),
           message: message.trim(),
+          expectedRecipientCount: reviewRecipients.length,
         }),
+      );
+      if (!result.ok || !result.data) {
+        setReviewFeedback({
+          tone: "error",
+          text: result.message || "L’envoi a échoué. Aucun message n’a été confirmé : réessayez.",
+        });
+        if (result.status === 409) {
+          const refreshed = await fetchJson<BroadcastAudienceResponse>(
+            `${ENDPOINT}${audienceQuery(audienceMode, disciplineId, personEmail)}`,
+          );
+          if (refreshed.ok && refreshed.data && refreshed.data.recipients.length > 0) {
+            setReviewRecipients(refreshed.data.recipients);
+            setReviewVersion((version) => version + 1);
+          }
+        }
+        return;
+      }
+      setSummary({
+        response: result.data,
+        audienceLabel,
+        subject: subject.trim(),
+        sentAt: new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }),
       });
-      const payload = (await response.json()) as {
-        message?: string;
-        failures?: SendFailure[];
-      };
-      if (!response.ok) {
-        throw new Error(payload.message ?? "Envoi impossible.");
-      }
-      setStatusMessage(payload.message ?? "E-mail envoyé.");
-      if (Array.isArray(payload.failures) && payload.failures.length > 0) {
-        setFailures(payload.failures);
-      }
-      setSubject("");
-      setMessage("");
-      setRecipientEmail("");
-      setRecipientQuery("");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Envoi impossible.");
+      setReviewRecipients(null);
+      setPageFeedback(null);
     } finally {
+      sendingRef.current = false;
       setIsSending(false);
     }
   }
 
+  function handleCloseReview() {
+    if (sendingRef.current) return;
+    setReviewRecipients(null);
+  }
+
+  function handleNewMessage() {
+    setSummary(null);
+    setAudienceMode(null);
+    setDisciplineId("");
+    setPersonEmail("");
+    setSubject("");
+    setMessage("");
+    setPageFeedback(null);
+    setReviewFeedback(null);
+    void loadOverview();
+  }
+
+  if (summary) {
+    return (
+      <BroadcastResult
+        summary={summary}
+        onNewMessage={handleNewMessage}
+        onBackToMessage={() => setSummary(null)}
+      />
+    );
+  }
+
+  const audienceOptions: { mode: AudienceMode; title: string; detail: string }[] = [
+    {
+      mode: "all",
+      title: "Tous les adhérents",
+      detail: overview ? peopleLabel(totalCount) : "Chargement…",
+    },
+    {
+      mode: "discipline",
+      title: "Une activité",
+      detail:
+        audienceMode === "discipline" && disciplineId
+          ? peopleLabel(recipientCount)
+          : "Choisir dans la liste",
+    },
+    {
+      mode: "person",
+      title: "Une personne",
+      detail: selectedPerson ? selectedPerson.name : "Choisir dans la liste",
+    },
+  ];
+
+  const busy = isPreparing || isSending || isTesting;
+
   return (
-    <section className="bento-card p-5">
-      <h2 className="text-lg font-bold text-slate-900">Envoyer un e-mail</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Message à tous les adhérents, à une activité ou à une personne. Chaque destinataire reçoit
-        un e-mail individuel (les autres adresses ne sont pas visibles).
-      </p>
-
-      <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-          Destinataires
-          <select
-            value={audienceMode}
-            onChange={(event) => setAudienceMode(event.target.value as AudienceMode)}
-            disabled={isSending}
-            className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-          >
-            <option value="all">Tous les adhérents</option>
-            <option value="discipline">Par activité</option>
-            <option value="person">Une personne</option>
-          </select>
-        </label>
-
-        {audienceMode === "discipline" ? (
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Activité
-            <select
-              value={disciplineId}
-              onChange={(event) => setDisciplineId(event.target.value)}
-              disabled={isSending}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-              required
+    <div className="space-y-5">
+      <SectionCard
+        eyebrow="Étape 1 sur 3"
+        title="Destinataires"
+        description="Choisissez qui doit recevoir ce message. Chacun le reçoit sans voir les adresses des autres."
+      >
+        {overviewError ? (
+          <div className="space-y-3">
+            <StatusMessage feedback={{ tone: "error", text: overviewError }} />
+            <button
+              type="button"
+              onClick={() => {
+                setOverviewError("");
+                void loadOverview();
+              }}
+              className="btn btn-outline btn-sm"
             >
-              <option value="">Choisir une activité…</option>
-              {disciplines.map((discipline) => (
-                <option key={discipline.id} value={discipline.id}>
-                  {discipline.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        {audienceMode === "person" ? (
-          <div className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            <label htmlFor="broadcast-recipient-search">Nom de la personne</label>
-            <input
-              id="broadcast-recipient-search"
-              type="search"
-              value={recipientQuery}
-              onChange={(event) => setRecipientQuery(event.target.value)}
-              disabled={isSending}
-              className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-              placeholder="Rechercher un nom ou un prénom…"
-              autoComplete="off"
-            />
-
-            {approvedMembers.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 text-sm font-normal text-slate-500">
-                Aucun adhérent approuvé pour le moment.
-              </p>
-            ) : (
-              <div
-                role="listbox"
-                aria-label="Adhérents approuvés"
-                className="mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white"
-              >
-                {memberMatches.length > 0 ? (
-                  memberMatches.map((member) => {
-                    const selected = member.email === recipientEmail;
-                    return (
-                      <button
-                        key={member.email}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        onClick={() => setRecipientEmail(member.email)}
-                        disabled={isSending}
-                        className={`flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 text-left text-sm font-normal transition last:border-b-0 ${
-                          selected
-                            ? "bg-emerald-50 text-emerald-900"
-                            : "text-slate-700 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span className="min-w-0 truncate">{member.name}</span>
-                        {selected ? (
-                          <span className="shrink-0 text-xs font-semibold text-emerald-700">
-                            Sélectionné
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })
-                ) : (
-                  <p className="px-3 py-3 text-sm font-normal text-slate-500">
-                    Aucun adhérent ne correspond à « {recipientQuery.trim()} ».
-                  </p>
-                )}
-              </div>
-            )}
-
-            {selectedMember ? (
-              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 font-normal">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                  Destinataire sélectionné
-                </p>
-                <p className="mt-1 text-sm font-semibold text-emerald-950">
-                  {selectedMember.name}
-                </p>
-                <p className="mt-0.5 break-all text-xs text-emerald-800">
-                  {selectedMember.email}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecipientEmail("");
-                    setRecipientQuery("");
-                  }}
-                  disabled={isSending}
-                  className="mt-2 text-xs font-semibold text-emerald-700 underline-offset-2 hover:underline"
-                >
-                  Changer de personne
-                </button>
-              </div>
-            ) : (
-              <span className="mt-1 text-xs font-normal text-slate-500">
-                Choisissez une personne dans la liste : seuls les adhérents approuvés sont
-                proposés.
-              </span>
-            )}
+              Réessayer
+            </button>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <fieldset disabled={busy} className="min-w-0">
+              <legend className="sr-only">À qui envoyer le message ?</legend>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {audienceOptions.map((option) => (
+                  <label key={option.mode} className="block cursor-pointer">
+                    <input
+                      type="radio"
+                      name="broadcast-audience"
+                      value={option.mode}
+                      checked={audienceMode === option.mode}
+                      onChange={() => {
+                        setAudienceMode(option.mode);
+                        setPageFeedback(null);
+                      }}
+                      className="peer sr-only"
+                    />
+                    <span className="flex h-full min-h-24 items-start gap-3 rounded-2xl border-2 border-slate-300 bg-white p-4 transition hover:border-brand-blue/60 peer-checked:border-brand-blue peer-checked:bg-brand-blue/5 peer-focus-visible:ring-4 peer-focus-visible:ring-brand-blue/30 peer-disabled:opacity-60 peer-checked:[&_.radio-dot]:border-brand-blue peer-checked:[&_.radio-dot]:bg-brand-blue peer-checked:[&_.radio-dot]:shadow-[inset_0_0_0_3px_#fff]">
+                      <span
+                        aria-hidden="true"
+                        className="radio-dot mt-1 h-5 w-5 shrink-0 rounded-full border-2 border-slate-400 bg-white"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-lg font-extrabold leading-tight text-slate-900">
+                          {option.title}
+                        </span>
+                        <span className="mt-1 block break-words text-sm font-semibold text-slate-600">
+                          {option.detail}
+                        </span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
-        {audienceMode !== "person" ? (
-          <p className="text-sm text-slate-600">
-            Environ <strong>{recipientCount}</strong> destinataire
-            {recipientCount > 1 ? "s" : ""} (aperçu).
-          </p>
-        ) : null}
+            {audienceMode === "discipline" ? (
+              <div className="mt-4">
+                <label htmlFor="broadcast-discipline" className="field-label">
+                  Activité
+                </label>
+                <select
+                  id="broadcast-discipline"
+                  value={disciplineId}
+                  onChange={(event) => {
+                    setDisciplineId(event.target.value);
+                    setPageFeedback(null);
+                  }}
+                  disabled={busy}
+                  className="field text-base"
+                >
+                  <option value="">Choisir une activité…</option>
+                  {disciplines.map((discipline) => (
+                    <option key={discipline.id} value={discipline.id}>
+                      {discipline.name}
+                      {overview ? ` (${peopleLabel(overview.disciplineCounts[discipline.id] ?? 0)})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
-        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-          Objet
-          <input
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            disabled={isSending}
-            className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-            placeholder="Ex. Info rentrée, rappel cotisation…"
-            maxLength={200}
-            required
-          />
-        </label>
+            {audienceMode === "person" && overview ? (
+              <div className="mt-4">
+                <BroadcastPersonPicker
+                  people={overview.people}
+                  selectedEmail={personEmail}
+                  onSelect={(email) => {
+                    setPersonEmail(email);
+                    setPageFeedback(null);
+                  }}
+                  disabled={busy}
+                />
+              </div>
+            ) : null}
 
-        <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-          Message
-          <textarea
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            disabled={isSending}
-            className="rounded-xl border border-slate-300 px-3 py-2 font-normal"
-            rows={6}
-            placeholder="Bonjour,&#10;&#10;Nous vous informons que…"
-            maxLength={8000}
-            required
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={isSending || !canSend}
-          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
-        >
-          {isSending ? "Envoi en cours…" : "Envoyer"}
-        </button>
-      </form>
-
-      {statusMessage ? <p className="mt-3 text-sm text-slate-700">{statusMessage}</p> : null}
-
-      {failures.length > 0 ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-          <p className="text-sm font-semibold text-amber-900">
-            {failures.length} adresse{failures.length > 1 ? "s" : ""} en échec
-          </p>
-          <ul className="mt-2 space-y-2">
-            {failures.map((failure) => (
-              <li key={failure.email} className="text-xs text-amber-900">
-                <span className="break-all font-semibold">{failure.email}</span>
-                <span className="mt-0.5 block text-amber-800">
-                  {failureLabel(failure.reason)}
-                  {failure.detail ? ` · ${failure.detail}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {failures.some((failure) =>
-            /@(hotmail|outlook|live|msn)\./i.test(failure.email),
-          ) ? (
-            <p className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">
-              <strong>Adresses Hotmail / Outlook en échec :</strong> Microsoft renvoie souvent
-              « mailbox unavailable » pour des boîtes fermées ou désactivées après une longue
-              inactivité — l&apos;adresse existe peut-être encore, mais elle ne reçoit plus rien.
-              Demandez à l&apos;adhérent de confirmer son adresse, corrigez la fiche, puis
-              relancez l&apos;envoi. Les nouvelles inscriptions sont désormais vérifiées par un
-              code envoyé sur la boîte mail.
+            <p aria-live="polite" className="mt-4 text-[15px] font-semibold text-slate-800">
+              {audienceMode && audienceLabel
+                ? recipientCount > 0
+                  ? `Ce message sera envoyé à ${peopleLabel(recipientCount)} (${audienceLabel}).`
+                  : "Aucun adhérent ne correspond à cette sélection."
+                : ""}
             </p>
-          ) : null}
-          <p className="mt-2 text-xs leading-5 text-amber-800">
-            Une adresse introuvable est généralement une faute de frappe dans le dossier de
-            l&apos;adhérent. Corrigez-la dans la fiche, puis relancez l&apos;envoi à cette
-            personne.
-          </p>
+          </>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Étape 2 sur 3"
+        title="Message"
+        description="Écrivez simplement, comme dans un courrier. Le texte est envoyé tel quel."
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="broadcast-subject" className="field-label">
+              Objet
+            </label>
+            <input
+              id="broadcast-subject"
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              disabled={busy}
+              className="field text-base"
+              placeholder="Ex. : Reprise des cours le 8 septembre"
+              maxLength={BROADCAST_SUBJECT_MAX}
+            />
+            <div className="mt-1 text-right">
+              <CharCounter value={subject.length} max={BROADCAST_SUBJECT_MAX} />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="broadcast-message" className="field-label">
+              Votre message
+            </label>
+            <textarea
+              id="broadcast-message"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              disabled={busy}
+              className="field text-base leading-6"
+              rows={10}
+              placeholder={"Bonjour,\n\nNous vous informons que…"}
+              maxLength={BROADCAST_MESSAGE_MAX}
+            />
+            <div className="mt-1 text-right">
+              <CharCounter value={message.length} max={BROADCAST_MESSAGE_MAX} />
+            </div>
+          </div>
         </div>
+      </SectionCard>
+
+      <SectionCard
+        eyebrow="Étape 3 sur 3"
+        title="Relecture et envoi"
+        description="Vous verrez la liste des destinataires et le message avant l’envoi. Vous pouvez aussi vous envoyer un test."
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleOpenReview()}
+              disabled={busy}
+              className="btn btn-primary"
+            >
+              {isPreparing ? "Chargement…" : "Relire avant d’envoyer"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSendTest("page")}
+              disabled={busy}
+              className="btn btn-outline"
+            >
+              {isTesting ? "Envoi du test…" : "M’envoyer un test"}
+            </button>
+          </div>
+          <div aria-live="polite">
+            <StatusMessage feedback={pageFeedback} />
+          </div>
+          <BroadcastDeliveryTips />
+        </div>
+      </SectionCard>
+
+      {reviewRecipients ? (
+        <BroadcastReviewDialog
+          key={reviewVersion}
+          audienceLabel={audienceLabel}
+          recipients={reviewRecipients}
+          subject={subject.trim()}
+          message={message.trim()}
+          requireConfirmation={audienceMode === "all"}
+          sending={isSending}
+          testing={isTesting}
+          feedback={reviewFeedback}
+          onSend={() => void handleSend()}
+          onSendTest={() => void handleSendTest("dialog")}
+          onClose={handleCloseReview}
+        />
       ) : null}
-    </section>
+    </div>
   );
 }

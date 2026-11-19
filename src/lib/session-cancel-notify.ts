@@ -45,3 +45,41 @@ export async function notifyDisciplineSessionCancelled(params: {
   const result = await sendEmailToMany(recipients, { subject, text, html });
   return { ...result, recipientCount: recipients.length };
 }
+
+export type CancelNotifyOutcome = {
+  /** Nombre d'adhérents pour lesquels l'e-mail est parti. */
+  notified: number;
+  failed: number;
+  recipientCount: number;
+  notifyError?: string;
+};
+
+/** Comme notifyDisciplineSessionCancelled, mais ne lève jamais : l'échec est décrit dans notifyError. */
+export async function notifySessionCancelledSafely(params: {
+  disciplineId: string;
+  sessionDate: string;
+  reason: string;
+}): Promise<CancelNotifyOutcome> {
+  try {
+    const result = await notifyDisciplineSessionCancelled(params);
+    const outcome: CancelNotifyOutcome = {
+      notified: result.sent,
+      failed: result.failed,
+      recipientCount: result.recipientCount,
+    };
+    if (result.recipientCount > 0 && result.sent === 0) {
+      outcome.notifyError = "Aucun e-mail n'a pu être envoyé.";
+    } else if (result.failed > 0) {
+      outcome.notifyError = `${result.failed} e-mail${result.failed > 1 ? "s" : ""} n'${result.failed > 1 ? "ont" : "a"} pas pu être envoyé${result.failed > 1 ? "s" : ""}.`;
+    }
+    return outcome;
+  } catch (error) {
+    console.error("notifySessionCancelledSafely failed", error);
+    return {
+      notified: 0,
+      failed: 0,
+      recipientCount: 0,
+      notifyError: "Le service d'envoi d'e-mails ne répond pas.",
+    };
+  }
+}

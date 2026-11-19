@@ -1,6 +1,7 @@
 import { jsonError, jsonOk } from "@/lib/api-response";
 import { requirePresident } from "@/lib/api-auth";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
+import { stripVoterHashes } from "@/lib/site-polls";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,14 @@ export async function PATCH(
 
   const { pollId } = await context.params;
 
+  let payload: { action?: unknown };
   try {
-    const payload = (await request.json()) as { action?: "close" | "open" | "delete" };
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return jsonError("Demande invalide.", 400);
+  }
+
+  try {
     const data = await readSiteData();
     const poll = data.polls.find((entry) => entry.id === pollId);
     if (!poll) {
@@ -27,14 +34,14 @@ export async function PATCH(
       poll.status = "closed";
       poll.closedAt = new Date().toISOString();
       await writeSiteData(data);
-      return jsonOk({ message: "Sondage arrêté.", poll });
+      return jsonOk({ message: "Sondage arrêté.", poll: stripVoterHashes(poll) });
     }
 
     if (payload.action === "open") {
       poll.status = "open";
       poll.closedAt = null;
       await writeSiteData(data);
-      return jsonOk({ message: "Sondage relancé.", poll });
+      return jsonOk({ message: "Sondage relancé.", poll: stripVoterHashes(poll) });
     }
 
     if (payload.action === "delete") {

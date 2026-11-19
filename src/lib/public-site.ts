@@ -78,6 +78,22 @@ export function findNextSession(entries: WeekScheduleEntry[]): WeekScheduleEntry
   return timed[0] ?? upcoming.sort(byDate)[0] ?? null;
 }
 
+/** Prochaines séances (non annulées, pas encore terminées), triées par date puis heure. */
+export function listUpcomingSessions(entries: WeekScheduleEntry[], limit = 4): WeekScheduleEntry[] {
+  const now = nowParis();
+  const start = (entry: WeekScheduleEntry) => parseScheduleTimeToMinutes(entry.startTime);
+  return entries
+    .filter((entry) => !entry.cancelled && start(entry) !== null)
+    .filter((entry) => {
+      if (entry.date > now.date) return true;
+      if (entry.date < now.date) return false;
+      const end = parseScheduleTimeToMinutes(entry.endTime) ?? start(entry) ?? 0;
+      return end >= now.minutes;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || (start(a) ?? 0) - (start(b) ?? 0))
+    .slice(0, limit);
+}
+
 export function formatHourLabel(value: string): string {
   const minutes = parseScheduleTimeToMinutes(value);
   if (minutes === null) return value.trim();

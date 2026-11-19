@@ -1,18 +1,37 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
+import { StatusMessage, type Feedback } from "@/components/bureau-ui";
 import type { DisciplineOption } from "@/lib/discipline-options";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/dossier-workflow";
-import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
+import { fetchJson, jsonInit } from "@/lib/fetch-json";
 
 type ManualMemberPanelProps = {
   disciplines: DisciplineOption[];
 };
 
-const inputClass =
-  "w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900";
+const ANCHOR = "adherent-papier";
+
+function subscribeToHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+/** Ouverture demandée par l’adresse (`/espace/bureau/dossiers#adherent-papier`). */
+function useHashRequestsOpen(): boolean {
+  return useSyncExternalStore(
+    subscribeToHash,
+    () => window.location.hash === `#${ANCHOR}`,
+    () => false,
+  );
+}
 
 export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProps) {
+  const router = useRouter();
+  const [, startRefresh] = useTransition();
+  const hashRequestsOpen = useHashRequestsOpen();
+  const [manualOpen, setManualOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -27,9 +46,21 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
   const [paymentStatus, setPaymentStatus] = useState<"unpaid" | "paid">("unpaid");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [notes, setNotes] = useState("");
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState<Feedback>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+
+  const isOpen = manualOpen || hashRequestsOpen;
+
+  function toggleOpen() {
+    if (isOpen) {
+      setManualOpen(false);
+      if (window.location.hash === `#${ANCHOR}`) {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      }
+    } else {
+      setManualOpen(true);
+    }
+  }
 
   function toggleDiscipline(disciplineId: string) {
     setDisciplineIds((previous) =>
@@ -39,19 +70,39 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
     );
   }
 
+  function resetForm() {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+    setAddress("");
+    setPostalCode("");
+    setCity("");
+    setDisciplineIds([]);
+    setSignedBulletinReceived(false);
+    setSignedBulletinReceivedAt("");
+    setAmountPaid("");
+    setPaymentStatus("unpaid");
+    setPaymentMethod("");
+    setNotes("");
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    setFeedback(null);
     if (disciplineIds.length === 0) {
-      setMessage("Sélectionnez au moins une activité.");
+      setFeedback({ tone: "error", text: "Cochez au moins une activité pour cet adhérent." });
+      return;
+    }
+    if (paymentStatus === "paid" && !paymentMethod) {
+      setFeedback({ tone: "error", text: "Choisissez le mode de paiement encaissé." });
       return;
     }
     setIsSaving(true);
     try {
-      const response = await fetch("/api/club/manual-members", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const result = await fetchJson(
+        "/api/club/manual-members",
+        jsonInit("POST", {
           firstName,
           lastName,
           email,
@@ -67,135 +118,133 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
           paymentMethod: paymentMethod || undefined,
           notes,
         }),
+      );
+      if (!result.ok) {
+        setFeedback({
+          tone: "error",
+          text: result.message || "L’adhérent n’a pas pu être ajouté. Vérifiez les informations puis réessayez.",
+        });
+        return;
+      }
+      const name = `${firstName} ${lastName}`.trim();
+      setFeedback({
+        tone: "success",
+        text: `${name} a été ajouté(e). Son dossier apparaît dans la liste ci-dessous${
+          paymentStatus === "paid" ? " (onglet « Finalisés »)" : " (onglet « En cours »)"
+        }.`,
       });
-      const text = await response.text();
-      let payload: { message?: string } = {};
-      if (text.trim()) {
-        try {
-          payload = JSON.parse(text) as { message?: string };
-        } catch {
-          payload = {};
-        }
-      }
-      if (!response.ok) {
-        throw new Error(payload.message ?? "Ajout impossible.");
-      }
-      setMessage(payload.message ?? "Adhérent papier ajouté.");
-      setFirstName("");
-      setLastName("");
-      setEmail("");
-      setPhone("");
-      setAddress("");
-      setPostalCode("");
-      setCity("");
-      setDisciplineIds([]);
-      setSignedBulletinReceived(false);
-      setSignedBulletinReceivedAt("");
-      setAmountPaid("");
-      setPaymentStatus("unpaid");
-      setPaymentMethod("");
-      setNotes("");
-      window.setTimeout(() => reloadAfterDossierChange(), 900);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Ajout impossible.");
+      resetForm();
+      startRefresh(() => router.refresh());
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <section className="bento-card min-w-0 p-5">
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span>
-          <span className="block text-lg font-bold text-slate-900">Ajouter un adhérent papier</span>
-          <span className="mt-1 block text-sm text-slate-600">
-            Pour les inscriptions reçues au bureau, sans compte en ligne.
-          </span>
-        </span>
-        <span className="shrink-0 text-sm font-semibold text-amber-800">
-          {isOpen ? "Replier" : "Ouvrir"}
-        </span>
-      </button>
+    <section id={ANCHOR} className="anchor-section panel p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-extrabold tracking-tight text-slate-900">Adhérent papier</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+            Pour une inscription reçue au bureau sur papier, sans compte en ligne.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggleOpen}
+          aria-expanded={isOpen}
+          className={`btn btn-sm ${isOpen ? "btn-ghost" : "btn-outline"}`}
+        >
+          {isOpen ? "Fermer" : "+ Adhérent papier"}
+        </button>
+      </div>
+
+      {!isOpen && feedback ? <StatusMessage feedback={feedback} className="mt-4" /> : null}
 
       {isOpen ? (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <label className="field-label">
               Prénom *
               <input
                 value={firstName}
                 onChange={(event) => setFirstName(event.target.value)}
-                className={inputClass}
+                className="field"
+                autoComplete="off"
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
               Nom *
               <input
                 value={lastName}
                 onChange={(event) => setLastName(event.target.value)}
-                className={inputClass}
+                className="field"
+                autoComplete="off"
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
+              Téléphone
+              <input
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                className="field"
+                autoComplete="off"
+              />
+            </label>
+            <label className="field-label">
               E-mail
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className={inputClass}
-                placeholder="Utile pour les annonces et attestations"
+                className="field"
+                placeholder="Pour les annonces et l’attestation"
+                autoComplete="off"
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-              Téléphone
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            <label className="field-label md:col-span-2 lg:col-span-2">
               Adresse
               <input
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
-                className={inputClass}
+                className="field"
+                autoComplete="off"
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
               Code postal
               <input
                 value={postalCode}
                 onChange={(event) => setPostalCode(event.target.value)}
-                className={inputClass}
+                className="field"
+                autoComplete="off"
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
               Ville
               <input
                 value={city}
                 onChange={(event) => setCity(event.target.value)}
-                className={inputClass}
+                className="field"
+                autoComplete="off"
               />
             </label>
           </div>
 
-          <fieldset className="rounded-xl border border-slate-200 bg-white/70 p-3">
-            <legend className="px-1 text-sm font-semibold text-slate-800">Activités *</legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <fieldset className="rounded-2xl border border-brand-line p-4">
+            <legend className="px-1 text-[15px] font-bold text-slate-900">Activités *</legend>
+            <div className="mt-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {disciplines.map((discipline) => (
                 <label
                   key={discipline.id}
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
+                  className="flex min-h-11 items-center gap-3 rounded-xl border border-brand-line bg-white px-3 py-2 text-sm font-medium text-slate-800"
                 >
                   <input
                     type="checkbox"
+                    className="h-5 w-5"
                     checked={disciplineIds.includes(discipline.id)}
                     onChange={() => toggleDiscipline(discipline.id)}
                   />
@@ -208,44 +257,44 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
             ) : null}
           </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-white/80 px-3 py-3 text-sm font-medium text-slate-800 sm:col-span-2">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <label className="flex min-h-11 items-start gap-3 rounded-2xl border border-brand-line bg-brand-cream/60 px-4 py-3 text-sm font-semibold text-slate-800 md:col-span-2 lg:col-span-3">
               <input
                 type="checkbox"
                 checked={signedBulletinReceived}
                 onChange={(event) => setSignedBulletinReceived(event.target.checked)}
-                className="mt-0.5"
+                className="mt-0.5 h-5 w-5"
               />
               <span>
-                Bulletin papier signé réceptionné
-                <span className="mt-0.5 block text-xs font-normal text-slate-500">
-                  Le dossier sera marqué comme adhérent papier validé.
+                Bulletin papier signé reçu
+                <span className="mt-0.5 block text-sm font-normal text-slate-600">
+                  Le dossier sera considéré comme validé et passera directement à l’étape « Paiement ».
                 </span>
               </span>
             </label>
             {signedBulletinReceived ? (
-              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              <label className="field-label">
                 Date de réception du bulletin
                 <input
                   type="date"
                   value={signedBulletinReceivedAt}
                   onChange={(event) => setSignedBulletinReceivedAt(event.target.value)}
-                  className={inputClass}
+                  className="field"
                 />
               </label>
             ) : null}
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
               Paiement
               <select
                 value={paymentStatus}
                 onChange={(event) => setPaymentStatus(event.target.value as "unpaid" | "paid")}
-                className={inputClass}
+                className="field"
               >
                 <option value="unpaid">Pas encore encaissé</option>
                 <option value="paid">Encaissé</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            <label className="field-label">
               Montant encaissé (€)
               <input
                 type="number"
@@ -253,17 +302,17 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
                 step="0.01"
                 value={amountPaid}
                 onChange={(event) => setAmountPaid(event.target.value)}
-                className={inputClass}
+                className="field"
                 placeholder="Ex. 190"
               />
             </label>
             {paymentStatus === "paid" ? (
-              <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              <label className="field-label">
                 Mode de paiement *
                 <select
                   value={paymentMethod}
                   onChange={(event) => setPaymentMethod(event.target.value)}
-                  className={inputClass}
+                  className="field"
                   required
                 >
                   <option value="">Choisir…</option>
@@ -275,26 +324,24 @@ export default function ManualMemberPanel({ disciplines }: ManualMemberPanelProp
                 </select>
               </label>
             ) : null}
-            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            <label className="field-label md:col-span-2 lg:col-span-3">
               Notes internes
               <textarea
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                className={inputClass}
+                className="field"
                 rows={2}
-                placeholder="Ex. chèque n°123, certificat à fournir…"
+                placeholder="Ex. chèque n° 123, certificat à fournir…"
               />
             </label>
           </div>
 
-          <button
-            type="submit"
-            disabled={isSaving || disciplineIds.length === 0}
-            className="rounded-xl bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
-          >
-            {isSaving ? "Ajout en cours…" : "Ajouter l'adhérent papier"}
-          </button>
-          {message ? <p className="text-sm text-slate-700">{message}</p> : null}
+          <div className="space-y-3">
+            <button type="submit" disabled={isSaving} className="btn btn-primary">
+              {isSaving ? "Ajout en cours…" : "Ajouter l’adhérent papier"}
+            </button>
+            <StatusMessage feedback={feedback} />
+          </div>
         </form>
       ) : null}
     </section>

@@ -1,1154 +1,356 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { ConfirmDialog } from "@/components/bureau-ui";
+import DocumentsSection, { documentsSummary } from "@/components/dossier-documents";
+import DossierOtherActions from "@/components/dossier-other-actions";
+import {
+  ActivitiesSection,
+  BulletinSection,
+  ContactSection,
+  DossierSection,
+  TrialSection,
+  bulletinSummary,
+  contactSummary,
+} from "@/components/dossier-sections";
+import DossierStepper from "@/components/dossier-stepper";
 import PaymentReceiptLink from "@/components/payment-receipt-link";
-import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import type { ClubApplicationActions } from "@/hooks/useClubApplicationActions";
 import type { PaymentMethod, RegistrationApplication } from "@/lib/club-data";
-import { reloadAfterDossierChange } from "@/lib/bureau-navigation";
+import type { ApplicationUpdatePayload } from "@/lib/club-mutations";
+import type { DisciplineOption } from "@/lib/discipline-options";
+import { formatDateFr } from "@/lib/dossier-format";
 import {
   PAYMENT_METHOD_OPTIONS,
-  PROCESSING_PHASE_DESCRIPTIONS,
-  PROCESSING_PHASE_LABELS,
-  getApplicationDisciplineIds,
   getApplicationDisciplineNames,
   getDossierProcessingPhase,
+  getDossierStep,
+  getPhaseAction,
   paymentMethodLabel,
-  type DossierProcessingPhase,
+  type DossierPhaseAction,
 } from "@/lib/dossier-workflow";
-import type { DisciplineOption } from "@/lib/discipline-options";
 
 export type { ApplicationUpdatePayload as UpdatePayload };
 
 type DossierPanelProps = {
   application: RegistrationApplication;
-  disciplineName?: string;
-  /** Disciplines actives, pour modifier les activités du dossier. */
-  disciplines?: DisciplineOption[];
-  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
-  onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
-  onRequestBulletinRevalidation: (applicationId: string) => Promise<void>;
-  onValidateEspace: (applicationId: string) => Promise<void>;
-  onReject: (applicationId: string) => Promise<void>;
-  onMessage: (text: string) => void;
+  /** Activités actives du club, pour modifier celles du dossier. */
+  disciplines: DisciplineOption[];
+  actions: ClubApplicationActions;
 };
 
-function DocumentRequestBlock({
-  applicationId,
-  busy,
-  onRequestDocument,
-}: {
-  applicationId: string;
-  busy: boolean;
-  onRequestDocument: (applicationId: string, documentLabel: string) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState("certificat médical");
-  const [sending, setSending] = useState(false);
+type PendingConfirm =
+  | { type: "step"; action: DossierPhaseAction }
+  | { type: "reject" }
+  | null;
 
-  async function submit() {
-    const trimmed = label.trim();
-    if (!trimmed) return;
-    setSending(true);
+/** Lien à transmettre à la main quand l’e-mail n’a pas pu partir (remplace l’ancienne fenêtre « prompt »). */
+function SecureLinkBox({ link, kind, onClose }: { link: string; kind: "document" | "bulletin"; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
     try {
-      await onRequestDocument(applicationId, trimmed);
-      setOpen(false);
-      setLabel("certificat médical");
-    } finally {
-      setSending(false);
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 disabled:opacity-50"
-      >
-        Demander une pièce
-      </button>
-    );
-  }
-
   return (
-    <div className="w-full rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:col-span-2">
-      <p className="text-sm font-semibold text-amber-950">Demander une pièce à l&apos;adhérent</p>
-      <p className="mt-1 text-xs text-amber-900/80">
-        Un e-mail avec un lien public sécurisé sera envoyé pour que l&apos;adhérent dépose le document.
-      </p>
-      <label className="mt-2 block text-sm font-medium text-slate-700">
-        Pièce demandée
+    <div className="rounded-2xl border border-brand-blue/30 bg-brand-blue/5 p-4">
+      <label className="field-label">
+        {kind === "document" ? "Lien de dépôt à transmettre à l’adhérent" : "Lien de revalidation à transmettre à l’adhérent"}
         <input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          disabled={busy || sending}
-          placeholder="Ex. certificat médical"
-          className="mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          readOnly
+          value={link}
+          onFocus={(event) => event.currentTarget.select()}
+          className="field"
         />
       </label>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy || sending || !label.trim()}
-          onClick={() => void submit()}
-          className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {sending ? "Envoi…" : "Envoyer la demande par e-mail"}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => void copy()} className="btn btn-primary btn-sm">
+          Copier le lien
         </button>
-        <button
-          type="button"
-          disabled={busy || sending}
-          onClick={() => setOpen(false)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-        >
-          Annuler
+        <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">
+          Fermer
         </button>
+        {copied ? <span className="text-sm font-semibold text-brand-green-dark">Lien copié.</span> : null}
       </div>
     </div>
   );
 }
 
-function BulletinRevalidationBlock({
-  applicationId,
-  busy,
-  onRequestBulletinRevalidation,
-}: {
-  applicationId: string;
-  busy: boolean;
-  onRequestBulletinRevalidation: (applicationId: string) => Promise<void>;
-}) {
-  const [sending, setSending] = useState(false);
-
-  return (
-    <div className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3">
-      <p className="text-sm font-semibold text-cyan-950">Bulletin d&apos;adhésion</p>
-      <p className="mt-1 text-xs text-cyan-900/80">
-        Renvoyer un lien sécurisé pour que l&apos;adhérent revalide son bulletin en ligne.
-      </p>
-      <button
-        type="button"
-        disabled={busy || sending}
-        onClick={async () => {
-          setSending(true);
-          try {
-            await onRequestBulletinRevalidation(applicationId);
-          } finally {
-            setSending(false);
-          }
-        }}
-        className="mt-2 rounded-lg border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-900 disabled:opacity-50"
-      >
-        {sending ? "Envoi…" : "Renvoyer le bulletin d'adhésion"}
-      </button>
-    </div>
-  );
-}
-
-function PhaseStepper({ current }: { current: DossierProcessingPhase }) {
-  const steps: DossierProcessingPhase[] = [1, 2, 3, 4, 5];
-  return (
-    <ol className="grid grid-cols-2 gap-1 md:flex md:flex-row md:gap-2">
-      {steps.map((step) => {
-        const isCompleted = step === 5 && current === 5;
-        const isDone = step < current || isCompleted;
-        const isCurrent = step === current && !isCompleted;
-        return (
-          <li
-            key={step}
-            className={`flex min-w-0 flex-1 flex-col rounded-lg border px-1.5 py-2 text-center md:px-2 ${
-              isCurrent
-                ? "border-cyan-400 bg-cyan-50"
-                : isDone
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-slate-200 bg-slate-50"
-            }`}
-          >
-            <span
-              className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                isCurrent
-                  ? "bg-cyan-600 text-white"
-                  : isDone
-                    ? "bg-emerald-600 text-white"
-                    : "bg-slate-300 text-slate-700"
-              }`}
-            >
-              {isDone ? "✓" : step}
-            </span>
-            <span className="mt-1 text-[9px] font-semibold leading-tight text-slate-800 md:text-xs">
-              {PROCESSING_PHASE_LABELS[step]}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function splitFullName(
-  fullName: string,
-  firstName: string,
-  lastName: string,
-): { firstName: string; lastName: string } {
-  if (firstName.trim() || lastName.trim()) {
-    return { firstName: firstName.trim(), lastName: lastName.trim() };
-  }
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) {
-    return { firstName: parts[0] ?? "", lastName: "" };
-  }
-  return { firstName: parts[0]!, lastName: parts.slice(1).join(" ") };
-}
-
-/** Activités du dossier : le bureau peut en cocher plusieurs (ex. Pilates + Yoga). */
-function ActivitiesBlock({
-  application,
-  disciplines,
-  busy,
-  onUpdate,
-}: {
-  application: RegistrationApplication;
-  disciplines: DisciplineOption[];
-  busy: boolean;
-  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
-}) {
-  const currentIds = getApplicationDisciplineIds(application);
-  const [editing, setEditing] = useState(false);
-  const [selected, setSelected] = useState<string[]>(currentIds);
-  const [saving, setSaving] = useState(false);
-
-  const currentNames = getApplicationDisciplineNames(application, disciplines);
-
-  function toggle(id: string) {
-    setSelected((previous) =>
-      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id],
-    );
-  }
-
-  async function save() {
-    setSaving(true);
-    try {
-      await onUpdate(application.id, { disciplineIds: selected });
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p>
-          <strong>Activités :</strong> {currentNames.join(", ") || "Aucune"}
-        </p>
-        {!editing ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setSelected(currentIds);
-              setEditing(true);
-            }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50"
-          >
-            Modifier les activités
-          </button>
-        ) : null}
-      </div>
-      {editing ? (
-        <div className="mt-3 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {disciplines.map((discipline) => (
-              <label
-                key={discipline.id}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(discipline.id)}
-                  onChange={() => toggle(discipline.id)}
-                />
-                {discipline.name}
-              </label>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || saving || selected.length === 0}
-              onClick={() => void save()}
-              className="rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              Enregistrer
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => setEditing(false)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ApplicantBlock({
-  application,
-  busy,
-  onUpdate,
-}: {
-  application: RegistrationApplication;
-  busy: boolean;
-  onUpdate: (applicationId: string, payload: ApplicationUpdatePayload) => Promise<void>;
-}) {
-  const bulletin = application.membershipBulletin;
-  const initialName = splitFullName(
-    application.fullName,
-    application.firstName ?? "",
-    application.lastName ?? "",
-  );
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [firstName, setFirstName] = useState(initialName.firstName);
-  const [lastName, setLastName] = useState(initialName.lastName);
-  const [email, setEmail] = useState(application.email ?? "");
-  const [phone, setPhone] = useState(application.phone ?? "");
-  const [address, setAddress] = useState(application.address ?? "");
-  const [postalCode, setPostalCode] = useState(application.postalCode ?? "");
-  const [city, setCity] = useState(application.city ?? "");
-
-  function startEdit() {
-    const name = splitFullName(
-      application.fullName,
-      application.firstName ?? "",
-      application.lastName ?? "",
-    );
-    setFirstName(name.firstName);
-    setLastName(name.lastName);
-    setEmail(application.email ?? "");
-    setPhone(application.phone ?? "");
-    setAddress(application.address ?? "");
-    setPostalCode(application.postalCode ?? "");
-    setCity(application.city ?? "");
-    setError("");
-    setEditing(true);
-  }
-
-  async function save() {
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("Le prénom et le nom sont obligatoires.");
-      return;
-    }
-    const nextEmail = email.trim().toLowerCase();
-    if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
-      setError("Adresse e-mail invalide.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      await onUpdate(application.id, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: nextEmail,
-        phone: phone.trim(),
-        address: address.trim(),
-        postalCode: postalCode.trim(),
-        city: city.trim(),
-      });
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const fieldClass =
-    "mt-0.5 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900";
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coordonnées</p>
-          {application.origin === "paper" ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
-              Adhérent papier
-            </span>
-          ) : null}
-        </div>
-        {!editing ? (
-          <button
-            type="button"
-            onClick={startEdit}
-            disabled={busy || saving}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
-          >
-            Modifier les coordonnées
-          </button>
-        ) : null}
-      </div>
-
-      {editing ? (
-        <div className="mt-3 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">
-              Prénom
-              <input
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="given-name"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Nom
-              <input
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="family-name"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              E-mail
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="email"
-                placeholder="adresse@exemple.fr"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Téléphone
-              <input
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="tel"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
-              Adresse
-              <input
-                value={address}
-                onChange={(event) => setAddress(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="street-address"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Code postal
-              <input
-                value={postalCode}
-                onChange={(event) => setPostalCode(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="postal-code"
-              />
-            </label>
-            <label className="text-sm font-medium text-slate-700">
-              Ville
-              <input
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                disabled={saving}
-                className={fieldClass}
-                autoComplete="address-level2"
-              />
-            </label>
-          </div>
-          <p className="text-xs text-slate-500">
-            L&apos;e-mail sert aux envois du bureau et devient aussi l&apos;adresse de connexion
-            à l&apos;espace membre (compte Clerk). L&apos;ancienne adresse est retirée du compte.
-          </p>
-          {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {saving ? "Enregistrement…" : "Enregistrer les coordonnées"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              disabled={saving}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      ) : (
-        <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-slate-500">Nom</dt>
-            <dd className="font-medium text-slate-900">{application.fullName}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">E-mail</dt>
-            <dd className="text-break font-medium text-slate-900">
-              {application.email || "—"}
-              {application.emailVerifiedAt ? (
-                <span className="mt-1 block text-xs font-normal text-emerald-700">
-                  ✓ Vérifié le{" "}
-                  {new Date(application.emailVerifiedAt).toLocaleDateString("fr-FR")}
-                </span>
-              ) : application.origin === "online" ? (
-                <span className="mt-1 block text-xs font-normal text-amber-700">
-                  Adresse non confirmée par code
-                </span>
-              ) : null}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Téléphone</dt>
-            <dd className="font-medium text-slate-900">{application.phone || "—"}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-slate-500">Adresse</dt>
-            <dd className="font-medium text-slate-900">{application.address?.trim() || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Code postal</dt>
-            <dd className="font-medium text-slate-900">{application.postalCode?.trim() || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Ville</dt>
-            <dd className="font-medium text-slate-900">{application.city?.trim() || "—"}</dd>
-          </div>
-          {application.origin === "paper" ? (
-            <>
-              <div>
-                <dt className="text-slate-500">Bulletin papier signé</dt>
-                <dd className="font-medium text-slate-900">
-                  {application.signedBulletinReceivedAt
-                    ? `Reçu le ${new Date(
-                        `${application.signedBulletinReceivedAt}T12:00:00`,
-                      ).toLocaleDateString("fr-FR")}`
-                    : "Non coché"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Montant saisi au bureau</dt>
-                <dd className="font-medium text-slate-900">
-                  {typeof application.amountPaid === "number"
-                    ? `${application.amountPaid.toFixed(2).replace(".", ",")} €`
-                    : "—"}
-                </dd>
-              </div>
-            </>
-          ) : null}
-          {bulletin ? (
-            <>
-              <div>
-                <dt className="text-slate-500">Date de naissance</dt>
-                <dd className="font-medium text-slate-900">{bulletin.birthDate}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Contact urgence</dt>
-                <dd className="font-medium text-slate-900">
-                  {bulletin.emergencyContactName} — {bulletin.emergencyContactPhone}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Total bulletin</dt>
-                <dd className="font-medium text-slate-900">{bulletin.grandTotal} €</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Droit à l&apos;image</dt>
-                <dd className="font-medium text-slate-900">
-                  {bulletin.imageRights === "authorize" ? "Autorisé" : "Refusé"}
-                </dd>
-              </div>
-            </>
-          ) : null}
-        </dl>
-      )}
-      {application.motivation ? (
-        <p className="mt-3 text-sm text-slate-700">
-          <span className="font-medium text-slate-500">Motivation : </span>
-          {application.motivation}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function DocumentsBlock({
-  applicationId,
-  documents,
-  canUpload,
-  onMessage,
-}: {
-  applicationId: string;
-  documents: RegistrationApplication["documents"];
-  canUpload: boolean;
-  onMessage: (text: string) => void;
-}) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [docLabel, setDocLabel] = useState("");
-
-  async function handleUpload(file: File) {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (docLabel.trim()) {
-        formData.append("label", docLabel.trim());
-      }
-      const response = await fetch(`/api/club/applications/${applicationId}/documents`, {
-        method: "POST",
-        body: formData,
-      });
-      const body = (await response.json()) as { message?: string };
-      if (response.ok) {
-        onMessage(body.message ?? "Pièce jointe ajoutée.");
-        reloadAfterDossierChange();
-      } else {
-        onMessage(body.message ?? "Échec de l'envoi.");
-      }
-    } finally {
-      setUploading(false);
-      setDocLabel("");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pièces jointes</p>
-      {documents.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-600">Aucune pièce jointe déposée pour le moment.</p>
-      ) : (
-        <ul className="mt-2 space-y-2">
-          {documents.map((doc) => {
-            const isS3 = doc.url.startsWith("s3://");
-            const href = isS3
-              ? `/api/club/documents/file?url=${encodeURIComponent(doc.url)}`
-              : doc.url;
-            const isBulletin = doc.name.toLowerCase().includes("bulletin");
-            return (
-              <li
-                key={`${doc.url}-${doc.uploadedAt}`}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
-              >
-                <span className="text-break font-medium text-slate-900">
-                  {doc.name}
-                  {isBulletin ? (
-                    <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
-                      Bulletin signé
-                    </span>
-                  ) : null}
-                </span>
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-break shrink-0 text-xs font-semibold text-cyan-700 underline"
-                >
-                  Ouvrir
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {canUpload ? (
-        <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-          <p className="text-xs font-medium text-slate-600">
-            Déposer une pièce pour le candidat (scan, photo, document papier…)
-          </p>
-          <input
-            type="text"
-            value={docLabel}
-            onChange={(e) => setDocLabel(e.target.value)}
-            placeholder="Libellé (ex. certificat médical)"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              className="max-w-full text-sm text-slate-700"
-              disabled={uploading}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleUpload(file);
-              }}
-            />
-            {uploading ? <span className="text-xs text-slate-500">Envoi en cours…</span> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TrialBadge({
-  trialAttended,
-  onToggle,
-  disabled,
-}: {
-  trialAttended: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
-      <div>
-        <p className="text-xs font-semibold uppercase text-amber-900">Essai</p>
-        <p className="text-sm text-amber-950">
-          {trialAttended ? "Essai réalisé" : "Essai pas encore réalisé"}
-        </p>
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onToggle}
-        className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-950 disabled:opacity-50"
-      >
-        Marquer comme {trialAttended ? "non réalisé" : "réalisé"}
-      </button>
-    </div>
-  );
-}
-
-export default function DossierPanel({
-  application,
-  disciplineName,
-  disciplines,
-  onUpdate,
-  onRequestDocument,
-  onRequestBulletinRevalidation,
-  onValidateEspace,
-  onReject,
-  onMessage,
-}: DossierPanelProps) {
+export default function DossierPanel({ application, disciplines, actions }: DossierPanelProps) {
   const phase = getDossierProcessingPhase(application);
+  const step = getDossierStep(application);
   const isPaper = application.origin === "paper";
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(application.paymentMethod || "");
+  const [methodError, setMethodError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<PendingConfirm>(null);
 
-  async function run(action: () => Promise<void>) {
+  const disabled = busy || actions.refreshing;
+  const id = application.id;
+  const nextAction = getPhaseAction(application, "next");
+  const backAction = getPhaseAction(application, "back");
+  const secureLink = actions.secureLinkFor(id);
+
+  async function withBusy(task: () => Promise<unknown>) {
     setBusy(true);
     try {
-      await action();
+      await task();
     } finally {
       setBusy(false);
     }
   }
 
+  async function executeStep(action: DossierPhaseAction) {
+    await withBusy(async () => {
+      if (action.kind === "validate_espace") {
+        await actions.validateEspace(id, action.successMessage);
+        return;
+      }
+      const payload: ApplicationUpdatePayload | undefined =
+        action.kind === "finalize" ? { ...action.payload, paymentMethod } : action.payload;
+      if (payload) {
+        await actions.updateApplication(id, payload, action.successMessage);
+      }
+    });
+    setConfirm(null);
+  }
+
+  function requestStep(action: DossierPhaseAction) {
+    if (action.kind === "finalize" && !paymentMethod) {
+      setMethodError("Choisissez le mode de paiement reçu avant de finaliser.");
+      return;
+    }
+    setMethodError("");
+    if (action.confirm) {
+      setConfirm({ type: "step", action });
+    } else {
+      void executeStep(action);
+    }
+  }
+
+  async function executeReject() {
+    await withBusy(() => actions.rejectApplication(id, Boolean(application.clerkUserId)));
+    setConfirm(null);
+  }
+
   if (application.status === "rejected") {
     return (
-      <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-700">Ce dossier a été refusé.</p>
+      <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
+        Ce dossier a été refusé. Il n’apparaît plus dans les dossiers en cours.
+      </p>
     );
   }
 
   if (application.status === "cancelled") {
     return (
-      <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-900">
-        Adhérent désinscrit — plus dans les listes de diffusion ni les alertes de renouvellement.
+      <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-900">
+        Cet adhérent est désinscrit : il ne reçoit plus les messages du club ni les alertes de renouvellement.
       </p>
     );
   }
 
-  const canUploadDocuments = phase >= 3 && phase < 5;
+  const activityNames = getApplicationDisciplineNames(application, disciplines);
+  const confirmStep = confirm?.type === "step" ? confirm.action : null;
+  const licenseEnd = application.licenseEndDate ? formatDateFr(application.licenseEndDate, "long") : "";
 
   return (
-    <div className="space-y-4">
-      <PhaseStepper current={phase} />
-      <p className="text-sm text-slate-600">{PROCESSING_PHASE_DESCRIPTIONS[phase]}</p>
+    <div className="space-y-5">
+      <DossierStepper current={phase} />
 
-      <ApplicantBlock application={application} busy={busy} onUpdate={onUpdate} />
-      {disciplines && disciplines.length > 0 ? (
-        <ActivitiesBlock
-          application={application}
-          disciplines={disciplines}
-          busy={busy}
-          onUpdate={onUpdate}
-        />
+      {step === "missing_document" ? (
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 ring-1 ring-amber-200">
+          Une pièce a été demandée à l’adhérent. Le dossier reprendra dès qu’il l’aura déposée.
+        </p>
       ) : null}
-      {application.paymentStatus === "paid" ? (
-        <PaymentReceiptLink
-          applicationId={application.id}
-          className="inline-flex rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
-        >
-          Télécharger l&apos;attestation de paiement
-        </PaymentReceiptLink>
-      ) : null}
-      {!isPaper ? (
-        <BulletinRevalidationBlock
-          applicationId={application.id}
-          busy={busy}
-          onRequestBulletinRevalidation={onRequestBulletinRevalidation}
-        />
-      ) : null}
-      <DocumentsBlock
-        applicationId={application.id}
-        documents={application.documents}
-        canUpload={canUploadDocuments}
-        onMessage={onMessage}
-      />
 
-      <TrialBadge
-        trialAttended={application.trialAttended}
-        disabled={busy || phase === 5}
-        onToggle={() =>
-          void run(() =>
-            onUpdate(application.id, { trialAttended: !application.trialAttended })
-          )
-        }
-      />
-
-      {phase === 1 ? (
-        <div className="space-y-3 border-t border-slate-200 pt-4">
-          <p className="text-sm font-medium text-slate-800">
-            {isPaper
-              ? "Dossier papier reçu. Aucun espace membre Clerk n'est nécessaire : passez directement à la préparation du paiement."
-              : "Dossier reçu. Passez à la validation de l'espace membre Clerk avant de traiter les pièces."}
-          </p>
+      {nextAction ? (
+        <section className="rounded-2xl border-2 border-brand-blue/30 bg-brand-blue/5 p-4">
+          <p className="text-sm font-bold text-brand-blue-dark">À faire maintenant</p>
+          <p className="mt-1 text-sm text-slate-700">{nextAction.hint}</p>
+          {nextAction.kind === "finalize" ? (
+            <div className="mt-3 max-w-sm">
+              <label className="field-label">
+                Mode de paiement reçu
+                <select
+                  value={paymentMethod}
+                  onChange={(event) => {
+                    setPaymentMethod(event.target.value as PaymentMethod);
+                    setMethodError("");
+                  }}
+                  disabled={disabled}
+                  className="field"
+                  aria-invalid={methodError ? true : undefined}
+                >
+                  <option value="">Choisir…</option>
+                  {PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {methodError ? (
+                <p role="alert" className="mt-1 text-sm font-semibold text-rose-700">
+                  {methodError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
-            disabled={busy}
-            onClick={() =>
-              void run(() =>
-                onUpdate(
-                  application.id,
-                  isPaper
-                    ? { dossierPhase: "payment", status: "approved" }
-                    : { dossierPhase: "espace_validation", status: "pending" },
+            disabled={disabled || (nextAction.kind === "validate_espace" && !application.clerkUserId)}
+            onClick={() => requestStep(nextAction)}
+            className="btn btn-primary mt-4 w-full sm:w-auto"
+          >
+            {nextAction.label}
+          </button>
+          {nextAction.kind === "validate_espace" && !application.clerkUserId ? (
+            <p className="mt-2 text-sm font-semibold text-amber-800">
+              Aucun compte de connexion n’est lié à ce dossier : l’espace ne peut pas être validé.
+            </p>
+          ) : null}
+        </section>
+      ) : phase === 5 ? (
+        <section className="rounded-2xl border-2 border-brand-green/30 bg-brand-green/10 p-4">
+          <p className="text-[15px] font-bold text-brand-green-dark">Dossier finalisé</p>
+          <p className="mt-1 text-sm text-slate-700">
+            Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}).
+            {licenseEnd ? ` Licence valable jusqu’au ${licenseEnd}.` : ""}{" "}
+            {isPaper ? "Dossier papier traité." : "L’adhésion est active."}
+          </p>
+          <PaymentReceiptLink applicationId={id} className="btn btn-primary btn-sm mt-3">
+            Télécharger l’attestation de paiement
+          </PaymentReceiptLink>
+        </section>
+      ) : null}
+
+      {secureLink ? (
+        <SecureLinkBox link={secureLink.link} kind={secureLink.kind} onClose={actions.dismissSecureLink} />
+      ) : null}
+
+      <div className="space-y-2">
+        <DossierSection title="Coordonnées" summary={contactSummary(application)}>
+          <ContactSection
+            application={application}
+            disabled={disabled}
+            onUpdate={(payload, message) => actions.updateApplication(id, payload, message)}
+          />
+        </DossierSection>
+        {disciplines.length > 0 ? (
+          <DossierSection title="Activités" summary={activityNames.join(", ") || "Aucune activité"}>
+            <ActivitiesSection
+              application={application}
+              disciplines={disciplines}
+              disabled={disabled}
+              onUpdate={(payload, message) => actions.updateApplication(id, payload, message)}
+            />
+          </DossierSection>
+        ) : null}
+        <DossierSection title="Bulletin d’adhésion" summary={bulletinSummary(application)}>
+          <BulletinSection
+            application={application}
+            busy={disabled}
+            onRequestRevalidation={() => void withBusy(() => actions.requestBulletinRevalidation(id))}
+          />
+        </DossierSection>
+        <DossierSection
+          title="Pièces"
+          summary={documentsSummary(application.documents.length)}
+          defaultOpen={phase === 3}
+        >
+          <DocumentsSection
+            applicationId={id}
+            documents={application.documents}
+            canUpload={phase >= 3 && phase < 5}
+            showReceipt={application.paymentStatus === "paid" && phase !== 5}
+            disabled={disabled}
+            onUpload={(file, label) => actions.uploadDocument(id, file, label)}
+          />
+        </DossierSection>
+        <DossierSection
+          title="Essai"
+          summary={application.trialAttended ? "Essai réalisé" : "Essai pas encore réalisé"}
+        >
+          <TrialSection
+            trialAttended={application.trialAttended}
+            disabled={disabled || phase === 5}
+            onToggle={() =>
+              void withBusy(() =>
+                actions.updateApplication(
+                  id,
+                  { trialAttended: !application.trialAttended },
+                  application.trialAttended ? "Essai marqué comme non réalisé." : "Essai marqué comme réalisé.",
                 ),
               )
             }
-            className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {isPaper ? "Passer à la préparation du paiement" : "Passer à la validation de l'espace"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const message = isPaper
-                ? "Refuser ce dossier papier ?"
-                : "Refuser ce dossier et supprimer le compte Clerk ?";
-              if (window.confirm(message)) {
-                void run(() => onReject(application.id));
-              }
-            }}
-            className="block text-xs font-medium text-rose-600 underline disabled:opacity-50"
-          >
-            Refuser le dossier
-          </button>
-        </div>
-      ) : null}
-
-      {phase === 2 && isPaper ? (
-        <div className="space-y-3 border-t border-slate-200 pt-4">
-          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
-            <p>
-              <strong>Dossier papier :</strong> aucun compte Clerk à valider.
-            </p>
-            <p className="mt-1 text-xs text-amber-900">
-              Les pièces et le paiement peuvent être traités directement par le bureau.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, { dossierPhase: "payment", status: "approved" }),
-                )
-              }
-              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Passer au paiement
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, { dossierPhase: "documents", status: "pending" }),
-                )
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Passer aux pièces
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, { dossierPhase: "reception", status: "pending" }),
-                )
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Revenir à la réception
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {phase === 2 && !isPaper ? (
-        <div className="space-y-3 border-t border-slate-200 pt-4">
-          <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-sm text-violet-950">
-            <p>
-              <strong>Compte Clerk :</strong>{" "}
-              {application.clerkUserId ? "créé (en attente d'activation)" : "absent"}
-            </p>
-            {disciplineName ? (
-              <p className="mt-1">
-                <strong>Activité :</strong> {disciplineName}
-              </p>
-            ) : null}
-            <p className="mt-1 text-xs text-violet-800">
-              Validez pour autoriser la connexion à l&apos;espace membre. Les pièces seront traitées à l&apos;étape
-              suivante. En cas de refus, le compte Clerk sera supprimé.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || !application.clerkUserId}
-              onClick={() => void run(() => onValidateEspace(application.id))}
-              className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Valider l&apos;espace membre
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() => onUpdate(application.id, { dossierPhase: "reception", status: "pending" }))
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Revenir à la réception
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (window.confirm("Refuser ce dossier et supprimer le compte Clerk ?")) {
-                  void run(() => onReject(application.id));
-                }
-              }}
-              className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 disabled:opacity-50"
-            >
-              Refuser
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {phase === 3 ? (
-        <div className="space-y-3 border-t border-slate-200 pt-4">
-          <p className="text-sm font-medium text-slate-800">
-            {isPaper
-              ? "Dossier papier. Contrôlez les pièces jointes puis passez au paiement."
-              : "L'espace membre est actif. Contrôlez les pièces jointes."}
-          </p>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, {
-                    dossierPhase: "payment",
-                    status: "approved",
-                  })
-                )
-              }
-              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Pièces jointes vérifiées
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() => onUpdate(application.id, { dossierPhase: "espace_validation", status: "pending" }))
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Revenir à la validation de l&apos;espace
-            </button>
-            </div>
-            <DocumentRequestBlock
-              applicationId={application.id}
-              busy={busy}
-              onRequestDocument={onRequestDocument}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {phase === 4 ? (
-        <div className="space-y-3 border-t border-slate-200 pt-4">
-          <p className="text-sm font-medium text-slate-800">Enregistrer le paiement reçu</p>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Mode de paiement
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">Choisir…</option>
-              {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (!paymentMethod) {
-                  onMessage("Choisissez un mode de paiement avant de valider.");
-                  return;
-                }
-                void run(() =>
-                  onUpdate(application.id, {
-                    dossierPhase: "finalized",
-                    status: "approved",
-                    paymentStatus: "paid",
-                    paymentMethod,
-                  })
-                );
-              }}
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              Paiement reçu — finaliser
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, {
-                    dossierPhase: "documents",
-                    status: "pending",
-                    paymentStatus: "unpaid",
-                  })
-                )
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Revenir à la vérification des pièces
-            </button>
-            </div>
-            <DocumentRequestBlock
-              applicationId={application.id}
-              busy={busy}
-              onRequestDocument={onRequestDocument}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      {phase === 5 ? (
-        <div className="space-y-3 border-t border-emerald-200 pt-4">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <p className="font-semibold">Dossier finalisé</p>
-            <p className="mt-1">
-              Paiement enregistré ({paymentMethodLabel(application.paymentMethod)}).{" "}
-              {application.email
-                ? "L'attestation de paiement a été envoyée à l'adhérent."
-                : "Aucune adresse e-mail : l'attestation peut être téléchargée ci-dessous."}{" "}
-              {isPaper ? "Dossier papier traité." : "Adhésion active sur Clerk."}
-            </p>
-            <PaymentReceiptLink
-              applicationId={application.id}
-              className="mt-3 inline-flex rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Télécharger l&apos;attestation de paiement
-            </PaymentReceiptLink>
-            {application.licenseEndDate ? (
-              <p className="mt-1">
-                Licence valable jusqu&apos;au{" "}
-                {new Date(`${application.licenseEndDate}T12:00:00`).toLocaleDateString("fr-FR", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-                .
-              </p>
-            ) : null}
-          </div>
-          <DocumentRequestBlock
-            applicationId={application.id}
-            busy={busy}
-            onRequestDocument={onRequestDocument}
           />
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  onUpdate(application.id, {
-                    dossierPhase: "payment",
-                    status: "approved",
-                    paymentStatus: "unpaid",
-                  })
-                )
-              }
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-            >
-              Revenir au paiement
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    isPaper
-                      ? "Refuser ce dossier papier ?"
-                      : "Refuser ce dossier ? Le compte Clerk sera supprimé si possible.",
-                  )
-                ) {
-                  void run(() => onReject(application.id));
-                }
-              }}
-              className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800 disabled:opacity-50"
-            >
-              Refuser / supprimer
-            </button>
-          </div>
-        </div>
-      ) : null}
+        </DossierSection>
+      </div>
+
+      <DossierOtherActions
+        backAction={backAction}
+        canRequestDocument={phase >= 3}
+        hasEmail={Boolean(application.email?.trim())}
+        busy={disabled}
+        onBack={() => {
+          if (!backAction) return;
+          if (backAction.confirm) {
+            setConfirm({ type: "step", action: backAction });
+          } else {
+            void executeStep(backAction);
+          }
+        }}
+        onRequestDocument={(label) => actions.requestDocument(id, label)}
+        onReject={() => setConfirm({ type: "reject" })}
+      />
+
+      <ConfirmDialog
+        open={confirmStep !== null}
+        title={confirmStep?.confirm?.title ?? ""}
+        message={
+          confirmStep ? (
+            <>
+              <p>{confirmStep.confirm?.message}</p>
+              {confirmStep.kind === "finalize" ? (
+                <p className="mt-2 font-semibold">Mode de paiement : {paymentMethodLabel(paymentMethod)}.</p>
+              ) : null}
+            </>
+          ) : null
+        }
+        confirmLabel={confirmStep?.confirm?.confirmLabel ?? "Confirmer"}
+        tone={confirmStep?.confirm?.tone ?? "primary"}
+        busy={busy}
+        onConfirm={() => confirmStep && void executeStep(confirmStep)}
+        onCancel={() => setConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={confirm?.type === "reject"}
+        title="Refuser ce dossier ?"
+        message={
+          <>
+            <p>
+              Le dossier de {application.fullName} sera marqué comme refusé et ne sera plus dans les dossiers en
+              cours (onglet « Refusés et désinscrits »).
+            </p>
+            <p className="mt-2 font-semibold">
+              {application.clerkUserId
+                ? "Son accès à l’espace adhérent sera supprimé. Cette action est définitive depuis cet écran."
+                : "Cette action est définitive depuis cet écran."}
+            </p>
+          </>
+        }
+        confirmLabel="Refuser le dossier"
+        tone="danger"
+        busy={busy}
+        onConfirm={() => void executeReject()}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

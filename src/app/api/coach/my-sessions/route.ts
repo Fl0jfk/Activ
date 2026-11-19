@@ -12,10 +12,19 @@ export async function GET() {
     return NextResponse.json({ message: "Non autorisé." }, { status: 401 });
   }
 
-  const siteData = await readSiteData();
-  const clubData = await readClubData();
-  const sessions = buildCoachUpcomingSessions(siteData, user.fullName, 28);
-  const myRequests = clubData.coachAbsenceRequests.filter((r) => r.clerkUserId === user.userId);
+  try {
+    const [siteData, clubData] = await Promise.all([readSiteData(), readClubData()]);
+    const sessions = buildCoachUpcomingSessions(siteData, user.fullName, 28);
+    const requests = clubData.coachAbsenceRequests
+      .filter((r) => r.clerkUserId === user.userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const disciplineNames = Object.fromEntries(
+      siteData.disciplines.map((discipline) => [discipline.id, discipline.name]),
+    );
 
-  return NextResponse.json({ sessions, requests: myRequests });
+    return NextResponse.json({ sessions, requests, disciplineNames });
+  } catch (error) {
+    console.error("Failed to load coach sessions", error);
+    return NextResponse.json({ message: "Impossible de charger vos séances." }, { status: 500 });
+  }
 }

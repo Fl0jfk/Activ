@@ -72,6 +72,22 @@ export function sortNewsByDateDesc(items: SiteNewsItem[]): SiteNewsItem[] {
   return [...items].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/** Une actualité est « archivée » quand sa date remonte à plus d’un mois. */
+export function isNewsArchived(date: string, now: Date = new Date()): boolean {
+  const threshold = new Date(now);
+  threshold.setMonth(threshold.getMonth() - 1);
+  threshold.setHours(0, 0, 0, 0);
+  const itemDate = new Date(`${date}T23:59:59`);
+  return !Number.isNaN(itemDate.getTime()) && itemDate < threshold;
+}
+
+/** Date du jour au format AAAA-MM-JJ (heure locale), pour préremplir un champ date. */
+export function todayIsoLocal(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 export function normalizeNewsDisciplineId(disciplineId: string | null | undefined): string | null {
   if (!disciplineId || disciplineId === ASSOCIATION_GENERAL_NEWS) return null;
   return disciplineId;

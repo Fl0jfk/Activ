@@ -284,3 +284,63 @@ export function buildMistralActivitiesContext(data: AssociationData, reference =
 
   return JSON.stringify(payload, null, 2);
 }
+
+/** Instant fixe (midi UTC) d'une date ISO : tombe sur le même jour à Paris, été comme hiver. */
+export function referenceDateFromIso(isoDate: string): Date {
+  return new Date(`${isoDate}T12:00:00Z`);
+}
+
+/** Séances de la semaine commençant le lundi donné (calcul indépendant du fuseau du navigateur). */
+export function buildWeekScheduleForMonday(
+  data: AssociationData,
+  mondayIso: string
+): WeekScheduleEntry[] {
+  return buildWeekSchedule(data, referenceDateFromIso(mondayIso));
+}
+
+/** Vrai pour une date réelle au format YYYY-MM-DD (refuse le 31 février). */
+export function isValidIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+/** Jour de la semaine (1 = lundi … 7 = dimanche) d'une date ISO, sans passer par le fuseau local. */
+export function weekdayOfIsoDate(isoDate: string): DayOfWeek {
+  const day = referenceDateFromIso(isoDate).getUTCDay();
+  return (day === 0 ? 7 : day) as DayOfWeek;
+}
+
+function shortDateParts(isoDate: string): { day: string; month: string; year: string } {
+  const date = referenceDateFromIso(isoDate);
+  const month = new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", month: "long" }).format(date);
+  const day = date.getUTCDate();
+  return { day: day === 1 ? "1er" : String(day), month, year: String(date.getUTCFullYear()) };
+}
+
+/** Ex. « Du 17 au 23 novembre 2026 » pour la semaine commençant le lundi donné. */
+export function formatWeekRangeShort(mondayIso: string): string {
+  const start = shortDateParts(mondayIso);
+  const end = shortDateParts(addDaysToIsoDate(mondayIso, 6));
+  if (start.year !== end.year) {
+    return `Du ${start.day} ${start.month} ${start.year} au ${end.day} ${end.month} ${end.year}`;
+  }
+  if (start.month !== end.month) {
+    return `Du ${start.day} ${start.month} au ${end.day} ${end.month} ${end.year}`;
+  }
+  return `Du ${start.day} au ${end.day} ${end.month} ${end.year}`;
+}
+
+/** Normalise une heure saisie (« 9h », « 18:30 ») en HH:MM ; null si elle n'est pas valide. */
+export function normalizeScheduleTime(value: string | null | undefined): string | null {
+  const raw = (value ?? "").trim();
+  if (!/^\d{1,2}\s*(?:[h:.]\s*\d{0,2})?$/.test(raw)) return null;
+  const minutes = parseScheduleTimeToMinutes(raw);
+  if (minutes === null || minutes >= 24 * 60) return null;
+  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
+  return `${hours}:${String(minutes % 60).padStart(2, "0")}`;
+}

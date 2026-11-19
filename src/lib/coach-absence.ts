@@ -1,6 +1,6 @@
 import type { CoachAbsenceRequest } from "@/lib/club-data";
 import { readClubData, writeClubData } from "@/lib/club-data";
-import { notifyDisciplineSessionCancelled } from "@/lib/session-cancel-notify";
+import { notifySessionCancelledSafely, type CancelNotifyOutcome } from "@/lib/session-cancel-notify";
 import { readSiteData, writeSiteData } from "@/lib/site-data";
 import type { ScheduleException } from "@/lib/site-data-types";
 
@@ -9,7 +9,7 @@ import { randomId } from "@/lib/ids";
 export async function approveCoachAbsenceRequest(
   requestId: string,
   reviewedByUserId: string
-): Promise<{ ok: true } | { ok: false; message: string }> {
+): Promise<({ ok: true } & CancelNotifyOutcome) | { ok: false; message: string }> {
   const [clubData, siteData] = await Promise.all([readClubData(), readSiteData()]);
   const request = clubData.coachAbsenceRequests.find((r) => r.id === requestId);
 
@@ -48,13 +48,13 @@ export async function approveCoachAbsenceRequest(
   request.reviewedByUserId = reviewedByUserId;
   await writeClubData(clubData);
 
-  await notifyDisciplineSessionCancelled({
+  const outcome = await notifySessionCancelledSafely({
     disciplineId: request.disciplineId,
     sessionDate: request.sessionDate,
     reason: request.reason,
   });
 
-  return { ok: true };
+  return { ok: true, ...outcome };
 }
 
 export async function rejectCoachAbsenceRequest(
@@ -83,4 +83,15 @@ export function listPendingCoachAbsences(requests: CoachAbsenceRequest[]): Coach
   return requests
     .filter((r) => r.status === "pending")
     .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+}
+
+/** Dernières demandes traitées (validées ou refusées), les plus récentes d'abord. */
+export function listRecentCoachAbsences(
+  requests: CoachAbsenceRequest[],
+  limit = 10
+): CoachAbsenceRequest[] {
+  return requests
+    .filter((r) => r.status !== "pending")
+    .sort((a, b) => (b.reviewedAt ?? b.createdAt).localeCompare(a.reviewedAt ?? a.createdAt))
+    .slice(0, limit);
 }

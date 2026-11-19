@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Badge, ConfirmDialog, SectionCard, StatusMessage, type Feedback } from "@/components/bureau-ui";
 import type {
   MemberContactChangeRequest,
   RegistrationApplication,
 } from "@/lib/club-data";
+import { formatDateFr } from "@/lib/dossier-format";
+import { fetchJson, jsonInit } from "@/lib/fetch-json";
 import {
   contactValuesFromApplication,
   type MemberContactValues,
@@ -39,213 +43,217 @@ function requestValues(
   };
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
 export default function MemberContactRequestsPanel({
   requests,
   applications,
 }: MemberContactRequestsPanelProps) {
+  const router = useRouter();
+  const [, startRefresh] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [error, setError] = useState("");
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
+  const [errorFor, setErrorFor] = useState<{ id: string; text: string } | null>(null);
+  const [doneFeedback, setDoneFeedback] = useState<Feedback>(null);
 
-  if (requests.length === 0) {
+  if (requests.length === 0 && !doneFeedback) {
     return null;
   }
 
   async function review(
-    requestId: string,
+    request: MemberContactChangeRequest,
     action: "approve" | "reject",
     reason?: string,
   ) {
-    setBusyId(requestId);
-    setError("");
+    setBusyId(request.id);
+    setErrorFor(null);
+    setDoneFeedback(null);
     try {
-      const response = await fetch(`/api/club/contact-change-requests/${requestId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason }),
-      });
-      const payload = (await response.json()) as { message?: string };
-      if (!response.ok) {
-        setError(payload.message ?? "Action impossible.");
+      const result = await fetchJson(
+        `/api/club/contact-change-requests/${request.id}`,
+        jsonInit("POST", { action, reason }),
+      );
+      if (!result.ok) {
+        setErrorFor({
+          id: request.id,
+          text: result.message || "L’action n’a pas pu être effectuée. Réessayez dans un instant.",
+        });
         return;
       }
+      const name = [request.firstName, request.lastName].filter(Boolean).join(" ") || "l’adhérent";
+      setDoneFeedback({
+        tone: "success",
+        text:
+          action === "approve"
+            ? `Les nouvelles coordonnées de ${name} sont enregistrées.`
+            : `La demande de ${name} a été refusée.`,
+      });
       setRejectingId(null);
       setRejectReason("");
-      window.location.reload();
-    } catch {
-      setError("Action impossible. Réessayez dans un instant.");
+      startRefresh(() => router.refresh());
     } finally {
       setBusyId(null);
+      setConfirmApproveId(null);
     }
   }
 
+  function startApprove(request: MemberContactChangeRequest, emailChanges: boolean) {
+    if (emailChanges) {
+      setConfirmApproveId(request.id);
+    } else {
+      void review(request, "approve");
+    }
+  }
+
+  const confirmRequest = requests.find((request) => request.id === confirmApproveId) ?? null;
+
   return (
-    <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-bold text-slate-900">Demandes de modification</h2>
-        <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
-          {requests.length} en attente
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-slate-700">
-        Les adhérents peuvent demander la correction de leurs coordonnées. Vérifiez la demande
-        puis validez : le dossier et l&apos;adresse de connexion sont mis à jour ensemble.
-      </p>
+    <SectionCard
+      id="modifications"
+      eyebrow="À traiter"
+      title="Demandes de modification de coordonnées"
+      description="Des adhérents demandent la correction de leurs coordonnées. Vérifiez la demande puis validez : le dossier et l’adresse de connexion sont mis à jour ensemble."
+      action={
+        requests.length > 0 ? (
+          <Badge tone="orange">
+            {requests.length} en attente
+          </Badge>
+        ) : null
+      }
+    >
+      <div className="space-y-4">
+        <StatusMessage feedback={doneFeedback} />
 
-      {error ? (
-        <p className="mt-3 rounded-xl bg-rose-100 px-4 py-3 text-sm font-medium text-rose-900">
-          {error}
-        </p>
-      ) : null}
+        <ul className="space-y-3">
+          {requests.map((request) => {
+            const application = applications.find((entry) => entry.id === request.applicationId);
+            const current = application ? contactValuesFromApplication(application) : null;
+            const next = requestValues(request);
+            const changes = (Object.keys(FIELD_LABELS) as (keyof MemberContactValues)[])
+              .filter(
+                (key) =>
+                  !current || current[key].trim().toLowerCase() !== next[key].trim().toLowerCase(),
+              )
+              .map((key) => ({
+                key,
+                label: FIELD_LABELS[key],
+                before: current?.[key]?.trim() || "—",
+                after: next[key].trim() || "—",
+              }));
+            const isBusy = busyId === request.id;
+            const emailChanges = changes.some((change) => change.key === "email");
 
-      <ul className="mt-4 space-y-3">
-        {requests.map((request) => {
-          const application = applications.find(
-            (entry) => entry.id === request.applicationId,
-          );
-          const current = application
-            ? contactValuesFromApplication(application)
-            : null;
-          const next = requestValues(request);
-          const changes = (Object.keys(FIELD_LABELS) as (keyof MemberContactValues)[])
-            .filter(
-              (key) =>
-                !current ||
-                current[key].trim().toLowerCase() !== next[key].trim().toLowerCase(),
-            )
-            .map((key) => ({
-              key,
-              label: FIELD_LABELS[key],
-              before: current?.[key]?.trim() || "—",
-              after: next[key].trim() || "—",
-            }));
-          const isBusy = busyId === request.id;
+            return (
+              <li key={request.id} className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-base font-extrabold text-slate-900">
+                    {[next.firstName, next.lastName].filter(Boolean).join(" ") || "Adhérent"}
+                    {application ? (
+                      <span className="ml-2 text-sm font-normal text-slate-600">
+                        Dossier du {formatDateFr(application.createdAt)}
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-sm font-semibold text-rose-700">Dossier introuvable</span>
+                    )}
+                  </p>
+                  <p className="text-sm text-slate-600">Demande du {formatDateFr(request.createdAt)}</p>
+                </div>
 
-          return (
-            <li
-              key={request.id}
-              className="rounded-xl border border-amber-200 bg-white p-4"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-semibold text-slate-900">
-                  {[next.firstName, next.lastName].filter(Boolean).join(" ") || "Adhérent"}
-                  {application ? (
-                    <span className="ml-2 text-sm font-normal text-slate-500">
-                      Dossier du {formatDate(application.createdAt)}
-                    </span>
-                  ) : (
-                    <span className="ml-2 text-sm font-normal text-rose-600">
-                      Dossier introuvable
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Demande du {formatDate(request.createdAt)}
-                </p>
-              </div>
+                {changes.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-700">
+                    Les coordonnées demandées sont déjà celles du dossier.
+                  </p>
+                ) : (
+                  <dl className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                    {changes.map((change) => (
+                      <div key={change.key} className="min-w-0 rounded-xl bg-white px-3 py-2">
+                        <dt className="text-sm font-semibold text-slate-600">{change.label}</dt>
+                        <dd className="mt-0.5 min-w-0 text-sm text-slate-900">
+                          <span className="text-break block text-slate-500 line-through">{change.before}</span>
+                          <span className="text-break mt-0.5 block font-semibold">{change.after}</span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
 
-              {changes.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-600">
-                  Les coordonnées demandées sont déjà celles du dossier.
-                </p>
-              ) : (
-                <dl className="mt-3 grid min-w-0 grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                  {changes.map((change) => (
-                    <div
-                      key={change.key}
-                      className="min-w-0 rounded-lg bg-slate-50 px-3 py-2"
-                    >
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {change.label}
-                      </dt>
-                      <dd className="mt-0.5 min-w-0 text-slate-900">
-                        <span className="block break-words text-slate-500 line-through [overflow-wrap:anywhere]">
-                          {change.before}
-                        </span>
-                        <span className="mt-0.5 block break-words font-medium [overflow-wrap:anywhere]">
-                          {change.after}
-                        </span>
-                      </dd>
+                {errorFor?.id === request.id ? (
+                  <StatusMessage feedback={{ tone: "error", text: errorFor.text }} className="mt-3" />
+                ) : null}
+
+                {rejectingId === request.id ? (
+                  <div className="mt-3 space-y-3">
+                    <label className="field-label">
+                      Motif du refus (facultatif)
+                      <textarea
+                        value={rejectReason}
+                        onChange={(event) => setRejectReason(event.target.value)}
+                        rows={2}
+                        className="field"
+                        placeholder="Ex. adresse incomplète, justificatif manquant…"
+                        disabled={isBusy}
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void review(request, "reject", rejectReason)}
+                        disabled={isBusy}
+                        className="btn btn-danger btn-sm"
+                      >
+                        {isBusy ? "Envoi…" : "Confirmer le refus"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRejectingId(null);
+                          setRejectReason("");
+                        }}
+                        disabled={isBusy}
+                        className="btn btn-ghost btn-sm"
+                      >
+                        Annuler
+                      </button>
                     </div>
-                  ))}
-                </dl>
-              )}
-
-              {rejectingId === request.id ? (
-                <div className="mt-3 space-y-2">
-                  <label className="block text-sm font-medium text-slate-700">
-                    Motif du refus (facultatif)
-                    <textarea
-                      value={rejectReason}
-                      onChange={(event) => setRejectReason(event.target.value)}
-                      rows={2}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
-                      placeholder="Ex. adresse incomplète, justificatif manquant…"
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-2">
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        void review(request.id, "reject", rejectReason)
-                      }
-                      disabled={isBusy}
-                      className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      onClick={() => startApprove(request, emailChanges)}
+                      disabled={isBusy || !application}
+                      className="btn btn-primary btn-sm"
                     >
-                      {isBusy ? "Envoi…" : "Confirmer le refus"}
+                      {isBusy ? "Validation…" : "Valider la modification"}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setRejectingId(null);
+                        setRejectingId(request.id);
                         setRejectReason("");
                       }}
                       disabled={isBusy}
-                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                      className="btn btn-ghost btn-sm border-rose-300 text-rose-700 hover:bg-rose-50"
                     >
-                      Annuler
+                      Refuser
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void review(request.id, "approve")}
-                    disabled={isBusy || !application}
-                    className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    {isBusy ? "Validation…" : "Valider la modification"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRejectingId(request.id);
-                      setRejectReason("");
-                    }}
-                    disabled={isBusy}
-                    className="rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50"
-                  >
-                    Refuser
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <ConfirmDialog
+        open={confirmRequest !== null}
+        title="Valider le changement d’adresse e-mail ?"
+        message="L’adresse e-mail du dossier sera remplacée, et l’adhérent devra se connecter à son espace avec la nouvelle adresse."
+        confirmLabel="Valider la modification"
+        busy={busyId !== null}
+        onConfirm={() => confirmRequest && void review(confirmRequest, "approve")}
+        onCancel={() => setConfirmApproveId(null)}
+      />
+    </SectionCard>
   );
 }

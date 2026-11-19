@@ -1,69 +1,121 @@
+import Link from "next/link";
 import BureauDossiersView from "@/components/bureau-dossiers-view";
 import BureauPageHeader from "@/components/bureau-page-header";
+import { SectionCard } from "@/components/bureau-ui";
 import ManualMemberPanel from "@/components/manual-member-panel";
 import MemberContactRequestsPanel from "@/components/member-contact-requests-panel";
 import { loadBureauPageData } from "@/lib/bureau-page-data";
-import { getDossierStep, type QueueFilter } from "@/lib/dossier-workflow";
+import { matchesStepFilter, type StepFilter } from "@/lib/dossier-workflow";
 
 export const dynamic = "force-dynamic";
 
-export default async function BureauDossiersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ filtre?: string; discipline?: string }>;
-}) {
-  const [data, params] = await Promise.all([loadBureauPageData(), searchParams]);
-  const initialFilter: QueueFilter =
-    params.filtre === "finalized" || params.filtre === "all" ? params.filtre : "en_cours";
-  const initialDisciplineId =
-    data.disciplines.find(
-      (discipline) => discipline.slug === params.discipline || discipline.id === params.discipline,
-    )?.id ?? null;
+type TodoTile = {
+  key: string;
+  label: string;
+  hint: string;
+  count: number;
+  href: string;
+};
 
-  const enCours = data.applications.filter((application) => {
-    const step = getDossierStep(application);
-    return step !== "finalized" && step !== "rejected" && step !== "cancelled";
-  }).length;
+export default async function BureauDossiersPage() {
+  const data = await loadBureauPageData();
+
+  const countStep = (step: StepFilter) =>
+    data.applications.filter((application) => matchesStepFilter(application, step)).length;
+
+  const tiles: TodoTile[] = [
+    {
+      key: "a_examiner",
+      label: "À examiner",
+      hint: "Nouveaux dossiers et espaces adhérents à valider",
+      count: countStep("a_examiner"),
+      href: "/espace/bureau/dossiers?filtre=en_cours&etape=a_examiner#dossiers",
+    },
+    {
+      key: "pieces",
+      label: "Pièces manquantes",
+      hint: "En attente d’un document de l’adhérent",
+      count: countStep("pieces"),
+      href: "/espace/bureau/dossiers?filtre=en_cours&etape=pieces#dossiers",
+    },
+    {
+      key: "paiement",
+      label: "Paiements en attente",
+      hint: "Paiement à enregistrer",
+      count: countStep("paiement"),
+      href: "/espace/bureau/dossiers?filtre=en_cours&etape=paiement#dossiers",
+    },
+    {
+      key: "modifications",
+      label: "Changements de coordonnées",
+      hint: "Demandes des adhérents à valider",
+      count: data.contactChangeRequests.length,
+      href: "/espace/bureau/dossiers#modifications",
+    },
+  ];
+  const nothingToDo = tiles.every((tile) => tile.count === 0);
 
   return (
     <div className="mx-auto mt-6 w-full max-w-6xl space-y-6 px-4 sm:px-8">
       <BureauPageHeader
         eyebrow="Bureau · Dossiers"
         title="Dossiers d’adhésion"
-        description="File de traitement des pré-inscriptions, validation des pièces et enregistrement des adhésions papier reçues au bureau."
+        description="Traitez les inscriptions reçues, vérifiez les pièces, enregistrez les paiements et ajoutez les adhérents papier."
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              {enCours} à traiter
-            </span>
-            {data.contactChangeRequests.length > 0 ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/70 bg-cyan-50/80 px-3 py-1.5 text-xs font-semibold text-cyan-800">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                {data.contactChangeRequests.length} demande
-                {data.contactChangeRequests.length > 1 ? "s" : ""} de coordonnées
-              </span>
-            ) : null}
-          </div>
+          <a href="#adherent-papier" className="btn btn-outline btn-sm">
+            + Adhérent papier
+          </a>
         }
       />
+
+      <SectionCard
+        eyebrow="À traiter"
+        title="Ce qui attend le bureau"
+        description={
+          nothingToDo
+            ? "Tout est à jour : aucun dossier n’attend d’action pour le moment."
+            : "Cliquez sur une case pour afficher les dossiers concernés."
+        }
+        action={
+          <Link href="/espace/bureau/dossiers?filtre=en_cours#dossiers" className="btn btn-ghost btn-sm">
+            Tous les dossiers en cours
+          </Link>
+        }
+      >
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {tiles.map((tile) => (
+            <li key={tile.key} className="min-w-0">
+              <Link
+                href={tile.href}
+                className={`flex h-full min-h-28 flex-col justify-between rounded-2xl border p-4 transition hover:-translate-y-px ${
+                  tile.count > 0
+                    ? "border-brand-blue/30 bg-brand-blue/5 hover:bg-brand-blue/10"
+                    : "border-brand-line bg-slate-50 hover:bg-slate-100"
+                }`}
+              >
+                <span className="text-[15px] font-bold text-slate-900">{tile.label}</span>
+                <span
+                  className={`mt-1 text-4xl font-extrabold leading-none ${
+                    tile.count > 0 ? "text-brand-blue-dark" : "text-slate-500"
+                  }`}
+                >
+                  {tile.count}
+                </span>
+                <span className="mt-2 text-sm text-slate-600">{tile.hint}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
 
       <MemberContactRequestsPanel
         requests={data.contactChangeRequests}
         applications={data.applications}
       />
 
-      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
-        <BureauDossiersView
-          disciplines={data.disciplines}
-          applications={data.applications}
-          initialFilter={initialFilter}
-          initialDisciplineId={initialDisciplineId}
-        />
-        <div id="adherent-papier" className="anchor-section min-w-0">
-          <ManualMemberPanel disciplines={data.disciplines} />
-        </div>
-      </div>
+      <ManualMemberPanel disciplines={data.disciplines} />
+
+      <BureauDossiersView disciplines={data.disciplines} applications={data.applications} />
     </div>
   );
 }
