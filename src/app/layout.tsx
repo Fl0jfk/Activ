@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import AppClerkProvider from "@/components/clerk-provider";
 import Header from "@/components/header";
 import JsonLd from "@/components/json-ld";
@@ -11,11 +11,12 @@ import {
   SITE_SHORT_NAME,
   SITE_URL,
 } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import SiteFooter from "@/components/site-footer";
+import { readPublicSiteData } from "@/lib/site-data";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
 });
 const geistMono = Geist_Mono({
@@ -41,17 +42,23 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children}: Readonly<{ children: React.ReactNode;}>) {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   return (
     <AppClerkProvider>
-      <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-        <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+      <html lang="fr" className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}>
+        <body className="min-h-full flex flex-col bg-brand-cream text-slate-900">
           <Header
             facebookUrl={data.association.facebookUrl}
             showNewsNav={data.news.length > 0 || data.polls.length > 0}
-            showGalleryNav={data.homeGallery.slides.length > 0}
           />
           {children}
+          <div className="h-14 shrink-0" aria-hidden />
+          <SiteFooter
+            address={data.association.address}
+            facebookUrl={data.association.facebookUrl}
+            hasNews={data.news.length > 0 || data.polls.length > 0}
+            hasPhotos={data.homeGallery.slides.length > 0}
+          />
           <JsonLd data={organizationJsonLd(data.association)} />
         </body>
       </html>

@@ -3,7 +3,7 @@ import MembershipBulletinForm from "@/components/membership-bulletin-form";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { buildMembershipActivityCatalog } from "@/lib/membership-activities";
 import { buildPageMetadata, SITE_LOCALITY } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import { readPublicSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ type PageProps = {
 
 export default async function PreinscriptionPage({ searchParams }: PageProps) {
   const { discipline: disciplineParam, revalidateToken } = await searchParams;
-  const siteData = await readSiteData();
+  const siteData = await readPublicSiteData();
   const disciplines = getActiveDisciplineOptions(siteData);
   const activityOptions = buildMembershipActivityCatalog(siteData);
 

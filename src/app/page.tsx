@@ -1,27 +1,26 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
+import NewsCard from "@/components/news-card";
+import OrientationAssistant from "@/components/orientation-assistant";
+import PhotoMosaic from "@/components/photo-mosaic";
+import PollCard from "@/components/poll-card";
+import SiteImage from "@/components/site-image";
+import WeekPlanner from "@/components/week-planner";
 import { ASSOCIATION_PHONE_DISPLAY, ASSOCIATION_PHONE_TEL } from "@/lib/association-contact";
+import { buildDisciplineColors } from "@/lib/discipline-colors";
+import { buildPlannerWeeks, describeDisciplineSessions, pickHomeNews } from "@/lib/public-site";
+import { formatDayLabelFr, getPublicScheduleReference, todayParisIso } from "@/lib/schedule-week";
 import { buildPageMetadata, SITE_LOCALITY, SITE_SHORT_NAME, toMetaDescription } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
-import {
-  buildWeekSchedule,
-  formatDayLabelFr,
-  formatWeekRangeLabel,
-  getPublicScheduleReference,
-} from "@/lib/schedule-week";
-import { sortNewsByDateDesc } from "@/lib/site-news";
+import { HOME_PHOTO_COUNT } from "@/lib/public-site-constants";
+import { readPublicSiteData } from "@/lib/site-data";
 import { limitSentences } from "@/lib/text";
-import ActivityOrientation from "@/components/activity-orientation";
-import CallButton from "@/components/call-button";
-import FacebookButton from "@/components/facebook-button";
-import HomeGallerySlider from "@/components/home-gallery-slider";
-import HomeFeedSlider from "@/components/home-feed-slider";
 
 export const dynamic = "force-dynamic";
 
+const HOME_NEWS_COUNT = 3;
+
 export async function generateMetadata(): Promise<Metadata> {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const names = data.disciplines
     .filter((discipline) => discipline.active)
     .map((discipline) => discipline.name.trim().toLowerCase())
@@ -44,185 +43,236 @@ export default async function Home({
 }) {
   const params = await searchParams;
   const preregistrationReceived = params.preregistration === "received";
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const activeDisciplines = data.disciplines.filter((discipline) => discipline.active);
+  const colors = buildDisciplineColors(data.disciplines);
   const { referenceDate, isSummerBreak, resumeIso } = getPublicScheduleReference();
-  const weekSchedule = buildWeekSchedule(data, referenceDate);
-  const weekLabel = formatWeekRangeLabel(referenceDate);
-  const latestNews = sortNewsByDateDesc(data.news).slice(0, 8);
+  const plannerWeeks = buildPlannerWeeks(data, referenceDate);
+  const plannerDisciplines = activeDisciplines.map((discipline) => ({
+    id: discipline.id,
+    name: discipline.name,
+    slug: discipline.slug,
+    color: colors[discipline.id]!,
+  }));
+
+  const homeNews = pickHomeNews(data.news, HOME_NEWS_COUNT);
+  const [featuredNews, ...otherNews] = homeNews;
+  const openPollNewsIds = new Set(
+    data.polls.filter((poll) => poll.status === "open" && poll.newsId).map((poll) => poll.newsId as string),
+  );
+  const standalonePolls = data.polls.filter((poll) => poll.status === "open" && !poll.newsId);
+
+  const slides = data.homeGallery.slides;
+  const heroSlide = slides[0];
+  const latestPhotos = slides.slice(-HOME_PHOTO_COUNT).reverse();
 
   return (
-    <>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-8 pt-12">
+    <main>
+      <section className="mx-auto w-full max-w-6xl px-4 pb-6 pt-8 sm:px-8 sm:pt-12">
         {preregistrationReceived ? (
-          <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-            Nous avons bien reçu votre demande de pré-inscription. Vous recevrez un email dans quelques jours, une
-            fois votre demande validée par le bureau de l&apos;association. Ensuite, vous pourrez accéder à votre espace.
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            Nous avons bien reçu votre demande de pré-inscription. Vous recevrez un e-mail dans quelques jours, une
+            fois votre demande validée par le bureau de l&apos;association. Vous pourrez ensuite accéder à votre espace.
           </div>
         ) : null}
-        <header className="rounded-3xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 p-6 shadow-xl sm:p-10">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-wide text-white/90">{data.association.city}</p>
-            <h1 className="text-3xl font-bold text-white sm:text-5xl">{data.association.name}</h1>
-            <p className="text-lg text-white/95">{data.association.tagline}</p>
-            <p className="text-sm text-white/90">
-              Rejoins une association locale qui fait bouger Sainte-Croix. Cours sportifs et culturels, ambiance
-              bienveillante, progression adaptée à chacun.
+
+        <div className={`grid items-center gap-10 ${heroSlide ? "lg:grid-cols-[1.05fr_0.95fr] lg:gap-14" : ""}`}>
+          <div>
+            <span className="eyebrow">{data.association.city || SITE_LOCALITY}</span>
+            <h1 className="mt-3.5 text-[2.1rem] font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.4rem]">
+              Bouger, se renforcer et <span className="text-brand-blue">partager</span> ensemble.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg text-slate-600">
+              Une association locale qui fait bouger Sainte-Croix : cours sportifs et culturels, ambiance bienveillante
+              et progression adaptée à chacun.
             </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <CallButton />
-              <FacebookButton href={data.association.facebookUrl} />
-              <Link
-                href="/preinscription"
-                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-400"
-              >
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="/preinscription" className="btn btn-primary">
                 Faire une pré-inscription
+              </Link>
+              <Link href="/#planning" className="btn btn-outline">
+                Voir le planning
               </Link>
             </div>
           </div>
-        </header>
 
-        <HomeGallerySlider gallery={data.homeGallery} />
-
-        <HomeFeedSlider news={latestNews} polls={data.polls} disciplines={data.disciplines} />
-
-        <section id="programme" className="anchor-section panel mt-8 p-6 sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="panel-title">
-                {isSummerBreak ? "Planning de rentrée" : "Planning de la semaine"}
-              </h2>
-              <p className="mt-1 text-sm text-slate-600">{weekLabel}</p>
+          {heroSlide ? (
+            <div className="relative flex justify-center lg:justify-end">
+              <span className="absolute -top-4 right-6 h-14 w-14 rounded-full bg-brand-orange/90" aria-hidden />
+              <span className="absolute -left-3 bottom-10 h-8 w-8 rounded-full bg-brand-pink" aria-hidden />
+              <span className="absolute -left-6 top-1/3 h-5 w-5 rounded-full bg-brand-green" aria-hidden />
+              <SiteImage
+                src={heroSlide.imageUrl}
+                alt={heroSlide.caption || data.association.name}
+                width={1200}
+                height={800}
+                priority
+                sizes="(min-width: 1024px) 520px, 100vw"
+                style={{ width: "auto", height: "auto", maxWidth: "100%", maxHeight: 440 }}
+                className="relative rounded-3xl shadow-[0_30px_60px_-30px_rgba(20,64,127,0.5)]"
+              />
             </div>
-            <span className="gradient-chip">
-              {isSummerBreak ? "Reprise le 7 septembre" : "Mise à jour dynamique"}
-            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-10 grid gap-3.5 sm:grid-cols-3">
+          <div className="rounded-2xl border border-brand-line bg-white px-5 py-3.5 text-sm">
+            <p className="font-bold text-slate-900">
+              {activeDisciplines.length} activité{activeDisciplines.length > 1 ? "s" : ""}
+            </p>
+            <p className="text-slate-600">Sport, bien-être et culture</p>
+          </div>
+          <div className="rounded-2xl border border-brand-line bg-white px-5 py-3.5 text-sm">
+            <p className="font-bold text-slate-900">Nous trouver</p>
+            <p className="line-clamp-2 text-slate-600">{data.association.address || SITE_LOCALITY}</p>
+          </div>
+          <a
+            href={ASSOCIATION_PHONE_TEL}
+            className="rounded-2xl border border-brand-line bg-white px-5 py-3.5 text-sm transition hover:border-brand-blue"
+          >
+            <p className="font-bold text-slate-900">{ASSOCIATION_PHONE_DISPLAY}</p>
+            <p className="text-slate-600">Une question ? Appelez-nous</p>
+          </a>
+        </div>
+      </section>
+
+      {featuredNews || standalonePolls.length > 0 ? (
+        <section id="actualites" className="anchor-section mx-auto w-full max-w-6xl px-4 py-12 sm:px-8">
+          <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="section-title">Actualités</h2>
+              <p className="mt-1.5 text-slate-600">Les prochains rendez-vous de l&apos;association.</p>
+            </div>
+            {data.news.length > 0 ? (
+              <Link href="/actualites" className="text-[15px] font-bold text-brand-blue hover:underline">
+                Toutes les actualités →
+              </Link>
+            ) : null}
+          </div>
+
+          {featuredNews ? (
+            <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+              <NewsCard
+                item={featuredNews}
+                disciplines={data.disciplines}
+                variant="feature"
+                highlight={featuredNews.date >= todayParisIso() ? "Prochain rendez-vous" : "À la une"}
+                hasOpenPoll={openPollNewsIds.has(featuredNews.id)}
+              />
+              {otherNews.length > 0 ? (
+                <div className="grid content-start gap-5">
+                  {otherNews.map((item) => (
+                    <NewsCard
+                      key={item.id}
+                      item={item}
+                      disciplines={data.disciplines}
+                      hasOpenPoll={openPollNewsIds.has(item.id)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {standalonePolls.length > 0 ? (
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              {standalonePolls.map((poll) => (
+                <PollCard key={poll.id} poll={poll} />
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section id="planning" className="anchor-section border-y border-brand-line bg-white py-12">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-8">
+          <div className="mb-7">
+            <h2 className="section-title">{isSummerBreak ? "Planning de rentrée" : "Planning de la semaine"}</h2>
+            <p className="mt-1.5 text-slate-600">
+              Cliquez sur une séance pour voir les détails. Mis à jour en direct par le bureau.
+            </p>
           </div>
           {isSummerBreak ? (
-            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               Fermeture estivale : l&apos;association ne propose pas de cours jusqu&apos;au{" "}
-              <strong>{formatDayLabelFr(resumeIso)}</strong>. Voici les horaires de la semaine de
-              reprise.
+              <strong>{formatDayLabelFr(resumeIso)}</strong>. Voici les horaires de la semaine de reprise.
             </p>
           ) : null}
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-700">
-                  <th className="py-2 pr-4">Jour</th>
-                  <th className="py-2 pr-4">Horaire</th>
-                  <th className="py-2 pr-4">Discipline</th>
-                  <th className="py-2 pr-4">Lieu</th>
-                  <th className="py-2 pr-4">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weekSchedule.length > 0 ? (
-                  weekSchedule.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className={`border-b border-slate-100 transition ${
-                        entry.cancelled ? "bg-rose-50/80" : "hover:bg-cyan-50/50"
-                      }`}
-                    >
-                      <td
-                        className={`py-3 pr-4 font-medium ${
-                          entry.cancelled ? "text-rose-800 line-through" : "text-slate-900"
-                        }`}
-                      >
-                        {entry.dayLabel}
-                      </td>
-                      <td className={`py-3 pr-4 ${entry.cancelled ? "text-rose-700 line-through" : "text-slate-700"}`}>
-                        {entry.startTime} - {entry.endTime}
-                      </td>
-                      <td className={`py-3 pr-4 ${entry.cancelled ? "text-rose-700 line-through" : "text-slate-700"}`}>
-                        {entry.disciplineName}
-                        {entry.teacherName ? (
-                          <span className="mt-0.5 block text-xs text-slate-500">{entry.teacherName}</span>
-                        ) : null}
-                      </td>
-                      <td className={`py-3 pr-4 ${entry.cancelled ? "text-rose-700 line-through" : "text-slate-700"}`}>
-                        {entry.location}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {entry.cancelled ? (
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="rounded-full bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white">
-                              Annulé
-                            </span>
-                            {entry.cancelReason ? (
-                              <span className="max-w-[12rem] text-xs text-rose-700">{entry.cancelReason}</span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">
-                            Confirmé
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-slate-600">
-                      Aucun cours programmé cette semaine.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <WeekPlanner weeks={plannerWeeks} disciplines={plannerDisciplines} todayIso={todayParisIso()} />
+        </div>
+      </section>
 
-        <ActivityOrientation />
+      <section id="disciplines" className="anchor-section mx-auto w-full max-w-6xl px-4 py-12 sm:px-8">
+        <div className="mb-7">
+          <h2 className="section-title">Nos disciplines</h2>
+          <p className="mt-1.5 text-slate-600">Des activités pour bouger, se détendre et s&apos;exprimer.</p>
+        </div>
 
-        <section id="disciplines" className="anchor-section panel mt-8 p-6 sm:p-8">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="panel-title">Disciplines disponibles</h2>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              {activeDisciplines.length} activités
-            </span>
-          </div>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {activeDisciplines.map((discipline) => (
+        <OrientationAssistant className="mb-7" />
+
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {activeDisciplines.map((discipline) => {
+            const sessions = describeDisciplineSessions(discipline.id, data.schedule);
+            return (
               <Link
                 key={discipline.id}
                 href={`/disciplines/${discipline.slug}`}
-                className="group relative overflow-hidden rounded-2xl border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/35 to-fuchsia-50/50 p-4 transition hover:-translate-y-1 hover:shadow-lg"
+                className="group flex flex-col overflow-hidden rounded-3xl border border-brand-line bg-white transition hover:-translate-y-1 hover:shadow-[0_20px_40px_-24px_rgba(20,64,127,0.45)]"
               >
-                <div className="absolute -right-8 -top-8 h-20 w-20 rounded-full bg-fuchsia-200/55 blur-xl" />
-                <Image
-                  src={discipline.imageUrl}
-                  alt={discipline.name}
-                  width={700}
-                  height={380}
-                  unoptimized={discipline.imageUrl.startsWith("/api/")}
-                  className="h-44 w-full rounded-xl object-cover"
-                />
-                <h3 className="mt-4 text-xl font-semibold text-slate-900 group-hover:text-cyan-700">{discipline.name}</h3>
-                <p className="mt-2 line-clamp-6 text-slate-700">
-                  {limitSentences(discipline.description, 3)}
-                </p>
-                <span className="mt-3 inline-block rounded-lg bg-cyan-700 px-3 py-1 text-xs font-semibold text-white">
-                  Je me pré-inscris
-                </span>
+                <div className="relative aspect-[3/2] w-full bg-brand-blue/5">
+                  <SiteImage
+                    src={discipline.imageUrl}
+                    alt={discipline.name}
+                    fill
+                    sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5 p-5">
+                  <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-brand-blue">{discipline.name}</h3>
+                  <p className="flex-1 text-sm text-slate-600">{limitSentences(discipline.description, 2)}</p>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[13px] font-bold">
+                    {sessions ? (
+                      <span className="inline-flex items-center gap-2 text-brand-green-dark">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: colors[discipline.id]?.bg }}
+                          aria-hidden
+                        />
+                        {sessions}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <span className="shrink-0 text-brand-blue">Découvrir →</span>
+                  </div>
+                </div>
               </Link>
-            ))}
+            );
+          })}
+        </div>
+      </section>
+
+      {latestPhotos.length > 0 ? (
+        <section id="photos" className="anchor-section border-t border-brand-line bg-white py-12">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-8">
+            <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="section-title">{data.homeGallery.title || "La vie de l'association"}</h2>
+                <p className="mt-1.5 text-slate-600">Quelques moments récents. Cliquez sur une photo pour l&apos;agrandir.</p>
+              </div>
+            </div>
+            <PhotoMosaic slides={latestPhotos} fallbackAlt={data.homeGallery.title || data.association.name} />
+            {slides.length > latestPhotos.length ? (
+              <div className="mt-6 text-center">
+                <Link href="/galerie" className="btn btn-outline">
+                  Voir toutes les photos ({slides.length})
+                </Link>
+              </div>
+            ) : null}
           </div>
         </section>
-      </main>
-      <footer className="mt-2 w-full border-t border-white/30 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-3 px-4 py-8 text-sm sm:px-8">
-          <p className="text-md text-slate-300">© 2026 Sainte-Croix-sur-Buchy</p>
-          {data.association.address ? (
-            <p className="text-md text-slate-300">{data.association.address}</p>
-          ) : null}
-          <a href={ASSOCIATION_PHONE_TEL} className="text-md text-slate-300 hover:underline">
-            {ASSOCIATION_PHONE_DISPLAY}
-          </a>
-          <CallButton />
-        </div>
-      </footer>
-    </>
+      ) : null}
+    </main>
   );
 }

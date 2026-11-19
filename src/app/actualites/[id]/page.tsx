@@ -6,7 +6,7 @@ import JsonLd from "@/components/json-ld";
 import LinkedPollsPanel from "@/components/linked-polls-panel";
 import { RichTextContent } from "@/lib/chat-message-links";
 import { absoluteUrl, buildPageMetadata, newsJsonLd, toMetaDescription } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import { readPublicSiteData } from "@/lib/site-data";
 import {
   formatEventSchedule,
   newsKindLabel,
@@ -21,7 +21,7 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const item = data.news.find((entry) => entry.id === id);
   if (!item) return { title: "Actualité introuvable", robots: { index: false } };
   const schedule = formatEventSchedule(item);
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ActualitePage({ params }: PageProps) {
   const { id } = await params;
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const item = data.news.find((entry) => entry.id === id);
   if (!item) {
     notFound();
@@ -53,8 +53,8 @@ export default async function ActualitePage({ params }: PageProps) {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
       <JsonLd data={newsJsonLd(item, absoluteUrl(`/actualites/${item.id}`))} />
-      <Link href="/#actualites" className="text-sm font-semibold text-cyan-700 hover:underline">
-        ← Retour aux actualités
+      <Link href="/actualites" className="text-sm font-semibold text-brand-blue hover:underline">
+        ← Toutes les actualités
       </Link>
 
       <article className="panel mt-4 p-6 sm:p-8">

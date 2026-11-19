@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import CallButton from "@/components/call-button";
 import ContactForm from "@/components/contact-form";
+import OrientationAssistant from "@/components/orientation-assistant";
 import { buildPageMetadata, SITE_LOCALITY } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import { readPublicSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,15 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 export default async function ContactPage() {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const { association } = data;
   const disciplineNames = data.disciplines.filter((d) => d.active).map((d) => d.name);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8">
       <header className="panel p-6 sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-cyan-700">Contact</p>
-        <h1 className="mt-1 text-3xl font-bold text-slate-900">{association.name}</h1>
+        <span className="eyebrow">Contact</span>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">{association.name}</h1>
         <p className="mt-3 text-slate-700">
           Pour demander une séance d&apos;essai, proposer une date ou poser une question sur les activités, utilisez le
           formulaire ci-dessous.
@@ -36,6 +37,13 @@ export default async function ContactPage() {
           <CallButton />
         </div>
       </header>
+
+      <OrientationAssistant
+        className="mt-6"
+        title="Besoin d'un conseil avant de nous écrire ?"
+        subtitle="Notre assistant vous aide à choisir une activité en quelques questions."
+        buttonLabel="Demander conseil"
+      />
 
       <ContactForm
         associationName={association.name}

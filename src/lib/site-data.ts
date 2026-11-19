@@ -320,7 +320,32 @@ export async function readSiteData(): Promise<AssociationData> {
   }
 }
 
+const PUBLIC_CACHE_TTL_MS = 30_000;
+let publicCache: { value: AssociationData; expiresAt: number } | null = null;
+let publicInflight: Promise<AssociationData> | null = null;
+
+/**
+ * Lecture mise en cache (30 s) réservée aux pages publiques : évite de relire S3
+ * à chaque visite. Les écritures du bureau doivent continuer à utiliser readSiteData().
+ */
+export async function readPublicSiteData(): Promise<AssociationData> {
+  const now = Date.now();
+  if (publicCache && publicCache.expiresAt > now) return publicCache.value;
+  if (!publicInflight) {
+    publicInflight = readSiteData()
+      .then((value) => {
+        publicCache = { value, expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS };
+        return value;
+      })
+      .finally(() => {
+        publicInflight = null;
+      });
+  }
+  return publicInflight;
+}
+
 export async function writeSiteData(data: AssociationData): Promise<void> {
   const normalizedData = normalizeSiteData(data);
   await writeJsonToS3(siteDataKey(), normalizedData);
+  publicCache = null;
 }
