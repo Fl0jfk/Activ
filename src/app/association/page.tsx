@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import CallButton from "@/components/call-button";
 import { buildPageMetadata, SITE_LOCALITY } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import { readPublicSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +13,16 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 export default async function AssociationPage() {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const boardMembers = data.association.organisation.boardMembers;
   const teachers = data.disciplines
     .filter((discipline) => discipline.active)
     .flatMap((discipline) => {
       const list =
-        discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach a definir"];
+        discipline.teachers.length > 0 ? discipline.teachers : [discipline.teacher || "Coach à définir"];
       return list.map((teacherName, idx) => ({
         id: `${discipline.id}-${idx}`,
-        fullName: teacherName || "Coach a definir",
+        fullName: teacherName || "Coach à définir",
         disciplineName: discipline.name,
         slug: discipline.slug,
         email: discipline.contactEmail,
@@ -32,8 +32,8 @@ export default async function AssociationPage() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">
       <header className="panel mt-4 p-6 sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-cyan-700">Association</p>
-        <h1 className="mt-1 text-3xl font-bold text-slate-900">Organigramme</h1>
+        <span className="eyebrow">Association</span>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">Organigramme</h1>
         <p className="mt-3 text-slate-700">{data.association.organisation.notes}</p>
         <div className="mt-4">
           <CallButton />
@@ -65,10 +65,10 @@ export default async function AssociationPage() {
       </section>
 
       <section className="panel mt-6 p-6 sm:p-8">
-        <h2 className="panel-title">Equipe enseignante</h2>
+        <h2 className="panel-title">Équipe enseignante</h2>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Les enseignants sont renseignes dans chaque discipline. Contactez la discipline pour toute question
-          pedagogique.
+          Les enseignants sont renseignés dans chaque discipline. Contactez l&apos;association pour toute question
+          pédagogique.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {teachers.map((teacher) => (

@@ -87,7 +87,7 @@ export function organizationJsonLd(association: AssociationData["association"]) 
     telephone: ASSOCIATION_PHONE_TEL.replace("tel:", ""),
     address: {
       "@type": "PostalAddress",
-      streetAddress: association.address || undefined,
+      streetAddress: association.address?.replace(/\d{5}.*$/, "").replace(/[,\s]+$/, "") || undefined,
       addressLocality: SITE_LOCALITY,
       postalCode: "76750",
       addressRegion: "Normandie",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readClubData } from "@/lib/club-data";
 import { buildOrientationContext } from "@/lib/orientation-context";
+import { checkRateLimit, clientIpFromRequest } from "@/lib/rate-limit";
 import { readSiteData } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ Regles generales:
 - Explique chaque activite de facon accessible (benefices, niveau, ambiance).
 - Oriente selon les besoins exprimes (detente, cardio, debutant, dos, etc.).
 - Ne invente pas d'activites, de tarifs, d'horaires ou de creneaux absents du contexte.
+- Vouvoie toujours l'utilisateur (jamais de tutoiement).
 - Reponds en francais, de maniere concise (3 a 6 phrases sauf si l'utilisateur demande plus).
 
 Regles STRICTES sur l'essai / la decouverte:
@@ -46,26 +48,50 @@ Format des liens dans tes reponses:
 
 Termine souvent par une suggestion concrete (quelle activite correspond et comment la decouvrir legalement: seance d'essai reservee ou contact).`;
 
+const MAX_MESSAGE_LENGTH = 600;
+const MAX_BODY_BYTES = 12_000;
+const RATE_LIMIT = { limit: 12, windowMs: 10 * 60 * 1000 };
+
 export async function POST(request: Request) {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) {
+    console.error("Orientation: MISTRAL_API_KEY manquante.");
     return NextResponse.json(
-      { error: "Configuration Mistral manquante (MISTRAL_API_KEY)." },
+      { error: "L'assistant est momentanément indisponible." },
       { status: 503 }
     );
   }
 
-  let body: OrientationRequest;
-  try {
-    body = (await request.json()) as OrientationRequest;
-  } catch {
-    return NextResponse.json({ error: "Corps de requete invalide." }, { status: 400 });
+  const rate = checkRateLimit(`orientation:${clientIpFromRequest(request)}`, RATE_LIMIT);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "Vous avez posé beaucoup de questions. Réessayez dans quelques minutes ou contactez l'association." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } }
+    );
   }
 
-  const userMessages = (body.messages ?? []).filter(
-    (message) => message.role === "user" || message.role === "assistant"
-  );
-  if (userMessages.length === 0) {
+  const rawBody = await request.text();
+  if (rawBody.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Message trop long." }, { status: 413 });
+  }
+
+  let body: OrientationRequest;
+  try {
+    body = JSON.parse(rawBody) as OrientationRequest;
+  } catch {
+    return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
+  }
+
+  const userMessages = (Array.isArray(body.messages) ? body.messages : [])
+    .filter(
+      (message): message is ChatMessage =>
+        Boolean(message) &&
+        (message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string" &&
+        message.content.trim().length > 0
+    )
+    .map((message) => ({ role: message.role, content: message.content.slice(0, MAX_MESSAGE_LENGTH) }));
+  if (userMessages.length === 0 || userMessages[userMessages.length - 1]!.role !== "user") {
     return NextResponse.json({ error: "Aucun message fourni." }, { status: 400 });
   }
 
@@ -101,9 +127,9 @@ export async function POST(request: Request) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
+    console.error("Orientation: erreur Mistral", response.status, await response.text());
     return NextResponse.json(
-      { error: "Erreur Mistral.", details: errorText },
+      { error: "L'assistant ne peut pas répondre pour le moment." },
       { status: 502 }
     );
   }
@@ -114,7 +140,8 @@ export async function POST(request: Request) {
 
   const reply = payload.choices?.[0]?.message?.content?.trim();
   if (!reply) {
-    return NextResponse.json({ error: "Reponse vide de Mistral." }, { status: 502 });
+    console.error("Orientation: réponse vide de Mistral.");
+    return NextResponse.json({ error: "L'assistant ne peut pas répondre pour le moment." }, { status: 502 });
   }
 
   return NextResponse.json({ reply });

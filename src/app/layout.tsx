@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import AppClerkProvider from "@/components/clerk-provider";
 import Header from "@/components/header";
 import JsonLd from "@/components/json-ld";
@@ -11,16 +11,16 @@ import {
   SITE_SHORT_NAME,
   SITE_URL,
 } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import SiteFooter from "@/components/site-footer";
+import { readPublicSiteData } from "@/lib/site-data";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// Police hébergée dans le projet (src/fonts) : aucune requête vers Google Fonts.
+const jakarta = localFont({
+  src: "../fonts/plus-jakarta-sans-latin-wght-normal.woff2",
+  variable: "--font-jakarta",
+  weight: "200 800",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -41,17 +41,23 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children}: Readonly<{ children: React.ReactNode;}>) {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   return (
     <AppClerkProvider>
-      <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-        <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
+      <html lang="fr" className={`${jakarta.variable} h-full antialiased`}>
+        <body className="min-h-full flex flex-col bg-brand-cream text-slate-900">
           <Header
             facebookUrl={data.association.facebookUrl}
             showNewsNav={data.news.length > 0 || data.polls.length > 0}
-            showGalleryNav={data.homeGallery.slides.length > 0}
           />
           {children}
+          <div className="h-14 shrink-0" aria-hidden />
+          <SiteFooter
+            address={data.association.address}
+            facebookUrl={data.association.facebookUrl}
+            hasNews={data.news.length > 0 || data.polls.length > 0}
+            hasPhotos={data.homeGallery.slides.length > 0}
+          />
           <JsonLd data={organizationJsonLd(data.association)} />
         </body>
       </html>

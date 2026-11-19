@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/seo";
-import { readSiteData } from "@/lib/site-data";
+import { readPublicSiteData } from "@/lib/site-data";
 import { sortNewsByDateDesc } from "@/lib/site-news";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ function parseDate(value: string): Date | undefined {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const data = await readSiteData();
+  const data = await readPublicSiteData();
   const news = sortNewsByDateDesc(data.news);
   const latestNewsDate = news.length > 0 ? parseDate(news[0].date) : undefined;
 
@@ -26,6 +26,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.8,
       })),
     { url: `${SITE_URL}/preinscription`, changeFrequency: "monthly", priority: 0.7 },
+    ...(news.length > 0
+      ? [{ url: `${SITE_URL}/actualites`, lastModified: latestNewsDate, changeFrequency: "weekly" as const, priority: 0.7 }]
+      : []),
+    ...(data.homeGallery.slides.length > 0
+      ? [{ url: `${SITE_URL}/galerie`, changeFrequency: "monthly" as const, priority: 0.4 }]
+      : []),
     { url: `${SITE_URL}/contact`, changeFrequency: "yearly", priority: 0.6 },
     { url: `${SITE_URL}/association`, changeFrequency: "monthly", priority: 0.5 },
     ...news.map((item) => ({

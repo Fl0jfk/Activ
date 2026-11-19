@@ -168,7 +168,7 @@ export function buildWeekSchedule(
       location: slot.location,
       teacherName: slot.teacherName,
       disciplineId: slot.disciplineId,
-      disciplineName: discipline?.name ?? "A definir",
+      disciplineName: discipline?.name ?? "À définir",
       cancelled: exception?.status === "cancelled",
       cancelReason: exception?.reason,
     };

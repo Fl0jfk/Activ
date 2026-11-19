@@ -6,6 +6,8 @@ import type { AssociationData, HomeGallery, HomeGallerySlide } from "@/lib/site-
 import { randomId } from "@/lib/ids";
 import SiteImageField from "@/components/site-image-field";
 
+import { HOME_PHOTO_COUNT } from "@/lib/public-site-constants";
+
 const inputClass =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900";
 
@@ -142,11 +144,15 @@ export default function HomeGalleryPanel() {
     <section className="bento-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Galerie d&apos;accueil</h2>
+          <h2 className="text-lg font-bold text-slate-900">Photos du site</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Slider de la page d&apos;accueil. Réservé au président : photos, légendes et ordre des
-            diapositives.
+            Réservé au président : photos, légendes et ordre. Les nouvelles photos se placent à la fin de la liste.
           </p>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-slate-600">
+            <li>La photo en position 1 illustre le haut de la page d&apos;accueil.</li>
+            <li>Les {HOME_PHOTO_COUNT} dernières photos de la liste s&apos;affichent en mosaïque sur l&apos;accueil.</li>
+            <li>Toutes les photos sont visibles sur la page « Photos ».</li>
+          </ul>
         </div>
         <button
           type="button"
@@ -257,6 +263,8 @@ export default function HomeGalleryPanel() {
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase text-slate-500">
                 Position {index + 1} / {gallery.slides.length}
+                {index === 0 ? " · Photo du haut d'accueil" : ""}
+                {index >= gallery.slides.length - HOME_PHOTO_COUNT ? " · Affichée sur l'accueil" : ""}
               </p>
               <p className="truncate text-sm font-medium text-slate-900">
                 {slide.caption || "Sans légende"}

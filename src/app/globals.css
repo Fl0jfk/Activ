@@ -1,15 +1,68 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f2f7ff;
-  --foreground: #1e293b;
+  --background: #fbf8f3;
+  --foreground: #1b2430;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-jakarta);
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "Courier New", monospace;
+}
+
+/*
+ * Palette tirée du logo : bleu (Activ'), vert, rose, orange.
+ * Les échelles cyan / indigo / fuchsia de Tailwind sont redéfinies pour que
+ * tout le site (espace adhérent et bureau compris) suive la même identité.
+ */
+@theme {
+  --color-brand-blue: #1f6fd0;
+  --color-brand-blue-dark: #14407f;
+  --color-brand-green: #2e9e4f;
+  --color-brand-green-dark: #17653a;
+  --color-brand-pink: #e23d86;
+  --color-brand-orange: #f5a524;
+  --color-brand-teal: #0e8f8a;
+  --color-brand-cream: #fbf8f3;
+  --color-brand-line: #e8e2d8;
+
+  --color-cyan-50: #eef5fd;
+  --color-cyan-100: #dbe9fa;
+  --color-cyan-200: #bad4f5;
+  --color-cyan-300: #8db8ee;
+  --color-cyan-400: #5a95e2;
+  --color-cyan-500: #2f7fdc;
+  --color-cyan-600: #1f6fd0;
+  --color-cyan-700: #1a5bb0;
+  --color-cyan-800: #17488f;
+  --color-cyan-900: #14407f;
+  --color-cyan-950: #0c284f;
+
+  --color-indigo-50: #eef3fb;
+  --color-indigo-100: #dae5f6;
+  --color-indigo-200: #b6cbed;
+  --color-indigo-300: #86a8e0;
+  --color-indigo-400: #5483cf;
+  --color-indigo-500: #1f6fd0;
+  --color-indigo-600: #1a5bb0;
+  --color-indigo-700: #17488f;
+  --color-indigo-800: #14407f;
+  --color-indigo-900: #102f5e;
+  --color-indigo-950: #0a1d3d;
+
+  --color-fuchsia-50: #fdf0f6;
+  --color-fuchsia-100: #fbdcea;
+  --color-fuchsia-200: #f7bad5;
+  --color-fuchsia-300: #f08db8;
+  --color-fuchsia-400: #e9609b;
+  --color-fuchsia-500: #e23d86;
+  --color-fuchsia-600: #c42a70;
+  --color-fuchsia-700: #a11f5a;
+  --color-fuchsia-800: #7f1a49;
+  --color-fuchsia-900: #63173b;
+  --color-fuchsia-950: #3d0e24;
 }
 
 @layer base {
@@ -35,36 +88,32 @@
   textarea:disabled {
     cursor: not-allowed;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 }
 
 body {
-  background:
-    radial-gradient(circle at 10% 10%, #c4f1ff 0%, transparent 30%),
-    radial-gradient(circle at 90% 0%, #ffd8ef 0%, transparent 28%),
-    radial-gradient(circle at 80% 90%, #ffe6b8 0%, transparent 35%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
-
-html,
-body {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
+  font-family: var(--font-sans), "Segoe UI", Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 @layer components {
   .panel {
-    @apply min-w-0 rounded-3xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(8,47,73,0.08)] backdrop-blur-sm;
+    @apply min-w-0 rounded-3xl border border-brand-line bg-white shadow-[0_10px_30px_-22px_rgba(20,64,127,0.35)];
   }
 
   .bento-card {
-    @apply min-w-0 rounded-[1.75rem] border border-white/70 bg-white/85 shadow-[0_20px_60px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl;
+    @apply min-w-0 rounded-[1.75rem] border border-brand-line bg-white shadow-[0_20px_60px_-40px_rgba(20,64,127,0.4)];
   }
 
   .text-break {
@@ -72,15 +121,44 @@ body::-webkit-scrollbar {
   }
 
   .panel-title {
-    @apply text-2xl font-bold text-slate-900;
+    @apply text-2xl font-extrabold tracking-tight text-slate-900;
   }
 
   .gradient-chip {
-    @apply rounded-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 px-4 py-2 text-sm font-semibold text-white;
+    @apply rounded-full bg-brand-blue px-4 py-2 text-sm font-semibold text-white;
   }
 
   .anchor-section {
-    scroll-margin-top: 5rem;
+    scroll-margin-top: 5.5rem;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-transparent px-6 py-3 text-[15px] font-bold transition hover:-translate-y-px;
+  }
+
+  .btn-sm {
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-primary {
+    @apply bg-brand-blue text-white shadow-[0_8px_20px_-10px_rgba(31,111,208,0.8)] hover:bg-brand-blue-dark;
+  }
+
+  .btn-outline {
+    @apply border-brand-blue bg-transparent text-brand-blue hover:bg-brand-blue/10;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.08em] text-brand-green-dark;
+  }
+
+  .eyebrow::before {
+    content: "";
+    @apply h-[3px] w-7 rounded-full bg-gradient-to-r from-brand-pink via-brand-orange to-brand-green;
+  }
+
+  .section-title {
+    @apply text-[1.75rem] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-4xl;
   }
 }
 
@@ -91,13 +169,4 @@ body::-webkit-scrollbar {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-@keyframes home-gallery-progress {
-  from {
-    width: 0%;
-  }
-  to {
-    width: 100%;
-  }
 }

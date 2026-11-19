@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      { source: "/admin", destination: "/espace", permanent: false },
+      { source: "/club-admin", destination: "/espace", permanent: false },
       {
         source: "/:path*",
         has: [{ type: "host", value: "www.activsaintecroix.fr" }],
