@@ -22,7 +22,12 @@ import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
 export const dynamic = "force-dynamic";
 
-export default async function EspacePage() {
+export default async function EspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const currentUser = await getCurrentUserContext();
   if (!currentUser) {
     redirect("/sign-in?redirect_url=/espace");
@@ -164,7 +169,8 @@ export default async function EspacePage() {
   const newsCount = siteData.news.length;
   const galleryCount = siteData.homeGallery.slides.length;
 
-  const defaultTab = clubOps ? "cockpit" : coachPortal ? "coach" : "member";
+  const defaultTab =
+    tab === "member" ? "member" : clubOps ? "cockpit" : coachPortal ? "coach" : "member";
 
   return (
     <EspaceHub
