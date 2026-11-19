@@ -148,6 +148,22 @@ body {
     @apply border-brand-blue bg-transparent text-brand-blue hover:bg-brand-blue/10;
   }
 
+  .btn-ghost {
+    @apply border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  }
+
+  .btn:disabled {
+    @apply opacity-50 hover:translate-y-0;
+  }
+
+  .field {
+    @apply mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-normal text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 disabled:bg-slate-100 disabled:opacity-70;
+  }
+
+  .field-label {
+    @apply block text-sm font-semibold text-slate-700;
+  }
+
   .eyebrow {
     @apply inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.08em] text-brand-green-dark;
   }

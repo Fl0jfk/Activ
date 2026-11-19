@@ -15,7 +15,9 @@ import { readClubData } from "@/lib/club-data";
 import { getActiveDisciplineOptions } from "@/lib/discipline-options";
 import { listApplicationsNeedingLicenseRenewal } from "@/lib/license-renewal";
 import { readSiteData } from "@/lib/site-data";
-import { buildWeekSchedule, getPublicScheduleReference } from "@/lib/schedule-week";
+import { buildDisciplineColors } from "@/lib/discipline-colors";
+import { buildPlannerWeeks, findNextSession } from "@/lib/public-site";
+import { buildWeekSchedule, getPublicScheduleReference, todayParisIso } from "@/lib/schedule-week";
 import { getApplicationDisciplineIds } from "@/lib/dossier-workflow";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +76,7 @@ export default async function EspacePage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayParisIso();
   const upcomingEvents = siteData.news
     .filter((item) => item.date >= today)
     .filter((item) => !item.disciplineId || memberDisciplineIds.has(item.disciplineId))
@@ -99,6 +101,21 @@ export default async function EspacePage() {
   const weekSchedule = fullWeekSchedule.filter((entry) =>
     memberDisciplineIds.has(entry.disciplineId)
   );
+
+  const disciplineColors = buildDisciplineColors(siteData.disciplines);
+  const plannerDisciplines = siteData.disciplines
+    .filter((discipline) => discipline.active && memberDisciplineIds.has(discipline.id))
+    .map((discipline) => ({
+      id: discipline.id,
+      name: discipline.name,
+      slug: discipline.slug,
+      color: disciplineColors[discipline.id]!,
+    }));
+  const plannerWeeks = buildPlannerWeeks(siteData, scheduleReferenceDate).map((week) => ({
+    ...week,
+    entries: week.entries.filter((entry) => memberDisciplineIds.has(entry.disciplineId)),
+  }));
+  const nextSession = findNextSession(plannerWeeks.flatMap((week) => week.entries));
 
   let pendingDocument: {
     applicationId: string;
@@ -168,6 +185,10 @@ export default async function EspacePage() {
       myApplications={myApplications}
       allApplications={clubData.applications}
       weekSchedule={weekSchedule}
+      plannerWeeks={plannerWeeks}
+      plannerDisciplines={plannerDisciplines}
+      nextSession={nextSession}
+      todayIso={today}
       bureauWeekSchedule={fullWeekSchedule}
       upcomingEvents={upcomingEvents}
       pendingDocument={pendingDocument}

@@ -3,6 +3,7 @@ import {
   addDaysToIsoDate,
   buildWeekSchedule,
   getCurrentWeekRangeParis,
+  nowParis,
   parseScheduleTimeToMinutes,
   todayParisIso,
   type WeekScheduleEntry,
@@ -57,6 +58,24 @@ export function splitNewsByDate(news: SiteNewsItem[]): { upcoming: SiteNewsItem[
 export function pickHomeNews(news: SiteNewsItem[], count = 3): SiteNewsItem[] {
   const { upcoming, past } = splitNewsByDate(news);
   return [...upcoming, ...past].slice(0, count);
+}
+
+/** Prochaine séance à venir (ou en cours) ; les séances sans horaire ne passent qu'en dernier recours. */
+export function findNextSession(entries: WeekScheduleEntry[]): WeekScheduleEntry | null {
+  const now = nowParis();
+  const upcoming = entries
+    .filter((entry) => !entry.cancelled)
+    .filter((entry) => {
+      if (entry.date > now.date) return true;
+      if (entry.date < now.date) return false;
+      const end = parseScheduleTimeToMinutes(entry.endTime) ?? parseScheduleTimeToMinutes(entry.startTime);
+      return end === null || end >= now.minutes;
+    });
+  const start = (entry: WeekScheduleEntry) => parseScheduleTimeToMinutes(entry.startTime);
+  const byDate = (a: WeekScheduleEntry, b: WeekScheduleEntry) =>
+    a.date.localeCompare(b.date) || (start(a) ?? 0) - (start(b) ?? 0);
+  const timed = upcoming.filter((entry) => start(entry) !== null).sort(byDate);
+  return timed[0] ?? upcoming.sort(byDate)[0] ?? null;
 }
 
 export function formatHourLabel(value: string): string {

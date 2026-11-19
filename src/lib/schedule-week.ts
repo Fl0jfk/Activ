@@ -85,6 +85,19 @@ export function weekdayParis(reference = new Date()): DayOfWeek {
   return map[short] ?? 1;
 }
 
+/** Date (YYYY-MM-DD) et minutes écoulées depuis minuit, à l'heure de Paris. */
+export function nowParis(reference = new Date()): { date: string; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: PARIS_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(reference);
+  const hours = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minutes = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return { date: todayParisIso(reference), minutes: hours * 60 + minutes };
+}
+
 export function addDaysToIsoDate(isoDate: string, days: number): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   const utc = new Date(Date.UTC(year, month - 1, day + days));
