@@ -9,7 +9,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-jakarta);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "Courier New", monospace;
 }
 
 /*

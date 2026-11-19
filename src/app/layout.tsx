@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import AppClerkProvider from "@/components/clerk-provider";
 import Header from "@/components/header";
 import JsonLd from "@/components/json-ld";
@@ -15,13 +15,12 @@ import SiteFooter from "@/components/site-footer";
 import { readPublicSiteData } from "@/lib/site-data";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
+// Police hébergée dans le projet (src/fonts) : aucune requête vers Google Fonts.
+const jakarta = localFont({
+  src: "../fonts/plus-jakarta-sans-latin-wght-normal.woff2",
   variable: "--font-jakarta",
-  subsets: ["latin"],
-});
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: "200 800",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -45,7 +44,7 @@ export default async function RootLayout({ children}: Readonly<{ children: React
   const data = await readPublicSiteData();
   return (
     <AppClerkProvider>
-      <html lang="fr" className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}>
+      <html lang="fr" className={`${jakarta.variable} h-full antialiased`}>
         <body className="min-h-full flex flex-col bg-brand-cream text-slate-900">
           <Header
             facebookUrl={data.association.facebookUrl}
